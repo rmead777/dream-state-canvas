@@ -45,13 +45,16 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
   const { collapseObject, dissolveObject, pinObject, unpinObject, focusObject, processIntent } = useWorkspaceActions();
   const { state } = useWorkspace();
   const { shouldDim, shouldHighlight, getContextualActions, cascadeDissolve } = useCrossObjectBehavior();
+  const ambientHints = useAmbientSherpa();
   const [size, setSize] = useState<{ width: number | null; height: number | null }>({ width: null, height: null });
+  const [dismissedHints, setDismissedHints] = useState<Set<string>>(new Set());
 
   const isFocused = state.activeContext.focusedObjectId === object.id;
   const isDimmed = shouldDim(object.id);
   const isHighlighted = shouldHighlight(object.id);
   const isMaterializing = object.status === 'materializing';
   const contextualActions = getContextualActions(object.id);
+  const objectHints = ambientHints.filter((h) => h.objectId === object.id && !dismissedHints.has(h.hint));
 
   const handleDissolve = (e: React.MouseEvent) => {
     e.stopPropagation();
