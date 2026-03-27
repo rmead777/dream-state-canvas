@@ -248,7 +248,7 @@ export function parseIntent(
     actions: [
       {
         type: 'respond',
-        message: 'I can help with leverage exposure, fund comparisons, risk alerts, portfolio data, summaries, or activity timelines. What would you like to explore?',
+        message: 'I can help with AP exposure, vendor comparisons, urgent vendor alerts, the full vendor dataset, risk assessments, or activity timelines. What would you like to explore?',
       },
     ],
   };
