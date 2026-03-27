@@ -112,8 +112,34 @@ export const MOCK_TIMELINE_DATA = {
   ],
 };
 
+export const MOCK_DOCUMENT_DATA = {
+  fileName: 'Q3 Portfolio Risk Assessment.pdf',
+  summary: 'Portfolio leverage has increased 15% over the past quarter. Two funds are approaching covenant thresholds, and technology sector concentration is nearing its 40% limit. The report recommends accelerating distributions for Fund Beta and deferring one pending tech acquisition.',
+  paragraphs: [
+    'The Q3 2024 Portfolio Risk Assessment examines the current state of leverage, sector concentration, and covenant compliance across all active fund positions. This report is prepared for the investment committee and covers the period ending September 30, 2024.',
+    'Portfolio-wide leverage has increased from 2.8x to 3.2x Net Debt/EBITDA over the quarter, driven primarily by Fund Beta\'s aggressive deployment strategy. This represents a 15% increase and places the portfolio closer to internal warning thresholds than at any point in the past 18 months.',
+    'Fund Beta is the primary driver of concern, with leverage at 3.6x against a covenant ceiling of 3.5x. At current trajectory, a formal covenant breach is likely within 15 days unless corrective action is taken. Recommended actions include initiating early distribution discussions with the GP and evaluating the feasibility of an equity call.',
+    'Technology sector allocation has reached 38% of the total portfolio, against an internal limit of 40%. Two pending deals — Nexus Systems ($120M) and Orbital Analytics ($85M) — would push this allocation to approximately 44% if both proceed. The committee should consider deferring one deal or rebalancing through a secondary market sale.',
+    'Fund Alpha continues to perform well at 2.8x leverage with a +12.4% YTD return, representing the strongest risk-adjusted position in the portfolio. Fund Delta, at 1.9x leverage and +15.1% YTD return, is the lowest-risk, highest-return position and may warrant increased allocation.',
+    'In summary, the portfolio requires immediate attention on two fronts: Fund Beta covenant risk and technology sector concentration. Both issues are manageable with timely action, but inaction creates compounding risk over the next 30 days.',
+  ],
+};
+
+export const MOCK_DATASET_DATA = {
+  columns: ['Fund', 'AUM', 'Leverage', 'Return YTD', 'Risk Score', 'Status', 'Vintage', 'Sector'],
+  rows: [
+    ['Alpha', '$2.4B', '2.8x', '+12.4%', 'Low', 'Active', '2021', 'Technology'],
+    ['Beta', '$3.1B', '3.6x', '+6.2%', 'High', 'Watch', '2020', 'Healthcare'],
+    ['Gamma', '$1.8B', '3.1x', '+8.7%', 'Medium', 'Active', '2022', 'Healthcare'],
+    ['Delta', '$950M', '1.9x', '+15.1%', 'Low', 'Active', '2023', 'Energy'],
+    ['Epsilon', '$2.7B', '2.4x', '+11.3%', 'Low', 'Active', '2021', 'Technology'],
+    ['Zeta', '$1.2B', '2.1x', '+9.8%', 'Low', 'Active', '2022', 'Consumer'],
+    ['Eta', '$3.4B', '2.9x', '+7.5%', 'Medium', 'Active', '2020', 'Industrial'],
+  ],
+};
+
 export const DEFAULT_SUGGESTIONS = [
   { id: 's1', label: 'Show leverage exposure', query: 'show me leverage exposure', priority: 1 },
   { id: 's2', label: 'What needs attention?', query: 'what should I focus on?', priority: 2 },
-  { id: 's3', label: 'Compare funds', query: 'compare Alpha and Gamma', priority: 3 },
+  { id: 's3', label: 'Open portfolio dataset', query: 'show the full dataset', priority: 3 },
 ];
