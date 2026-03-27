@@ -3,7 +3,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useWorkspaceActions } from '@/hooks/useWorkspaceActions';
 import { WorkspaceObjectWrapper } from './WorkspaceObject';
 import { FusionZone } from './FusionZone';
-import { callAI } from '@/hooks/useAI';
+import { executeFusion } from '@/lib/fusion-executor';
 import { canFuse, SynthesisType } from '@/lib/fusion-rules';
 import { toast } from '@/hooks/use-toast';
 
