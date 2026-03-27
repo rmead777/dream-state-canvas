@@ -1,207 +1,206 @@
 
 
-# Dream State Workspace — Refined Architecture Plan
+# Elevating Dream State to 0.1% — Cognitive Manifestation Engine
 
-## 1. Workspace Object Model (not "panels")
+## The Gap
 
-Every surface in the workspace is a **WorkspaceObject** — a semantic entity, not a UI card.
+The current build is a beautiful, well-architected workspace with mock intelligence. To reach 0.1%, the system needs to **actually think**, **actually listen**, and **actually anticipate**. Everything below is technically possible today.
 
-```text
-WorkspaceObject {
-  id: string
-  type: 'metric' | 'comparison' | 'alert' | 'inspector' | 'brief' | 'timeline' | 'monitor'
-  title: string
-  status: 'materializing' | 'open' | 'collapsed' | 'dissolved'
-  pinned: boolean
-  origin: IntentOrigin        // what caused this to exist
-  relationships: string[]     // IDs of related objects
-  context: Record<string,any> // data payload
-  position: { zone: 'primary' | 'secondary' | 'peripheral', order: number }
-  createdAt: number
-  lastInteractedAt: number
-}
+## What Changes
 
-IntentOrigin {
-  type: 'user-query' | 'sherpa-suggestion' | 'cross-object' | 'system'
-  query?: string              // original natural language
-  sourceObjectId?: string     // if spawned from another object
-}
-```
+### 1. Real AI Backbone — Replace Every Mock with Lovable AI
 
-Relationships are first-class: a comparison object knows which metric objects it relates to. When a parent collapses, related children dim. When a user drills into an object, related objects subtly highlight.
+The single highest-impact upgrade. Replace the keyword-matching `intent-engine.ts` and all mock AI responses with actual LLM calls via Lovable AI Gateway.
 
-## 2. Intent-to-Object Mapping Layer
+- **Sherpa becomes genuinely intelligent**: Natural language understanding, not keyword matching. "What's my riskiest position and why?" produces a real analytical response.
+- **Document Q&A becomes real**: "Ask about this document" sends the document text + question to the LLM and streams a real answer.
+- **Dataset insights become real**: "Generate insight" actually analyzes the data and returns genuine observations.
+- **AI Brief generation becomes real**: The brief is synthesized from all open workspace objects' data, not a static string.
 
-A dedicated `IntentEngine` module maps natural language → workspace actions. This is NOT inside the Sherpa UI component — it's a pure logic layer.
+**Implementation**: One Supabase edge function (`supabase/functions/ai-chat/index.ts`) with streaming. A `useAI` hook wraps it. The intent engine calls the LLM with workspace context as system prompt. All existing UI surfaces stay identical — only the data source changes.
 
-```text
-src/lib/intent-engine.ts
+### 2. Voice as Primary Input — Web Speech API
 
-- parseIntent(input: string) → IntentResult
-- IntentResult { actions: WorkspaceAction[] }
-- WorkspaceAction:
-    | { type: 'create', objectType, title, data, relatedTo? }
-    | { type: 'focus', objectId }
-    | { type: 'dissolve', objectId }
-    | { type: 'respond', message }
-```
+Type is 2015. Voice is 2035. The Web Speech API is production-ready in all major browsers today.
 
-Pattern matching for v1 (keyword-based), structured so a real LLM can replace it later. The Sherpa UI calls the engine; the engine returns actions; the workspace state reducer executes them.
+- **Hold-to-speak microphone** on the Sherpa rail and Cmd+K palette
+- Speech-to-text feeds directly into the same `processIntent` pipeline
+- Subtle waveform visualization while listening (canvas element, ~40 lines)
+- No transcription UI — the workspace just *responds* to your voice
 
-## 3. AI Sherpa as System Intelligence
+This is a small implementation (~150 lines) with outsized impact on the feel of the product.
 
-The Sherpa is split into three layers:
+### 3. Cmd+K Command Palette — Contextual Intelligence Surface
 
-- **SherpaEngine** (`src/lib/sherpa-engine.ts`): System-level intelligence. Observes workspace state, generates proactive suggestions, routes intents. Has access to all workspace objects, their relationships, and interaction history.
-- **SherpaContext** (`src/contexts/SherpaContext.tsx`): React context providing engine state app-wide. Any component can read Sherpa suggestions or trigger intents.
-- **SherpaRail** (`src/components/workspace/SherpaRail.tsx`): The UI surface. Renders input, suggestions, and concise responses. It's a *view* of the intelligence, not the intelligence itself.
+A modal overlay triggered by `⌘K` / `Ctrl+K`. Not a simple command list — a **context-aware natural language input**.
 
-Sherpa behaviors:
-- Notices repeated interactions ("You've returned to leverage 3 times — pin it?")
-- Suggests related objects when one is created
-- Offers to dissolve stale objects
-- Provides contextual suggestions based on what's currently open
+- Shows what's currently focused, recent intents, and suggested next actions
+- Typing routes through the same AI-powered intent engine
+- Fuzzy-matches existing objects for focus/dissolve/pin actions
+- Supports compound commands: "compare the two things I'm looking at"
+- Keyboard-first, mouse-optional — power user velocity
 
-## 4. Spatial Orchestration Rules
+### 4. Object Fusion — Drag-to-Synthesize
 
-Objects don't just "appear" — they are placed by a **SpatialOrchestrator**.
+The most paradigm-breaking feature. Drag one object onto another → AI synthesizes a new object from both.
 
-Rules:
-- **Primary zone** (center-left): Active focus objects. Max 2-3 visible at once.
-- **Secondary zone** (below or beside primary): Supporting context. Related objects auto-place here.
-- **Peripheral zone** (collapsed bar): Minimized chips.
-- New objects materialize in primary zone; existing objects shift to secondary if space is needed.
-- Related objects appear adjacent to their parent.
-- When an object is focused (clicked/expanded), unrelated objects recede (opacity reduction, not removal).
-- The workspace never shows more than 4 full objects simultaneously — density is earned, not default.
+- Metric + Document → Annotated analysis ("Here's where the document discusses this metric's trajectory")
+- Dataset + Alert → Filtered view showing only the rows relevant to the alert
+- Two Metrics → Auto-generated comparison object
+- Any combination → AI-generated brief synthesizing both contexts
 
-Implementation: `src/lib/spatial-orchestrator.ts` — a pure function that takes current workspace state and a new action, returns updated positions for all objects.
+**Implementation**: Detect drag-overlap in FreeformCanvas. Show a "fusion zone" glow. On drop, send both objects' context data to the LLM with a synthesis prompt. Materialize the result as a new `brief` or `comparison` object with both originals as relationships.
 
-## 5. Cross-Object Intelligence
+### 5. Cognitive Mode System — Workspace Atmosphere Shifts
 
-Objects are aware of each other:
-- **Highlight propagation**: Hovering a metric in a comparison object highlights the same metric if it exists in a standalone metric object.
-- **Contextual actions**: An alert object can offer "Show related metric" which creates/focuses the relevant object.
-- **Relationship lines**: Subtle, optional visual connectors between related objects (thin lines or shared accent color).
-- **Cascade behaviors**: Dissolving a parent offers to dissolve children. Collapsing dims related.
-
-Implemented via the relationship graph in workspace state + a `CrossObjectBehavior` hook that watches state changes.
-
-## 6. Expanded State Model
+The workspace changes its entire character based on what you're doing. Not a theme toggle — an **automatic cognitive atmosphere**.
 
 ```text
-WorkspaceState {
-  objects: Record<string, WorkspaceObject>
-  activeContext: {
-    focusedObjectId: string | null
-    recentIntents: IntentOrigin[]
-    sessionStartedAt: number
-  }
-  sherpa: {
-    suggestions: Suggestion[]
-    lastResponse: string | null
-    observations: string[]    // things Sherpa has noticed
-  }
-  spatialLayout: {
-    primary: string[]         // object IDs in primary zone
-    secondary: string[]
-    peripheral: string[]
-  }
-}
+Mode        │ Trigger                    │ Visual Feel              │ Behavior
+────────────┼────────────────────────────┼──────────────────────────┼──────────────────
+Research    │ Multiple objects open,     │ Warm, expansive,         │ Objects spread,
+            │ browsing behavior          │ soft amber tones         │ relationships visible
+────────────┼────────────────────────────┼──────────────────────────┼──────────────────
+Analysis    │ Immersive mode,            │ Cool, focused,           │ Single object dominant,
+            │ deep interaction           │ higher contrast          │ others dimmed
+────────────┼────────────────────────────┼──────────────────────────┼──────────────────
+Decision    │ Alerts present,            │ Crisp, urgent,           │ Alerts promoted,
+            │ comparison active          │ slight edge tension      │ actions highlighted
+────────────┼────────────────────────────┼──────────────────────────┼──────────────────
+Synthesis   │ Brief generation,          │ Calm, distilled,         │ Everything recedes
+            │ export actions             │ minimal density          │ except the output
 ```
 
-Managed via React context + useReducer. Actions include: `MATERIALIZE_OBJECT`, `DISSOLVE_OBJECT`, `COLLAPSE_OBJECT`, `RESTORE_OBJECT`, `PIN_OBJECT`, `FOCUS_OBJECT`, `REFLOW_LAYOUT`, `ADD_SHERPA_OBSERVATION`.
+**Implementation**: A `useCognitiveMode` hook observes workspace state (object types, interaction patterns) and derives the current mode. CSS custom properties shift via transitions on `<body>`. Subtle, not dramatic — the user *feels* it more than *sees* it.
 
-## 7. Anti-Drift Constraints (Enforced in Architecture)
+### 6. Predictive Materialization — AI Anticipates Your Next Need
 
-These are structural rules, not guidelines:
+The Sherpa doesn't just suggest — it **pre-loads**.
 
-1. **No sidebar navigation.** The app has one route. Period.
-2. **No tab bars.** Objects are summoned, not selected from a menu.
-3. **No static dashboard grid.** Layout is dynamic, orchestrated by spatial rules.
-4. **No chat bubble UI.** Sherpa responses are inline text blocks, not message bubbles.
-5. **No always-visible action bars.** Actions appear contextually on hover/focus.
-6. **Max 4 full objects visible.** The orchestrator enforces this ceiling.
-7. **Empty space is never "filled" by default.** The initial screen has the Sherpa greeting and nothing else.
-8. **No KPI cards on load.** Nothing appears until summoned or contextually warranted.
-9. **Every object must have an IntentOrigin.** Nothing exists without a reason.
+- If you open a metric, the system silently prepares the related comparison data
+- If you focus on an alert, the relevant document section is pre-fetched
+- A subtle shimmer in the Sherpa rail indicates "I have something ready"
+- One click materializes the pre-loaded object instantly (no delay)
 
-## 8. Motion as Causality
+**Implementation**: After each `MATERIALIZE_OBJECT` or `FOCUS_OBJECT`, a background AI call predicts likely next actions. Results are cached in state as `pendingMaterializations`. The Sherpa shows a pulsing dot when predictions are ready.
 
-Motion communicates *why* something appeared, not just *that* it appeared:
+### 7. Workspace-to-Artifact Export — One Command, Full Briefing
 
-- **Materialize**: Object scales from 0.96 + fades in from the direction of its origin (from Sherpa rail if user-queried, from parent object if cross-spawned).
-- **Dissolve**: Fade out + slight scale down toward origin point.
-- **Collapse**: Shrink to chip, animate toward peripheral zone.
-- **Restore**: Chip expands from peripheral zone to its spatial position.
-- **Focus shift**: Focused object slightly enlarges; others reduce opacity to 0.6.
-- **Relationship highlight**: Subtle shared pulse or border glow between related objects.
+"Export this workspace" generates a structured document from everything currently open.
 
-All transitions use CSS transitions with `cubic-bezier(0.16, 1, 0.3, 1)` (smooth deceleration). No spring physics library needed for v1 — CSS is sufficient and lighter.
+- AI synthesizes all open objects into a coherent narrative
+- Output as a formatted briefing (rendered in immersive mode, downloadable as PDF)
+- Respects spatial hierarchy: primary objects get detailed treatment, secondary gets summary
+- Includes relationship map as a visual diagram
 
-## File Structure
+### 8. Ambient Sound Design — Web Audio API
+
+Subtle, almost subliminal audio cues that make the workspace feel alive:
+
+- Soft chime on object materialization
+- Gentle tone shift when entering immersive mode
+- Quiet pulse when an alert arrives
+- Atmospheric hum that subtly changes with cognitive mode
+
+**Implementation**: A `useAmbientAudio` hook with Web Audio API oscillators. All sounds procedurally generated (no audio files). Master volume control, default very low. Can be muted.
+
+### 9. Workspace Persistence + Memory Graph
+
+- `localStorage` serialization of full `WorkspaceState` — survive page refreshes
+- Session history: "You explored leverage → comparison → alerts yesterday. Resume?"
+- Frequently accessed objects get auto-pinned suggestions
+- Sherpa references past sessions: "Last time you looked at Beta's leverage, it was at 3.2x. It's now 3.6x."
+
+### 10. Living Sparklines + Real-time Pulse
+
+Objects shouldn't feel static. Even with mock data:
+
+- Sparklines animate on mount (draw-in effect)
+- Metric values have subtle count-up animations
+- A "last updated" pulse indicator on data objects
+- Periodic micro-animations that make objects feel alive (breathing border glow)
+
+---
+
+## Implementation Order (Priority)
+
+1. **Real AI backbone** — highest ROI, transforms everything from demo to product
+2. **Cmd+K command palette** — makes the workspace feel like a power tool
+3. **Voice input** — small effort, massive "future" signal
+4. **Cognitive mode system** — ambient atmosphere that no competitor has
+5. **Object fusion** — paradigm-breaking interaction model
+6. **Living animations + sparkline draw-in** — polish that signals quality
+7. **Workspace persistence** — expected functionality
+8. **Ambient sound design** — the detail that makes people say "wow"
+9. **Predictive materialization** — requires AI backbone first
+10. **Workspace-to-artifact export** — requires AI backbone first
+
+## Technical Architecture
 
 ```text
-src/
-  contexts/
-    WorkspaceContext.tsx      — state, reducer, provider
-    SherpaContext.tsx          — Sherpa intelligence state
-  lib/
-    intent-engine.ts          — NL → workspace actions
-    sherpa-engine.ts           — proactive intelligence logic
-    spatial-orchestrator.ts    — layout placement rules
-    workspace-types.ts         — all type definitions
-    mock-data.ts               — realistic demo data
-  components/
-    workspace/
-      WorkspaceShell.tsx       — root layout
-      PanelCanvas.tsx          — renders objects by spatial zone
-      WorkspaceObject.tsx      — universal object wrapper (motion, chrome)
-      SherpaRail.tsx           — AI interface surface
-      CollapsedBar.tsx         — peripheral zone chips
-      RelationshipConnector.tsx — visual links between objects
-    objects/
-      MetricDetail.tsx
-      ComparisonPanel.tsx
-      AlertRiskPanel.tsx
-      DataInspector.tsx
-      AIBrief.tsx
-      Timeline.tsx
-  hooks/
-    useCrossObjectBehavior.ts  — relationship-aware interactions
-    useWorkspaceActions.ts     — convenience dispatch hooks
-  pages/
-    Index.tsx                  — single entry, renders WorkspaceShell
+┌─────────────────────────────────────────────────────┐
+│                    Frontend                          │
+│  ┌──────────┐  ┌──────────┐  ┌───────────────────┐ │
+│  │ Cmd+K    │  │ Voice    │  │ Sherpa Rail       │ │
+│  │ Palette  │  │ Input    │  │ (+ ambient hints) │ │
+│  └────┬─────┘  └────┬─────┘  └────────┬──────────┘ │
+│       └──────────────┴────────────────┘              │
+│                      │                               │
+│            processIntent(query)                      │
+│                      │                               │
+│         ┌────────────▼────────────┐                  │
+│         │  AI Intent Engine       │                  │
+│         │  (LLM-powered, not     │                  │
+│         │   keyword matching)     │                  │
+│         └────────────┬────────────┘                  │
+│                      │                               │
+│    ┌─────────────────┼──────────────────┐            │
+│    │                 │                  │            │
+│    ▼                 ▼                  ▼            │
+│ CREATE            RESPOND           PREDICT          │
+│ objects           with real          next need        │
+│                   analysis                           │
+│                                                      │
+│  ┌──────────────────────────────────────────┐        │
+│  │  Cognitive Mode Engine                    │        │
+│  │  Observes state → shifts atmosphere       │        │
+│  └──────────────────────────────────────────┘        │
+│                                                      │
+│  ┌──────────────────────────────────────────┐        │
+│  │  Fusion Engine                            │        │
+│  │  Object + Object → Synthesized Object     │        │
+│  └──────────────────────────────────────────┘        │
+└──────────────────────┬──────────────────────────────┘
+                       │
+              Supabase Edge Function
+                       │
+              Lovable AI Gateway
+              (google/gemini-3-flash-preview)
 ```
 
-## Demo Flow
+## Files Created/Modified
 
-1. **Load**: Calm canvas. Sherpa greeting: "Good morning. What would you like to focus on?" Three subtle suggestion chips.
-2. **"show leverage exposure"** → IntentEngine creates MetricDetail object → SpatialOrchestrator places in primary zone → materializes from Sherpa rail direction.
-3. **"compare Alpha and Gamma"** → ComparisonPanel materializes in primary → MetricDetail shifts to secondary → relationship link established.
-4. **"what should I focus on?"** → Sherpa responds inline + creates AlertRisk object with `origin: sherpa-suggestion` → appears in primary, others shift.
-5. **Collapse** an object → dissolves to chip in peripheral bar. Related objects dim slightly.
-6. **Click chip** → restores with animation from chip position to spatial slot.
-7. **Hover** metric in comparison → if standalone metric object exists, it pulses subtly.
+**New files:**
+- `supabase/functions/ai-chat/index.ts` — Edge function for AI gateway
+- `src/hooks/useAI.ts` — Streaming AI hook
+- `src/hooks/useCognitiveMode.ts` — Atmosphere detection
+- `src/hooks/useVoiceInput.ts` — Web Speech API wrapper
+- `src/hooks/useAmbientAudio.ts` — Procedural sound design
+- `src/hooks/useWorkspacePersistence.ts` — localStorage serialization
+- `src/components/workspace/CommandPalette.tsx` — Cmd+K overlay
+- `src/components/workspace/FusionZone.tsx` — Drag-to-synthesize UI
+- `src/components/workspace/VoiceIndicator.tsx` — Waveform viz
+- `src/lib/cognitive-modes.ts` — Mode detection logic
 
-## Design Tokens (CSS Variables)
-
-Updated palette in `index.css`:
-- `--workspace-bg: 40 20% 98%` (warm pearl)
-- `--workspace-surface: 40 15% 96%` (fog)
-- `--workspace-accent: 234 60% 60%` (muted indigo)
-- `--workspace-accent-subtle: 234 30% 90%`
-- `--workspace-text: 220 20% 12%`
-- `--workspace-text-secondary: 220 10% 50%`
-- `--workspace-border: 220 15% 90%`
-- `--workspace-shadow: 0 2px 12px rgba(0,0,0,0.04)`
-
-## What This Enables Next
-
-The architecture is structured so these additions require no refactoring:
-- Real LLM integration (replace keyword matching in intent-engine)
-- localStorage/server persistence (serialize WorkspaceState)
-- Command palette (another intent input surface, same engine)
-- Workspace memory across sessions
-- Object registry for plugin-style new object types
+**Modified files:**
+- `src/lib/intent-engine.ts` — Replace keyword matching with LLM routing
+- `src/hooks/useWorkspaceActions.ts` — Wire AI calls
+- `src/components/workspace/SherpaRail.tsx` — Voice button, prediction indicators
+- `src/components/workspace/FreeformCanvas.tsx` — Fusion detection
+- `src/components/workspace/WorkspaceShell.tsx` — Cognitive mode classes, command palette
+- `src/components/objects/DocumentReader.tsx` — Real AI Q&A
+- `src/components/objects/DatasetView.tsx` — Real AI insights
+- `src/components/objects/MetricDetail.tsx` — Animated sparklines
+- `src/index.css` — Cognitive mode CSS variables, new animations
+- `src/contexts/WorkspaceContext.tsx` — Persistence, prediction state
 
