@@ -36,6 +36,7 @@ export interface WorkspaceObject {
   relationships: string[];
   context: Record<string, any>;
   position: SpatialPosition;
+  freeformPosition?: FreeformPosition;
   createdAt: number;
   lastInteractedAt: number;
 }
