@@ -83,6 +83,14 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
       {/* Header — actions appear on hover only (anti-drift: no always-visible action bars) */}
       <div className="flex items-center justify-between px-5 pt-4 pb-3">
         <div className="flex items-center gap-2.5">
+          {/* Drag handle */}
+          <span
+            {...dragListeners}
+            className="cursor-grab text-workspace-text-secondary/30 hover:text-workspace-text-secondary/60 transition-colors active:cursor-grabbing select-none"
+            title="Drag to reorder"
+          >
+            ⠿
+          </span>
           <span className="text-[10px] font-medium uppercase tracking-widest text-workspace-accent">
             {typeLabels[object.type] || object.type}
           </span>
