@@ -180,7 +180,6 @@ Produce a deep, specific synthesis. Do NOT write generic introductions like "Thi
           { id: target.id, type: target.type, title: target.title },
         ],
         generatedAt: new Date().toISOString(),
-        generatingImage: true,
       };
 
       dispatch({
