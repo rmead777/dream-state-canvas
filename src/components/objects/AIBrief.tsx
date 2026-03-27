@@ -2,6 +2,7 @@ import { WorkspaceObject } from '@/lib/workspace-types';
 
 export function AIBrief({ object }: { object: WorkspaceObject }) {
   const d = object.context;
+  const text = d.content || d.summary || '';
 
   return (
     <div className="space-y-4">
@@ -17,18 +18,52 @@ export function AIBrief({ object }: { object: WorkspaceObject }) {
         </div>
       )}
 
-      <div
-        className="prose prose-sm max-w-none text-workspace-text-secondary leading-relaxed
-          [&_strong]:text-workspace-text [&_strong]:font-medium
-          [&_p]:mb-3 [&_p:last-child]:mb-0"
-        dangerouslySetInnerHTML={{
-          __html: (d.content || '')
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\n\n/g, '</p><p>')
-            .replace(/^/, '<p>')
-            .replace(/$/, '</p>'),
-        }}
-      />
+      {text && (
+        <div
+          className="prose prose-sm max-w-none text-workspace-text-secondary leading-relaxed
+            [&_strong]:text-workspace-text [&_strong]:font-medium
+            [&_p]:mb-3 [&_p:last-child]:mb-0"
+          dangerouslySetInnerHTML={{
+            __html: text
+              .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+              .replace(/\n\n/g, '</p><p>')
+              .replace(/^/, '<p>')
+              .replace(/$/, '</p>'),
+          }}
+        />
+      )}
+
+      {d.insights && d.insights.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-[10px] font-medium uppercase tracking-wider text-workspace-text-secondary">
+            Key Insights
+          </div>
+          {d.insights.map((insight: string, i: number) => (
+            <div key={i} className="flex items-start gap-2 text-sm text-workspace-text-secondary leading-relaxed">
+              <span className="text-workspace-accent mt-0.5 text-xs">✦</span>
+              <span>{insight}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {d.sourceObjects && d.sourceObjects.length > 0 && (
+        <div className="border-t border-workspace-border/50 pt-3">
+          <div className="text-[10px] font-medium uppercase tracking-wider text-workspace-text-secondary mb-1.5">
+            Synthesized From
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {d.sourceObjects.map((s: any) => (
+              <span
+                key={s.id}
+                className="rounded-full bg-workspace-surface px-2.5 py-1 text-[11px] text-workspace-text-secondary"
+              >
+                {s.title}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {d.sources && d.sources.length > 0 && (
         <div className="border-t border-workspace-border/50 pt-3">
