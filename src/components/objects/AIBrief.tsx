@@ -1,0 +1,52 @@
+import { WorkspaceObject } from '@/lib/workspace-types';
+
+export function AIBrief({ object }: { object: WorkspaceObject }) {
+  const d = object.context;
+
+  return (
+    <div className="space-y-4">
+      {d.confidence && (
+        <div className="flex items-center gap-2 text-xs text-workspace-text-secondary">
+          <div className="h-1.5 w-12 rounded-full bg-workspace-surface overflow-hidden">
+            <div
+              className="h-full rounded-full bg-workspace-accent"
+              style={{ width: `${d.confidence * 100}%` }}
+            />
+          </div>
+          <span>{Math.round(d.confidence * 100)}% confidence</span>
+        </div>
+      )}
+
+      <div
+        className="prose prose-sm max-w-none text-workspace-text-secondary leading-relaxed
+          [&_strong]:text-workspace-text [&_strong]:font-medium
+          [&_p]:mb-3 [&_p:last-child]:mb-0"
+        dangerouslySetInnerHTML={{
+          __html: (d.content || '')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\n\n/g, '</p><p>')
+            .replace(/^/, '<p>')
+            .replace(/$/, '</p>'),
+        }}
+      />
+
+      {d.sources && d.sources.length > 0 && (
+        <div className="border-t border-workspace-border/50 pt-3">
+          <div className="text-[10px] font-medium uppercase tracking-wider text-workspace-text-secondary mb-1.5">
+            Sources
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {d.sources.map((s: string) => (
+              <span
+                key={s}
+                className="rounded-full bg-workspace-surface px-2.5 py-1 text-[11px] text-workspace-text-secondary"
+              >
+                {s}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
