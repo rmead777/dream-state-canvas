@@ -4,6 +4,8 @@ import { useWorkspaceActions } from '@/hooks/useWorkspaceActions';
 import { WorkspaceObjectWrapper } from './WorkspaceObject';
 import { FusionZone } from './FusionZone';
 import { callAI } from '@/hooks/useAI';
+import { canFuse, SynthesisType } from '@/lib/fusion-rules';
+import { toast } from '@/hooks/use-toast';
 
 const FUSION_THRESHOLD = 120;
 const FUSION_GLOW_THRESHOLD = 200;
@@ -54,6 +56,7 @@ export function FreeformCanvas() {
 
       for (const other of Object.values(objects)) {
         if (other.id === draggedId || other.status === 'dissolved' || other.status === 'collapsed' || !other.freeformPosition) continue;
+        if (!canFuse(draggedObj.type, other.type)) continue;
         const dx = Math.abs(draggedObj.freeformPosition.x - other.freeformPosition.x);
         const dy = Math.abs(draggedObj.freeformPosition.y - other.freeformPosition.y);
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -82,6 +85,7 @@ export function FreeformCanvas() {
 
       for (const other of visibleObjects) {
         if (other.id === draggedId || !other.freeformPosition) continue;
+        if (!canFuse(draggedObj.type, other.type)) continue;
         const dx = Math.abs(draggedObj.freeformPosition.x - other.freeformPosition.x);
         const dy = Math.abs(draggedObj.freeformPosition.y - other.freeformPosition.y);
         if (dx < FUSION_THRESHOLD && dy < FUSION_THRESHOLD) {
@@ -117,7 +121,19 @@ ${JSON.stringify(source.context).slice(0, 800)}
 OBJECT B — [${target.type}] "${target.title}":
 ${JSON.stringify(target.context).slice(0, 800)}
 
-Produce a deep, specific synthesis. Do NOT write generic introductions like "This synthesis combines..." — go straight into the analysis. Reference actual data points, numbers, and specifics from both objects.`,
+RULES:
+- Only produce this synthesis if the combination reveals something non-obvious or decision-useful. If the two objects are too similar or unrelated, set synthesisType to "low-value".
+- Do NOT write generic introductions like "This synthesis combines..." — go straight into the analysis.
+- Reference actual data points, numbers, and specifics from both objects.
+
+Return JSON with these fields:
+{
+  "title": "short synthesis title",
+  "summary": "the deep analytical synthesis text",
+  "insights": ["insight 1", "insight 2"],
+  "synthesisType": "direct-extraction" | "inferred-pattern" | "speculative-synthesis" | "low-value",
+  "confidence": 0.0-1.0
+}`,
           },
         ],
         'fusion'
@@ -126,6 +142,8 @@ Produce a deep, specific synthesis. Do NOT write generic introductions like "Thi
       let title = `${source.title} ✦ ${target.title}`;
       let summary = '';
       let insights: string[] = [];
+      let synthesisType: SynthesisType = 'inferred-pattern';
+      let confidence = 0.7;
 
       try {
         const jsonMatch = (result || '').match(/\{[\s\S]*\}/);
@@ -134,8 +152,18 @@ Produce a deep, specific synthesis. Do NOT write generic introductions like "Thi
           if (parsed.title) title = parsed.title;
           if (parsed.summary) summary = parsed.summary;
           if (parsed.insights && Array.isArray(parsed.insights)) insights = parsed.insights;
+          if (parsed.synthesisType) synthesisType = parsed.synthesisType as SynthesisType;
+          if (parsed.confidence) confidence = parsed.confidence;
         }
       } catch { /* fallback */ }
+
+      // Low-value gate — don't create clutter
+      if (synthesisType === 'low-value') {
+        toast({ title: 'Fusion not productive', description: 'These objects don\'t reveal non-obvious relationships when combined. Try a different pair.' });
+        setFusionProcessing(false);
+        setFusionTarget(null);
+        return;
+      }
 
       // If JSON parsing failed, use the raw text as the summary
       if (!summary && result) {
@@ -148,6 +176,8 @@ Produce a deep, specific synthesis. Do NOT write generic introductions like "Thi
         content: summary,
         summary,
         insights: insights.length > 0 ? insights : undefined,
+        synthesisType,
+        confidence,
         sourceObjects: [
           { id: source.id, type: source.type, title: source.title },
           { id: target.id, type: target.type, title: target.title },
