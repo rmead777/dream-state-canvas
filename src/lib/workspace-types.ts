@@ -130,4 +130,6 @@ export type WorkspaceReducerAction =
   | { type: 'ADD_SHERPA_OBSERVATION'; payload: string }
   | { type: 'SET_SHERPA_PROCESSING'; payload: boolean }
   | { type: 'ADD_RECENT_INTENT'; payload: IntentOrigin }
-  | { type: 'REORDER_ZONE'; payload: { zone: 'primary' | 'secondary'; ids: string[] } };
+  | { type: 'REORDER_ZONE'; payload: { zone: 'primary' | 'secondary'; ids: string[] } }
+  | { type: 'SET_LAYOUT_MODE'; payload: LayoutMode }
+  | { type: 'UPDATE_FREEFORM_POSITION'; payload: { id: string; position: FreeformPosition } };
