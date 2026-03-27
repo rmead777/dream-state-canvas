@@ -27,14 +27,14 @@ function buildWorkspaceContext(objects: Record<string, WorkspaceObject>): string
 
 // Mock data lookup for creating objects
 const MOCK_DATA_BY_TYPE: Record<string, { data: Record<string, any>; defaultTitle: string }> = {
-  metric: { data: MOCK_LEVERAGE_DATA, defaultTitle: 'Leverage Exposure' },
-  comparison: { data: MOCK_COMPARISON_DATA, defaultTitle: 'Fund Comparison' },
-  alert: { data: MOCK_ALERT_DATA, defaultTitle: 'Priority Alerts' },
-  inspector: { data: MOCK_INSPECTOR_DATA, defaultTitle: 'Portfolio Overview' },
-  brief: { data: MOCK_BRIEF_DATA, defaultTitle: 'Risk Brief' },
-  timeline: { data: MOCK_TIMELINE_DATA, defaultTitle: 'Activity Timeline' },
-  document: { data: MOCK_DOCUMENT_DATA, defaultTitle: 'Q3 Risk Assessment' },
-  dataset: { data: MOCK_DATASET_DATA, defaultTitle: 'Portfolio Dataset' },
+  metric: { data: MOCK_LEVERAGE_DATA, defaultTitle: 'AP Exposure' },
+  comparison: { data: MOCK_COMPARISON_DATA, defaultTitle: 'Vendor Comparison' },
+  alert: { data: MOCK_ALERT_DATA, defaultTitle: 'Urgent Vendors' },
+  inspector: { data: MOCK_INSPECTOR_DATA, defaultTitle: 'Top Vendors' },
+  brief: { data: MOCK_BRIEF_DATA, defaultTitle: 'AP Risk Assessment' },
+  timeline: { data: MOCK_TIMELINE_DATA, defaultTitle: 'Vendor Activity' },
+  document: { data: MOCK_DOCUMENT_DATA, defaultTitle: 'AP Vendor Tracker v14' },
+  dataset: { data: MOCK_DATASET_DATA, defaultTitle: 'Vendor Dataset' },
 };
 
 /**
@@ -154,80 +154,80 @@ const patterns: IntentPattern[] = [
     },
   },
   {
-    keywords: ['leverage', 'debt', 'ratio'],
+    keywords: ['exposure', 'ap', 'payable', 'owed', 'total', 'leverage'],
     generate: (input, existing) => {
-      const hasLeverage = Object.values(existing).some(
-        (o) => o.type === 'metric' && o.context?.label === 'leverage' && o.status !== 'dissolved'
+      const hasMetric = Object.values(existing).some(
+        (o) => o.type === 'metric' && o.context?.label === 'ap-exposure' && o.status !== 'dissolved'
       );
-      if (hasLeverage) {
+      if (hasMetric) {
         const obj = Object.values(existing).find(
-          (o) => o.type === 'metric' && o.context?.label === 'leverage'
+          (o) => o.type === 'metric' && o.context?.label === 'ap-exposure'
         );
         return [
-          { type: 'respond', message: 'Leverage exposure is already in your workspace. I\'ve brought it into focus.' },
+          { type: 'respond', message: 'AP exposure is already in your workspace.' },
           ...(obj ? [{ type: 'focus' as const, objectId: obj.id }] : []),
         ];
       }
       return [
-        { type: 'respond', message: 'Here\'s the current leverage position across the portfolio. Beta is approaching covenant threshold.' },
-        { type: 'create', objectType: 'metric', title: 'Leverage Exposure', data: { ...MOCK_LEVERAGE_DATA, label: 'leverage' } },
+        { type: 'respond', message: 'Total AP is $2.77M across 191 vendors. Tier 1 urgent: $158K across 5 vendors requiring immediate action.' },
+        { type: 'create', objectType: 'metric', title: 'AP Exposure', data: { ...MOCK_LEVERAGE_DATA, label: 'ap-exposure' } },
       ];
     },
   },
   {
     keywords: ['compare', 'versus', 'vs'],
     generate: (input) => {
-      const fundNames = ['alpha', 'beta', 'gamma', 'delta', 'epsilon'];
-      const mentioned = fundNames.filter((f) => input.toLowerCase().includes(f));
+      const vendorNames = ['acme', 'vac2go', 'delta ducon', 'coverall', 'mcgriff', 'white oak', 'csx', 'alabama power'];
+      const mentioned = vendorNames.filter((f) => input.toLowerCase().includes(f));
       const title = mentioned.length >= 2
-        ? `${mentioned.map((n) => n.charAt(0).toUpperCase() + n.slice(1)).join(' vs ')}`
-        : 'Fund Comparison';
+        ? mentioned.map((n) => n.charAt(0).toUpperCase() + n.slice(1)).join(' vs ')
+        : 'Vendor Comparison';
       return [
-        { type: 'respond', message: 'Comparison surface ready. Key divergence is in leverage and YTD returns.' },
+        { type: 'respond', message: 'Comparison ready. Showing Tier 1 vendor risk profiles side by side.' },
         { type: 'create', objectType: 'comparison', title, data: MOCK_COMPARISON_DATA },
       ];
     },
   },
   {
-    keywords: ['focus', 'attention', 'priority', 'risk', 'alert', 'concern'],
+    keywords: ['urgent', 'attention', 'priority', 'risk', 'alert', 'concern', 'action', 'tier 1', 'act now'],
     generate: () => [
-      { type: 'respond', message: 'Two items need attention. Beta\'s covenant risk is most urgent — I\'ve surfaced the detail.' },
-      { type: 'create', objectType: 'alert', title: 'Priority Alerts', data: MOCK_ALERT_DATA },
+      { type: 'respond', message: '11 vendors across Tier 1 and Tier 2 need attention. 5 Tier 1 vendors have active legal threats, lien filings, or service suspensions.' },
+      { type: 'create', objectType: 'alert', title: 'Urgent Vendors', data: MOCK_ALERT_DATA },
     ],
   },
   {
-    keywords: ['table', 'data', 'inspect', 'portfolio', 'funds', 'overview'],
+    keywords: ['table', 'top', 'inspect', 'overview', 'biggest', 'largest'],
     generate: () => [
-      { type: 'respond', message: 'Portfolio data inspector is ready. All active funds and key metrics.' },
-      { type: 'create', objectType: 'inspector', title: 'Portfolio Overview', data: MOCK_INSPECTOR_DATA },
+      { type: 'respond', message: 'Top vendors by outstanding balance. CSX Transportation leads at $523K.' },
+      { type: 'create', objectType: 'inspector', title: 'Top Vendors', data: MOCK_INSPECTOR_DATA },
     ],
   },
   {
-    keywords: ['summary', 'brief', 'analysis'],
+    keywords: ['summary', 'brief', 'analysis', 'assessment'],
     generate: () => [
-      { type: 'respond', message: 'I\'ve prepared a risk brief based on current portfolio state.' },
-      { type: 'create', objectType: 'brief', title: 'Risk Brief', data: MOCK_BRIEF_DATA },
+      { type: 'respond', message: 'AP risk assessment ready — covering all tiers, escalation patterns, and recommended actions.' },
+      { type: 'create', objectType: 'brief', title: 'AP Risk Assessment', data: MOCK_BRIEF_DATA },
     ],
   },
   {
-    keywords: ['timeline', 'activity', 'history', 'recent', 'log'],
+    keywords: ['timeline', 'activity', 'history', 'recent', 'log', 'deadline'],
     generate: () => [
-      { type: 'respond', message: 'Here\'s the recent workspace activity and system events.' },
-      { type: 'create', objectType: 'timeline', title: 'Activity Timeline', data: MOCK_TIMELINE_DATA },
+      { type: 'respond', message: 'Key vendor events and upcoming deadlines.' },
+      { type: 'create', objectType: 'timeline', title: 'Vendor Activity', data: MOCK_TIMELINE_DATA },
     ],
   },
   {
-    keywords: ['document', 'report', 'pdf', 'read', 'assessment'],
+    keywords: ['document', 'report', 'pdf', 'read', 'tracker'],
     generate: () => [
-      { type: 'respond', message: 'I\'ve opened the Q3 risk assessment. You can enter immersive mode for deep reading.' },
-      { type: 'create', objectType: 'document', title: 'Q3 Risk Assessment', data: MOCK_DOCUMENT_DATA },
+      { type: 'respond', message: 'Opening the AP Vendor Tracker v14 document view.' },
+      { type: 'create', objectType: 'document', title: 'AP Vendor Tracker v14', data: MOCK_DOCUMENT_DATA },
     ],
   },
   {
-    keywords: ['dataset', 'spreadsheet', 'full data', 'all funds', 'full dataset'],
+    keywords: ['dataset', 'spreadsheet', 'full data', 'all vendor', 'full dataset', 'vendor list'],
     generate: () => [
-      { type: 'respond', message: 'Full portfolio dataset ready. Expand it for sorting, filtering, and AI-driven insights.' },
-      { type: 'create', objectType: 'dataset', title: 'Portfolio Dataset', data: MOCK_DATASET_DATA },
+      { type: 'respond', message: 'Full vendor dataset ready — 30 largest vendors with balances, tier, and contact info.' },
+      { type: 'create', objectType: 'dataset', title: 'Vendor Dataset', data: MOCK_DATASET_DATA },
     ],
   },
 ];
@@ -248,7 +248,7 @@ export function parseIntent(
     actions: [
       {
         type: 'respond',
-        message: 'I can help with leverage exposure, fund comparisons, risk alerts, portfolio data, summaries, or activity timelines. What would you like to explore?',
+        message: 'I can help with AP exposure, vendor comparisons, urgent vendor alerts, the full vendor dataset, risk assessments, or activity timelines. What would you like to explore?',
       },
     ],
   };
