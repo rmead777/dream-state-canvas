@@ -81,24 +81,62 @@ Create a meaningful synthesis.`,
         'fusion'
       );
 
-      let title = `${source.title} + ${target.title}`;
+      let title = `${source.title} ✦ ${target.title}`;
       let summary = result || 'Synthesis of both objects.';
+      let insights: string[] = [];
 
       try {
-        const parsed = JSON.parse(result || '{}');
-        if (parsed.title) title = parsed.title;
-        if (parsed.summary) summary = parsed.summary;
-      } catch { /* use raw text */ }
+        const jsonMatch = (result || '').match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed.title) title = parsed.title;
+          if (parsed.summary) summary = parsed.summary;
+          if (parsed.insights) insights = parsed.insights;
+        }
+      } catch { /* use raw text as summary */ }
 
-      // Create fusion object
-      processIntent(`Create a brief titled "${title}" synthesizing ${source.title} and ${target.title}`);
+      // Directly materialize the fusion object with AI-generated content
+      const id = `wo-fusion-${Date.now()}`;
+      const fusionData = {
+        summary,
+        insights: insights.length > 0 ? insights : [summary],
+        sourceObjects: [
+          { id: source.id, type: source.type, title: source.title },
+          { id: target.id, type: target.type, title: target.title },
+        ],
+        generatedAt: new Date().toISOString(),
+      };
+
+      dispatch({
+        type: 'MATERIALIZE_OBJECT',
+        payload: {
+          id,
+          type: 'brief',
+          title,
+          pinned: false,
+          origin: { type: 'fusion' as any, query: `Fusion of ${source.title} and ${target.title}` },
+          relationships: [source.id, target.id],
+          context: fusionData,
+          position: { zone: 'primary', order: 0 },
+          freeformPosition: {
+            x: ((source.freeformPosition?.x ?? 200) + (target.freeformPosition?.x ?? 400)) / 2,
+            y: Math.max(source.freeformPosition?.y ?? 100, target.freeformPosition?.y ?? 100) + 120,
+          },
+        },
+      });
+
+      dispatch({ type: 'SET_SHERPA_RESPONSE', payload: `Synthesized "${source.title}" and "${target.title}" into a new insight.` });
+
+      setTimeout(() => {
+        dispatch({ type: 'OPEN_OBJECT', payload: { id } });
+      }, 400);
     } catch {
-      processIntent(`Compare ${source.title} and ${target.title}`);
+      dispatch({ type: 'SET_SHERPA_RESPONSE', payload: 'Fusion failed — try again or ask the Sherpa directly.' });
     }
 
     setFusionProcessing(false);
     setFusionTarget(null);
-  }, [fusionTarget, objects, processIntent]);
+  }, [fusionTarget, objects, dispatch]);
 
   return (
     <div
