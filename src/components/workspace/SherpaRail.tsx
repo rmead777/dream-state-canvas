@@ -1,22 +1,43 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useWorkspaceActions } from '@/hooks/useWorkspaceActions';
 import { useSherpa } from '@/contexts/SherpaContext';
+import { useVoiceInput } from '@/hooks/useVoiceInput';
+import { useAmbientAudio } from '@/hooks/useAmbientAudio';
+import { VoiceIndicator } from './VoiceIndicator';
 
 export function SherpaRail() {
   const { state } = useWorkspace();
   const { processIntent } = useWorkspaceActions();
   const { suggestions, observations, lastResponse, isProcessing } = useSherpa();
+  const { play } = useAmbientAudio();
   const [input, setInput] = useState('');
   const [isExpanded, setIsExpanded] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleSubmit = () => {
+  const handleSubmit = useCallback(() => {
     const trimmed = input.trim();
     if (!trimmed) return;
     processIntent(trimmed);
     setInput('');
-  };
+  }, [input, processIntent]);
+
+  const handleVoiceResult = useCallback(
+    (transcript: string) => {
+      play('focus');
+      processIntent(transcript);
+    },
+    [processIntent, play]
+  );
+
+  const handleVoiceInterim = useCallback((transcript: string) => {
+    setInput(transcript);
+  }, []);
+
+  const voice = useVoiceInput({
+    onResult: handleVoiceResult,
+    onInterim: handleVoiceInterim,
+  });
 
   const handleSuggestionClick = (query: string) => {
     processIntent(query);
@@ -53,7 +74,7 @@ export function SherpaRail() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-5">
-        {/* Greeting / Response area — NOT chat bubbles (anti-drift) */}
+        {/* Response area */}
         <div className="space-y-4 pb-4">
           {!lastResponse && (
             <div className="animate-[materialize_0.5s_cubic-bezier(0.16,1,0.3,1)_forwards]">
@@ -61,7 +82,7 @@ export function SherpaRail() {
                 Good morning. What would you like to focus on?
               </p>
               <p className="mt-2 text-xs text-workspace-text-secondary">
-                I can surface metrics, compare entities, highlight risks, or prepare a brief.
+                I can surface metrics, compare entities, highlight risks, or prepare a brief. Try voice input or ⌘K for commands.
               </p>
             </div>
           )}
@@ -75,7 +96,7 @@ export function SherpaRail() {
             </div>
           )}
 
-          {/* Proactive observations — the Sherpa noticing things */}
+          {/* Proactive observations */}
           {observations.length > 0 && (
             <div className="space-y-2 border-t border-workspace-border/30 pt-3">
               <span className="text-[9px] uppercase tracking-widest text-workspace-accent/50">
@@ -111,8 +132,11 @@ export function SherpaRail() {
         </div>
       </div>
 
-      {/* Input area — bottom of rail */}
-      <div className="border-t border-workspace-border/50 p-4">
+      {/* Input area */}
+      <div className="border-t border-workspace-border/50 p-4 space-y-3">
+        {/* Voice indicator */}
+        <VoiceIndicator volume={voice.volume} isListening={voice.isListening} />
+
         <div className="flex items-center gap-2 rounded-xl border border-workspace-border bg-white px-3.5 py-2.5
           transition-all focus-within:border-workspace-accent/30 focus-within:shadow-sm">
           <span className="text-workspace-accent/40 text-sm">→</span>
@@ -126,9 +150,36 @@ export function SherpaRail() {
             className="flex-1 bg-transparent text-sm text-workspace-text placeholder:text-workspace-text-secondary/40
               outline-none"
           />
+
+          {/* Voice button */}
+          {voice.isSupported && (
+            <button
+              onMouseDown={(e) => { e.preventDefault(); voice.startListening(); }}
+              onMouseUp={() => voice.stopListening()}
+              onMouseLeave={() => { if (voice.isListening) voice.stopListening(); }}
+              className={`rounded-full p-1.5 transition-all ${
+                voice.isListening
+                  ? 'bg-workspace-accent/15 text-workspace-accent scale-110'
+                  : 'text-workspace-text-secondary/40 hover:text-workspace-accent/60 hover:bg-workspace-accent/5'
+              }`}
+              title="Hold to speak"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                <line x1="12" x2="12" y1="19" y2="22" />
+              </svg>
+            </button>
+          )}
+
           {isProcessing && (
             <div className="h-3 w-3 rounded-full border-2 border-workspace-accent/30 border-t-workspace-accent animate-spin" />
           )}
+        </div>
+
+        {/* Keyboard hint */}
+        <div className="text-center text-[9px] text-workspace-text-secondary/30">
+          ⌘K for command palette
         </div>
       </div>
     </div>

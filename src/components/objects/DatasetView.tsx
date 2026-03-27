@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { WorkspaceObject } from '@/lib/workspace-types';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { useAI } from '@/hooks/useAI';
 
 interface DatasetViewProps {
   object: WorkspaceObject;
@@ -11,6 +12,7 @@ type SortDir = 'asc' | 'desc' | null;
 
 export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
   const { dispatch } = useWorkspace();
+  const { streamChat, isStreaming } = useAI();
   const d = object.context;
   const columns: string[] = d.columns || [];
   const rawRows: string[][] = d.rows || [];
@@ -46,18 +48,26 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
     return rows;
   }, [rawRows, sortCol, sortDir, filterText]);
 
-  const handleGenerateInsight = () => {
-    setAiInsight(
-      'Fund Beta shows the highest leverage at 3.6x with only +6.2% YTD return — a risk-adjusted underperformer. Fund Delta at 1.9x leverage with +15.1% return represents the strongest risk-adjusted position. Consider rebalancing exposure.'
+  const handleGenerateInsight = useCallback(async () => {
+    if (isStreaming) return;
+    setAiInsight('');
+
+    const tableStr = [columns.join(' | '), ...rawRows.map((r) => r.join(' | '))].join('\n');
+
+    await streamChat(
+      [{ role: 'user', content: `Analyze this dataset and provide 2-3 key insights:\n\n${tableStr}` }],
+      {
+        mode: 'dataset',
+        onDelta: (text) => setAiInsight((prev) => (prev || '') + text),
+      }
     );
-  };
+  }, [isStreaming, streamChat, columns, rawRows]);
 
   const handleEnterImmersive = () => {
     dispatch({ type: 'ENTER_IMMERSIVE', payload: { id: object.id } });
   };
 
   if (!isImmersive) {
-    // Compact card view
     return (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -71,7 +81,6 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
             Expand dataset →
           </button>
         </div>
-        {/* Mini preview table */}
         <div className="overflow-hidden rounded-lg border border-workspace-border">
           <table className="w-full text-xs">
             <thead>
@@ -103,10 +112,8 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
     );
   }
 
-  // Full immersive dataset view
   return (
     <div className="px-8 py-8">
-      {/* Toolbar */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 rounded-lg border border-workspace-border bg-white px-3 py-2 transition-all focus-within:border-workspace-accent/30">
@@ -127,9 +134,10 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
         <div className="flex items-center gap-2">
           <button
             onClick={handleGenerateInsight}
-            className="flex items-center gap-1.5 rounded-lg bg-workspace-accent/8 px-3 py-2 text-xs text-workspace-accent transition-colors hover:bg-workspace-accent/15"
+            disabled={isStreaming}
+            className="flex items-center gap-1.5 rounded-lg bg-workspace-accent/8 px-3 py-2 text-xs text-workspace-accent transition-colors hover:bg-workspace-accent/15 disabled:opacity-50"
           >
-            <span>✦</span> Generate insight
+            <span>✦</span> {isStreaming ? 'Analyzing...' : 'Generate insight'}
           </button>
           <button className="flex items-center gap-1.5 rounded-lg border border-workspace-border px-3 py-2 text-xs text-workspace-text-secondary transition-colors hover:bg-workspace-surface">
             📊 Generate chart
@@ -137,18 +145,16 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
         </div>
       </div>
 
-      {/* AI Insight */}
       {aiInsight && (
         <div className="mb-6 animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards] rounded-xl bg-workspace-accent-subtle/15 border border-workspace-accent/10 px-5 py-4">
           <div className="flex items-center gap-2 mb-2">
             <span className="text-workspace-accent text-sm">✦</span>
             <span className="text-[10px] font-medium uppercase tracking-widest text-workspace-accent">AI Insight</span>
           </div>
-          <p className="text-sm leading-relaxed text-workspace-text">{aiInsight}</p>
+          <p className="text-sm leading-relaxed text-workspace-text whitespace-pre-wrap">{aiInsight}</p>
         </div>
       )}
 
-      {/* Full table */}
       <div className="overflow-hidden rounded-xl border border-workspace-border bg-white">
         <table className="w-full text-sm">
           <thead>

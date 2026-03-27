@@ -1,18 +1,23 @@
 import { useRef, useCallback, useState, useEffect } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { useWorkspaceActions } from '@/hooks/useWorkspaceActions';
 import { WorkspaceObjectWrapper } from './WorkspaceObject';
-import { FreeformPosition } from '@/lib/workspace-types';
+import { FusionZone } from './FusionZone';
+import { callAI } from '@/hooks/useAI';
 
 export function FreeformCanvas() {
   const { state, dispatch } = useWorkspace();
+  const { processIntent } = useWorkspaceActions();
   const { objects } = state;
   const canvasRef = useRef<HTMLDivElement>(null);
+  const [fusionTarget, setFusionTarget] = useState<{ sourceId: string; targetId: string } | null>(null);
+  const [fusionProcessing, setFusionProcessing] = useState(false);
 
   const visibleObjects = Object.values(objects).filter(
     (o) => o.status !== 'dissolved' && o.status !== 'collapsed'
   );
 
-  // Assign default freeform positions to objects that don't have one yet
+  // Assign default freeform positions
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -34,12 +39,83 @@ export function FreeformCanvas() {
     }
   }, [visibleObjects.length]);
 
+  // Fusion detection — when a dragged object overlaps another
+  const handleDragEnd = useCallback(
+    (draggedId: string) => {
+      const draggedObj = objects[draggedId];
+      if (!draggedObj?.freeformPosition) return;
+
+      for (const other of visibleObjects) {
+        if (other.id === draggedId || !other.freeformPosition) continue;
+        const dx = Math.abs(draggedObj.freeformPosition.x - other.freeformPosition.x);
+        const dy = Math.abs(draggedObj.freeformPosition.y - other.freeformPosition.y);
+        // Overlap threshold
+        if (dx < 100 && dy < 80) {
+          setFusionTarget({ sourceId: draggedId, targetId: other.id });
+          return;
+        }
+      }
+    },
+    [objects, visibleObjects]
+  );
+
+  const handleFuse = useCallback(async () => {
+    if (!fusionTarget) return;
+    setFusionProcessing(true);
+
+    const source = objects[fusionTarget.sourceId];
+    const target = objects[fusionTarget.targetId];
+
+    try {
+      const result = await callAI(
+        [
+          {
+            role: 'user',
+            content: `Synthesize these two workspace objects:
+Object 1: [${source.type}] "${source.title}" — ${JSON.stringify(source.context).slice(0, 500)}
+Object 2: [${target.type}] "${target.title}" — ${JSON.stringify(target.context).slice(0, 500)}
+
+Create a meaningful synthesis.`,
+          },
+        ],
+        'fusion'
+      );
+
+      let title = `${source.title} + ${target.title}`;
+      let summary = result || 'Synthesis of both objects.';
+
+      try {
+        const parsed = JSON.parse(result || '{}');
+        if (parsed.title) title = parsed.title;
+        if (parsed.summary) summary = parsed.summary;
+      } catch { /* use raw text */ }
+
+      // Create fusion object
+      processIntent(`Create a brief titled "${title}" synthesizing ${source.title} and ${target.title}`);
+    } catch {
+      processIntent(`Compare ${source.title} and ${target.title}`);
+    }
+
+    setFusionProcessing(false);
+    setFusionTarget(null);
+  }, [fusionTarget, objects, processIntent]);
+
   return (
     <div
       ref={canvasRef}
       className="flex-1 relative overflow-auto"
       style={{ minHeight: '100%' }}
     >
+      {fusionTarget && (
+        <FusionZone
+          sourceTitle={objects[fusionTarget.sourceId]?.title || ''}
+          targetTitle={objects[fusionTarget.targetId]?.title || ''}
+          onFuse={handleFuse}
+          onCancel={() => setFusionTarget(null)}
+          isProcessing={fusionProcessing}
+        />
+      )}
+
       {visibleObjects.length === 0 ? (
         <div className="flex h-full items-center justify-center">
           <div className="max-w-md text-center">
@@ -47,11 +123,14 @@ export function FreeformCanvas() {
             <p className="text-sm text-workspace-text-secondary/50 leading-relaxed">
               Your workspace is clear. Ask the Sherpa to surface what matters.
             </p>
+            <p className="mt-2 text-[10px] text-workspace-text-secondary/30">
+              Try voice input, ⌘K, or type in the Sherpa rail
+            </p>
           </div>
         </div>
       ) : (
         visibleObjects.map((obj) => (
-          <DraggableFreeformObject key={obj.id} object={obj} />
+          <DraggableFreeformObject key={obj.id} object={obj} onDragEnd={handleDragEnd} />
         ))
       )}
     </div>
@@ -60,8 +139,10 @@ export function FreeformCanvas() {
 
 function DraggableFreeformObject({
   object,
+  onDragEnd,
 }: {
   object: ReturnType<typeof useWorkspace>['state']['objects'][string];
+  onDragEnd: (id: string) => void;
 }) {
   const { dispatch } = useWorkspace();
   const [dragging, setDragging] = useState(false);
@@ -70,7 +151,6 @@ function DraggableFreeformObject({
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      // Only start drag from the handle area (data attribute)
       const target = e.target as HTMLElement;
       if (!target.closest('[data-freeform-handle]')) return;
 
@@ -104,12 +184,13 @@ function DraggableFreeformObject({
         dragStart.current = null;
         window.removeEventListener('mousemove', onMove);
         window.removeEventListener('mouseup', onUp);
+        onDragEnd(object.id);
       };
 
       window.addEventListener('mousemove', onMove);
       window.addEventListener('mouseup', onUp);
     },
-    [pos, object.id, dispatch]
+    [pos, object.id, dispatch, onDragEnd]
   );
 
   return (

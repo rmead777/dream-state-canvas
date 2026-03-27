@@ -1,18 +1,36 @@
+import { useEffect, useRef, useState } from 'react';
 import { WorkspaceObject } from '@/lib/workspace-types';
 
-// Sparkline component for metric data
+// Animated sparkline with draw-in effect
 function Sparkline({ data }: { data: number[] }) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    let start: number | null = null;
+    const duration = 800;
+    const animate = (ts: number) => {
+      if (!start) start = ts;
+      const p = Math.min((ts - start) / duration, 1);
+      setProgress(p);
+      if (p < 1) requestAnimationFrame(animate);
+    };
+    requestAnimationFrame(animate);
+  }, []);
+
   const max = Math.max(...data);
   const min = Math.min(...data);
   const range = max - min || 1;
   const h = 32;
   const w = 120;
+  const visibleCount = Math.ceil(data.length * progress);
   const points = data
+    .slice(0, visibleCount)
     .map((v, i) => `${(i / (data.length - 1)) * w},${h - ((v - min) / range) * h}`)
     .join(' ');
 
   return (
-    <svg width={w} height={h} className="opacity-80">
+    <svg ref={svgRef} width={w} height={h} className="opacity-80">
       <polyline
         points={points}
         fill="none"
@@ -21,8 +39,50 @@ function Sparkline({ data }: { data: number[] }) {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+      {/* Live pulse dot at the end */}
+      {visibleCount > 0 && progress >= 1 && (
+        <circle
+          cx={(visibleCount - 1) / (data.length - 1) * w}
+          cy={h - ((data[visibleCount - 1] - min) / range) * h}
+          r="2.5"
+          fill="hsl(var(--workspace-accent))"
+          className="animate-pulse"
+        />
+      )}
     </svg>
   );
+}
+
+// Count-up animation for metric values
+function AnimatedValue({ value, unit }: { value: string; unit: string }) {
+  const numericMatch = value.match(/^(\d+\.?\d*)/);
+  const [display, setDisplay] = useState(numericMatch ? '0' : value);
+
+  useEffect(() => {
+    if (!numericMatch) {
+      setDisplay(value);
+      return;
+    }
+
+    const target = parseFloat(numericMatch[1]);
+    const suffix = value.slice(numericMatch[0].length);
+    const duration = 600;
+    let start: number | null = null;
+
+    const animate = (ts: number) => {
+      if (!start) start = ts;
+      const p = Math.min((ts - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - p, 3); // ease-out cubic
+      const current = target * eased;
+      setDisplay(
+        (Number.isInteger(target) ? Math.round(current).toString() : current.toFixed(1)) + suffix
+      );
+      if (p < 1) requestAnimationFrame(animate);
+    };
+    requestAnimationFrame(animate);
+  }, [value]);
+
+  return <>{display}{unit}</>;
 }
 
 export function MetricDetail({ object }: { object: WorkspaceObject }) {
@@ -33,7 +93,7 @@ export function MetricDetail({ object }: { object: WorkspaceObject }) {
       <div className="flex items-end justify-between">
         <div>
           <div className="text-3xl font-light tracking-tight text-workspace-text">
-            {d.currentValue}{d.unit}
+            <AnimatedValue value={String(d.currentValue)} unit={d.unit} />
           </div>
           <div className="mt-1 text-xs text-workspace-text-secondary">
             {d.change > 0 ? '+' : ''}{d.change}{d.unit} over {d.changePeriod}
@@ -66,27 +126,47 @@ export function MetricDetail({ object }: { object: WorkspaceObject }) {
             Breakdown
           </div>
           {d.breakdown.map((item: any) => (
-            <div key={item.name} className="flex items-center justify-between">
-              <span className="text-sm text-workspace-text">{item.name}</span>
-              <div className="flex items-center gap-2">
-                <div className="h-1.5 w-20 rounded-full bg-workspace-border/50 overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{
-                      width: `${(item.value / (d.threshold?.critical || 5)) * 100}%`,
-                      backgroundColor:
-                        item.value >= (d.threshold?.warning || 3)
-                          ? 'hsl(var(--workspace-accent))'
-                          : 'hsl(220 15% 55%)',
-                    }}
-                  />
-                </div>
-                <span className="text-sm font-medium text-workspace-text">{item.value}{d.unit}</span>
-              </div>
-            </div>
+            <BreakdownRow key={item.name} item={item} unit={d.unit} threshold={d.threshold} />
           ))}
         </div>
       )}
+
+      {/* Last updated pulse */}
+      <div className="flex items-center gap-2 pt-1">
+        <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+        <span className="text-[10px] text-workspace-text-secondary/40">Live</span>
+      </div>
+    </div>
+  );
+}
+
+function BreakdownRow({ item, unit, threshold }: { item: any; unit: string; threshold: any }) {
+  const [width, setWidth] = useState(0);
+
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      setWidth((item.value / (threshold?.critical || 5)) * 100);
+    });
+  }, [item.value, threshold]);
+
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-sm text-workspace-text">{item.name}</span>
+      <div className="flex items-center gap-2">
+        <div className="h-1.5 w-20 rounded-full bg-workspace-border/50 overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all duration-700 ease-out"
+            style={{
+              width: `${Math.min(width, 100)}%`,
+              backgroundColor:
+                item.value >= (threshold?.warning || 3)
+                  ? 'hsl(var(--workspace-accent))'
+                  : 'hsl(220 15% 55%)',
+            }}
+          />
+        </div>
+        <span className="text-sm font-medium text-workspace-text">{item.value}{unit}</span>
+      </div>
     </div>
   );
 }

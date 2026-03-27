@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { WorkspaceObject } from '@/lib/workspace-types';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { useAI } from '@/hooks/useAI';
 
 interface DocumentReaderProps {
   object: WorkspaceObject;
@@ -9,6 +10,7 @@ interface DocumentReaderProps {
 
 export function DocumentReader({ object, isImmersive = false }: DocumentReaderProps) {
   const { dispatch } = useWorkspace();
+  const { streamChat, isStreaming } = useAI();
   const d = object.context;
   const [askInput, setAskInput] = useState('');
   const [aiResponse, setAiResponse] = useState<string | null>(null);
@@ -18,12 +20,25 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
   const summary: string = d.summary || '';
   const fileName: string = d.fileName || 'Untitled Document';
 
-  const handleAsk = () => {
-    if (!askInput.trim()) return;
-    // Mock AI response
-    setAiResponse(`Based on the document "${fileName}": The key finding relates to ${askInput.toLowerCase().includes('risk') ? 'the risk factors outlined in section 2, particularly around covenant thresholds and deployment velocity.' : 'the overall portfolio positioning and strategic recommendations for the upcoming quarter.'}`);
+  const handleAsk = useCallback(async () => {
+    if (!askInput.trim() || isStreaming) return;
+    const question = askInput;
     setAskInput('');
-  };
+    setAiResponse('');
+
+    await streamChat(
+      [
+        {
+          role: 'user',
+          content: `Document: "${fileName}"\n\nContent:\n${paragraphs.join('\n\n')}\n\nQuestion: ${question}`,
+        },
+      ],
+      {
+        mode: 'document',
+        onDelta: (text) => setAiResponse((prev) => (prev || '') + text),
+      }
+    );
+  }, [askInput, isStreaming, streamChat, fileName, paragraphs]);
 
   const toggleHighlight = (idx: number) => {
     setHighlights((prev) =>
@@ -36,7 +51,6 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
   };
 
   if (!isImmersive) {
-    // Compact view inside workspace object card
     return (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -68,10 +82,8 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
     );
   }
 
-  // Full immersive reading layout
   return (
     <div className="mx-auto max-w-3xl px-8 py-10">
-      {/* AI Summary banner */}
       {summary && (
         <div className="mb-8 rounded-xl bg-workspace-accent-subtle/15 border border-workspace-accent/10 px-6 py-5">
           <div className="flex items-center gap-2 mb-2">
@@ -84,7 +96,6 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
         </div>
       )}
 
-      {/* Document body */}
       <div className="space-y-6">
         {paragraphs.map((para, idx) => (
           <p
@@ -101,7 +112,7 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
         ))}
       </div>
 
-      {/* Ask about this document */}
+      {/* Ask about this document — now AI-powered */}
       <div className="mt-12 border-t border-workspace-border/30 pt-8">
         <div className="flex items-center gap-2 mb-4">
           <span className="text-workspace-accent text-sm">✦</span>
@@ -119,15 +130,16 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
           />
           <button
             onClick={handleAsk}
-            className="rounded-lg bg-workspace-accent/10 px-3 py-1.5 text-xs text-workspace-accent transition-colors hover:bg-workspace-accent/20"
+            disabled={isStreaming}
+            className="rounded-lg bg-workspace-accent/10 px-3 py-1.5 text-xs text-workspace-accent transition-colors hover:bg-workspace-accent/20 disabled:opacity-50"
           >
-            Ask
+            {isStreaming ? '...' : 'Ask'}
           </button>
         </div>
 
         {aiResponse && (
           <div className="mt-4 animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards] rounded-xl bg-workspace-surface/60 px-5 py-4">
-            <p className="text-sm leading-relaxed text-workspace-text">{aiResponse}</p>
+            <p className="text-sm leading-relaxed text-workspace-text whitespace-pre-wrap">{aiResponse}</p>
           </div>
         )}
       </div>
