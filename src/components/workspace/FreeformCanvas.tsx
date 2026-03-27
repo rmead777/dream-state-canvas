@@ -56,6 +56,7 @@ export function FreeformCanvas() {
 
       for (const other of Object.values(objects)) {
         if (other.id === draggedId || other.status === 'dissolved' || other.status === 'collapsed' || !other.freeformPosition) continue;
+        if (!canFuse(draggedObj.type, other.type)) continue;
         const dx = Math.abs(draggedObj.freeformPosition.x - other.freeformPosition.x);
         const dy = Math.abs(draggedObj.freeformPosition.y - other.freeformPosition.y);
         const dist = Math.sqrt(dx * dx + dy * dy);
