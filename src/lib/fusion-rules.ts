@@ -1,27 +1,16 @@
 import { ObjectType } from './workspace-types';
 
-// Compatibility matrix — only these pairs can fuse
-const COMPATIBLE_PAIRS: Set<string> = new Set([
-  'metric+dataset',
-  'metric+metric',
-  'document+dataset',
-  'brief+dataset',
-  'document+metric',
-  'comparison+metric',
-  'alert+metric',
-  'dataset+dataset',
-  'comparison+dataset',
-  'document+document',
-  'alert+dataset',
-  'inspector+metric',
-  'inspector+dataset',
+// Incompatible pairs — these combinations are blocked to prevent clutter
+const INCOMPATIBLE_PAIRS: Set<string> = new Set([
+  'brief+brief',       // prevents recursive summary sludge
+  'timeline+timeline', // no meaningful synthesis
 ]);
 
 /** Returns true if two object types can be fused */
 export function canFuse(typeA: ObjectType, typeB: ObjectType): boolean {
   const key1 = `${typeA}+${typeB}`;
   const key2 = `${typeB}+${typeA}`;
-  return COMPATIBLE_PAIRS.has(key1) || COMPATIBLE_PAIRS.has(key2);
+  return !INCOMPATIBLE_PAIRS.has(key1) && !INCOMPATIBLE_PAIRS.has(key2);
 }
 
 export type SynthesisType = 'direct-extraction' | 'inferred-pattern' | 'speculative-synthesis' | 'low-value';
