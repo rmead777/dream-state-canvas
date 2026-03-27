@@ -56,9 +56,9 @@ export function SherpaRail() {
   const handleVoiceResult = useCallback(
     (transcript: string) => {
       play('focus');
-      processIntent(transcript);
+      trackAndProcess(transcript);
     },
-    [processIntent, play]
+    [trackAndProcess, play]
   );
 
   const handleVoiceInterim = useCallback((transcript: string) => {
