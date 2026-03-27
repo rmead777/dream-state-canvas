@@ -27,14 +27,14 @@ function buildWorkspaceContext(objects: Record<string, WorkspaceObject>): string
 
 // Mock data lookup for creating objects
 const MOCK_DATA_BY_TYPE: Record<string, { data: Record<string, any>; defaultTitle: string }> = {
-  metric: { data: MOCK_LEVERAGE_DATA, defaultTitle: 'Leverage Exposure' },
-  comparison: { data: MOCK_COMPARISON_DATA, defaultTitle: 'Fund Comparison' },
-  alert: { data: MOCK_ALERT_DATA, defaultTitle: 'Priority Alerts' },
-  inspector: { data: MOCK_INSPECTOR_DATA, defaultTitle: 'Portfolio Overview' },
-  brief: { data: MOCK_BRIEF_DATA, defaultTitle: 'Risk Brief' },
-  timeline: { data: MOCK_TIMELINE_DATA, defaultTitle: 'Activity Timeline' },
-  document: { data: MOCK_DOCUMENT_DATA, defaultTitle: 'Q3 Risk Assessment' },
-  dataset: { data: MOCK_DATASET_DATA, defaultTitle: 'Portfolio Dataset' },
+  metric: { data: MOCK_LEVERAGE_DATA, defaultTitle: 'AP Exposure' },
+  comparison: { data: MOCK_COMPARISON_DATA, defaultTitle: 'Vendor Comparison' },
+  alert: { data: MOCK_ALERT_DATA, defaultTitle: 'Urgent Vendors' },
+  inspector: { data: MOCK_INSPECTOR_DATA, defaultTitle: 'Top Vendors' },
+  brief: { data: MOCK_BRIEF_DATA, defaultTitle: 'AP Risk Assessment' },
+  timeline: { data: MOCK_TIMELINE_DATA, defaultTitle: 'Vendor Activity' },
+  document: { data: MOCK_DOCUMENT_DATA, defaultTitle: 'AP Vendor Tracker v14' },
+  dataset: { data: MOCK_DATASET_DATA, defaultTitle: 'Vendor Dataset' },
 };
 
 /**
