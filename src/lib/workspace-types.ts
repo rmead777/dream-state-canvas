@@ -136,4 +136,7 @@ export type WorkspaceReducerAction =
   | { type: 'UPDATE_FREEFORM_POSITION'; payload: { id: string; position: FreeformPosition } }
   | { type: 'UPDATE_OBJECT_CONTEXT'; payload: { id: string; context: Record<string, any> } }
   | { type: 'ENTER_IMMERSIVE'; payload: { id: string } }
-  | { type: 'EXIT_IMMERSIVE' };
+  | { type: 'EXIT_IMMERSIVE' }
+  | { type: 'CLEAR_SHERPA' }
+  | { type: 'COLLAPSE_ALL_OBJECTS' }
+  | { type: 'DISSOLVE_ALL_OBJECTS' };

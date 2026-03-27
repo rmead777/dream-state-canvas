@@ -7,16 +7,37 @@ import { useAmbientAudio } from '@/hooks/useAmbientAudio';
 import { useCognitiveMode } from '@/hooks/useCognitiveMode';
 import { MODE_LABELS } from '@/lib/cognitive-modes';
 import { VoiceIndicator } from './VoiceIndicator';
+import { toast } from 'sonner';
 
 export function SherpaRail() {
-  const { state } = useWorkspace();
+  const { state, dispatch } = useWorkspace();
   const { processIntent } = useWorkspaceActions();
   const { suggestions, observations, lastResponse, isProcessing } = useSherpa();
   const cognitiveMode = useCognitiveMode();
   const { play } = useAmbientAudio();
   const [input, setInput] = useState('');
   const [isExpanded, setIsExpanded] = useState(true);
+  const [showCanvasMenu, setShowCanvasMenu] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const activeObjectCount = Object.values(state.objects).filter(o => o.status !== 'dissolved').length;
+
+  const handleClearSherpa = useCallback(() => {
+    dispatch({ type: 'CLEAR_SHERPA' });
+    toast.success('Conversation cleared');
+  }, [dispatch]);
+
+  const handleCollapseAll = useCallback(() => {
+    dispatch({ type: 'COLLAPSE_ALL_OBJECTS' });
+    setShowCanvasMenu(false);
+    toast.success('All objects minimized');
+  }, [dispatch]);
+
+  const handleDissolveAll = useCallback(() => {
+    dispatch({ type: 'DISSOLVE_ALL_OBJECTS' });
+    setShowCanvasMenu(false);
+    toast.success('Canvas cleared');
+  }, [dispatch]);
 
   const handleSubmit = useCallback(() => {
     const trimmed = input.trim();
@@ -73,12 +94,23 @@ export function SherpaRail() {
             </span>
           )}
         </div>
-        <button
-          onClick={() => setIsExpanded(false)}
-          className="rounded-md p-1 text-workspace-text-secondary transition-colors hover:bg-workspace-surface text-xs"
-        >
-          ▸
-        </button>
+        <div className="flex items-center gap-1">
+          {(lastResponse || observations.length > 0) && (
+            <button
+              onClick={handleClearSherpa}
+              className="rounded-md p-1 text-workspace-text-secondary/40 transition-colors hover:bg-workspace-surface hover:text-workspace-text-secondary text-[10px]"
+              title="Clear conversation"
+            >
+              ⌫
+            </button>
+          )}
+          <button
+            onClick={() => setIsExpanded(false)}
+            className="rounded-md p-1 text-workspace-text-secondary transition-colors hover:bg-workspace-surface text-xs"
+          >
+            ▸
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5">
@@ -185,9 +217,35 @@ export function SherpaRail() {
           )}
         </div>
 
-        {/* Keyboard hint */}
-        <div className="text-center text-[9px] text-workspace-text-secondary/30">
-          ⌘K for command palette
+        {/* Canvas controls + keyboard hint */}
+        <div className="flex items-center justify-between text-[9px] text-workspace-text-secondary/30">
+          <span>⌘K for command palette</span>
+          {activeObjectCount > 0 && (
+            <div className="relative">
+              <button
+                onClick={() => setShowCanvasMenu(!showCanvasMenu)}
+                className="rounded px-1.5 py-0.5 text-workspace-text-secondary/40 transition-colors hover:text-workspace-text-secondary hover:bg-workspace-surface"
+              >
+                Canvas ▾
+              </button>
+              {showCanvasMenu && (
+                <div className="absolute bottom-full right-0 mb-1 w-40 rounded-lg border border-workspace-border bg-white shadow-lg overflow-hidden animate-[materialize_0.2s_cubic-bezier(0.16,1,0.3,1)_forwards]">
+                  <button
+                    onClick={handleCollapseAll}
+                    className="block w-full px-3 py-2 text-left text-[11px] text-workspace-text transition-colors hover:bg-workspace-surface"
+                  >
+                    Minimize all
+                  </button>
+                  <button
+                    onClick={handleDissolveAll}
+                    className="block w-full px-3 py-2 text-left text-[11px] text-destructive transition-colors hover:bg-destructive/5"
+                  >
+                    Clear canvas
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
