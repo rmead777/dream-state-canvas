@@ -67,6 +67,11 @@ export function SherpaRail() {
           <span className="text-xs font-semibold uppercase tracking-widest text-workspace-text">
             Sherpa
           </span>
+          {cognitiveMode !== 'neutral' && (
+            <span className="rounded-full bg-workspace-accent/8 border border-workspace-accent/10 px-2 py-0.5 text-[8px] uppercase tracking-widest text-workspace-accent/60 animate-[materialize_0.4s_cubic-bezier(0.16,1,0.3,1)_forwards]">
+              {MODE_LABELS[cognitiveMode]}
+            </span>
+          )}
         </div>
         <button
           onClick={() => setIsExpanded(false)}
