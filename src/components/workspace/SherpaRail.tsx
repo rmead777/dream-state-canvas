@@ -238,7 +238,7 @@ export function SherpaRail() {
                   </button>
                   <button
                     onClick={handleDissolveAll}
-                    className="block w-full px-3 py-2 text-left text-[11px] text-red-500 transition-colors hover:bg-red-50"
+                    className="block w-full px-3 py-2 text-left text-[11px] text-destructive transition-colors hover:bg-destructive/5"
                   >
                     Clear canvas
                   </button>
