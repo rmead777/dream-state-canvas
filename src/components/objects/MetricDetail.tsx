@@ -12,9 +12,9 @@ function formatValue(value: number, unit: string): string {
   return value.toLocaleString('en-US') + unit;
 }
 
-// Animated sparkline with draw-in effect
-function Sparkline({ data }: { data: number[] }) {
-  const svgRef = useRef<SVGSVGElement>(null);
+// Tier distribution mini-chart — horizontal stacked bar showing proportions
+function TierDistribution({ breakdown }: { breakdown: { name: string; value: number }[] }) {
+  const total = breakdown.reduce((s, b) => s + b.value, 0) || 1;
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
@@ -23,43 +23,53 @@ function Sparkline({ data }: { data: number[] }) {
     const animate = (ts: number) => {
       if (!start) start = ts;
       const p = Math.min((ts - start) / duration, 1);
-      setProgress(p);
+      setProgress(1 - Math.pow(1 - p, 3));
       if (p < 1) requestAnimationFrame(animate);
     };
     requestAnimationFrame(animate);
   }, []);
 
-  const max = Math.max(...data);
-  const min = Math.min(...data);
-  const range = max - min || 1;
-  const h = 32;
-  const w = 120;
-  const visibleCount = Math.ceil(data.length * progress);
-  const points = data
-    .slice(0, visibleCount)
-    .map((v, i) => `${(i / (data.length - 1)) * w},${h - ((v - min) / range) * h}`)
-    .join(' ');
+  const colors = [
+    'hsl(0 72% 55%)',      // Tier 1 — red/urgent
+    'hsl(35 92% 55%)',     // Tier 2 — amber
+    'hsl(220 15% 55%)',    // Tier 3 — neutral
+    'hsl(220 15% 75%)',    // Tier 4 — light
+  ];
 
   return (
-    <svg ref={svgRef} width={w} height={h} className="opacity-80">
-      <polyline
-        points={points}
-        fill="none"
-        stroke="hsl(var(--workspace-accent))"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      {visibleCount > 0 && progress >= 1 && (
-        <circle
-          cx={(visibleCount - 1) / (data.length - 1) * w}
-          cy={h - ((data[visibleCount - 1] - min) / range) * h}
-          r="2.5"
-          fill="hsl(var(--workspace-accent))"
-          className="animate-pulse"
-        />
-      )}
-    </svg>
+    <div className="flex flex-col items-end gap-1.5">
+      {/* Stacked horizontal bar */}
+      <div className="flex h-3 w-28 overflow-hidden rounded-full bg-workspace-border/30">
+        {breakdown.map((item, i) => {
+          const pct = (item.value / total) * 100 * progress;
+          return (
+            <div
+              key={item.name}
+              className="h-full transition-all duration-700 ease-out first:rounded-l-full last:rounded-r-full"
+              style={{
+                width: `${pct}%`,
+                backgroundColor: colors[i] || colors[3],
+                minWidth: pct > 0 ? '2px' : '0',
+              }}
+            />
+          );
+        })}
+      </div>
+      {/* Legend */}
+      <div className="flex gap-2">
+        {breakdown.slice(0, 2).map((item, i) => (
+          <div key={item.name} className="flex items-center gap-1">
+            <div
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ backgroundColor: colors[i] }}
+            />
+            <span className="text-[9px] text-workspace-text-secondary/60">
+              {item.name.replace(/Tier \d — /, '')}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -88,6 +98,11 @@ function AnimatedValue({ value, unit }: { value: number; unit: string }) {
 export function MetricDetail({ object }: { object: WorkspaceObject }) {
   const d = object.context;
 
+  // Compute max breakdown value for consistent bar scaling
+  const breakdownMax = d.breakdown
+    ? Math.max(...d.breakdown.map((b: any) => b.value), 1)
+    : 1;
+
   return (
     <div className="space-y-4">
       <div className="flex items-end justify-between">
@@ -103,7 +118,7 @@ export function MetricDetail({ object }: { object: WorkspaceObject }) {
             </span>
           </div>
         </div>
-        {d.sparkline && <Sparkline data={d.sparkline} />}
+        {d.breakdown && <TierDistribution breakdown={d.breakdown} />}
       </div>
 
       {d.threshold && (
@@ -122,17 +137,16 @@ export function MetricDetail({ object }: { object: WorkspaceObject }) {
       )}
 
       {d.breakdown && (
-        <div className="space-y-2 pt-2">
+        <div className="space-y-2.5 pt-2">
           <div className="text-xs font-medium uppercase tracking-wider text-workspace-text-secondary">
             Breakdown
           </div>
-          {d.breakdown.map((item: any) => (
-            <BreakdownRow key={item.name} item={item} unit={d.unit} threshold={d.threshold} />
+          {d.breakdown.map((item: any, idx: number) => (
+            <BreakdownRow key={item.name} item={item} unit={d.unit} maxValue={breakdownMax} tierIndex={idx} />
           ))}
         </div>
       )}
 
-      {/* Last updated pulse */}
       <div className="flex items-center gap-2 pt-1">
         <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
         <span className="text-[10px] text-workspace-text-secondary/40">Live</span>
@@ -141,33 +155,36 @@ export function MetricDetail({ object }: { object: WorkspaceObject }) {
   );
 }
 
-function BreakdownRow({ item, unit, threshold }: { item: any; unit: string; threshold: any }) {
+const TIER_COLORS = [
+  'hsl(0 72% 55%)',      // Tier 1 — red/urgent
+  'hsl(35 92% 55%)',     // Tier 2 — amber
+  'hsl(220 15% 55%)',    // Tier 3 — neutral
+  'hsl(220 15% 75%)',    // Tier 4 — light
+];
+
+function BreakdownRow({ item, unit, maxValue, tierIndex }: { item: any; unit: string; maxValue: number; tierIndex: number }) {
   const [width, setWidth] = useState(0);
-  const maxVal = threshold?.critical || Math.max(item.value * 2, 1);
 
   useEffect(() => {
     requestAnimationFrame(() => {
-      setWidth((item.value / maxVal) * 100);
+      setWidth((item.value / maxValue) * 100);
     });
-  }, [item.value, maxVal]);
+  }, [item.value, maxValue]);
 
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-sm text-workspace-text">{item.name}</span>
-      <div className="flex items-center gap-2">
-        <div className="h-1.5 w-20 rounded-full bg-workspace-border/50 overflow-hidden">
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-sm text-workspace-text min-w-[140px]">{item.name}</span>
+      <div className="flex items-center gap-2 flex-1 justify-end">
+        <div className="h-2 w-32 rounded-full bg-workspace-border/30 overflow-hidden">
           <div
             className="h-full rounded-full transition-all duration-700 ease-out"
             style={{
               width: `${Math.min(width, 100)}%`,
-              backgroundColor:
-                item.value >= (threshold?.warning || Infinity)
-                  ? 'hsl(var(--workspace-accent))'
-                  : 'hsl(220 15% 55%)',
+              backgroundColor: TIER_COLORS[tierIndex] || TIER_COLORS[3],
             }}
           />
         </div>
-        <span className="text-sm font-medium text-workspace-text tabular-nums">
+        <span className="text-sm font-medium text-workspace-text tabular-nums min-w-[90px] text-right">
           {formatValue(item.value, unit)}
         </span>
       </div>
