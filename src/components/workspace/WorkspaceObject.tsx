@@ -33,10 +33,11 @@ function ObjectContent({ object }: { object: WO }) {
   }
 }
 
-export function WorkspaceObjectWrapper({ object }: { object: WO }) {
+export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; dragListeners?: SyntheticListenerMap }) {
   const { collapseObject, dissolveObject, pinObject, unpinObject, focusObject, processIntent } = useWorkspaceActions();
   const { state } = useWorkspace();
   const { shouldDim, shouldHighlight, getContextualActions, cascadeDissolve } = useCrossObjectBehavior();
+  const [height, setHeight] = useState<number | null>(null);
 
   const isFocused = state.activeContext.focusedObjectId === object.id;
   const isDimmed = shouldDim(object.id);
@@ -47,7 +48,6 @@ export function WorkspaceObjectWrapper({ object }: { object: WO }) {
   const handleDissolve = (e: React.MouseEvent) => {
     e.stopPropagation();
     const cascadeTargets = cascadeDissolve(object.id);
-    // Dissolve children first, then parent
     for (const childId of cascadeTargets) {
       dissolveObject(childId);
     }
@@ -72,6 +72,7 @@ export function WorkspaceObjectWrapper({ object }: { object: WO }) {
               : 'border-workspace-border shadow-[0_2px_12px_rgba(0,0,0,0.04)]'
         }
       `}
+      style={height ? { height: `${height}px`, overflow: 'auto' } : undefined}
       onClick={() => focusObject(object.id)}
     >
       {/* Relationship highlight pulse */}
