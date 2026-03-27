@@ -71,8 +71,14 @@ export function SherpaRail() {
   });
 
   const handleSuggestionClick = (query: string) => {
-    processIntent(query);
+    trackAndProcess(query);
   };
+
+  const handleClearSherpaFull = useCallback(() => {
+    dispatch({ type: 'CLEAR_SHERPA' });
+    setPromptHistory([]);
+    toast.success('Conversation cleared');
+  }, [dispatch]);
 
   if (!isExpanded) {
     return (
