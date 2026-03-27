@@ -1,30 +1,26 @@
 import { WorkspaceObject } from '@/lib/workspace-types';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { FusionCharts } from './FusionCharts';
 
 export function AIBrief({ object }: { object: WorkspaceObject }) {
+  const { state } = useWorkspace();
   const d = object.context;
   const text = d.content || d.summary || '';
 
+  // Resolve source objects for fusion charts
+  const sourceA = d.sourceObjects?.[0]?.id ? state.objects[d.sourceObjects[0].id] : null;
+  const sourceB = d.sourceObjects?.[1]?.id ? state.objects[d.sourceObjects[1].id] : null;
+  const hasFusionData = sourceA && sourceB;
+
   return (
     <div className="space-y-4">
-      {/* AI-generated fusion visual */}
-      {d.fusionImage && (
-        <div className="rounded-xl overflow-hidden border border-workspace-border/30 animate-[materialize_0.5s_cubic-bezier(0.16,1,0.3,1)_forwards]">
-          <img
-            src={d.fusionImage}
-            alt="Synthesis visualization"
-            className="w-full h-auto object-cover"
-            style={{ maxHeight: 200 }}
-          />
+      {/* Real data visualizations for fusion objects */}
+      {hasFusionData && (
+        <div className="animate-[materialize_0.5s_cubic-bezier(0.16,1,0.3,1)_forwards]">
+          <FusionCharts sourceA={sourceA} sourceB={sourceB} />
         </div>
       )}
-      {d.generatingImage && !d.fusionImage && (
-        <div className="rounded-xl border border-workspace-border/30 bg-workspace-surface/30 flex items-center justify-center h-32 animate-pulse">
-          <div className="flex items-center gap-2 text-xs text-workspace-text-secondary/50">
-            <div className="h-3 w-3 rounded-full border-2 border-workspace-accent/30 border-t-workspace-accent animate-spin" />
-            <span>Generating visualization...</span>
-          </div>
-        </div>
-      )}
+
       {d.confidence && (
         <div className="flex items-center gap-2 text-xs text-workspace-text-secondary">
           <div className="h-1.5 w-12 rounded-full bg-workspace-surface overflow-hidden">
