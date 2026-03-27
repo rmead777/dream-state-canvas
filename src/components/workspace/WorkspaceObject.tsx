@@ -149,6 +149,22 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
       {/* Content */}
       <div className="px-5 pb-4">
         <ObjectContent object={object} />
+
+        {/* Ambient Sherpa hints — contextual, inline */}
+        {objectHints.map((h) => (
+          <AmbientHint
+            key={h.hint}
+            hint={h.hint}
+            acceptLabel={h.acceptLabel}
+            onDismiss={() => setDismissedHints((prev) => new Set(prev).add(h.hint))}
+            onAccept={
+              h.action === 'pin' ? () => { pinObject(object.id); setDismissedHints((prev) => new Set(prev).add(h.hint)); }
+              : h.action === 'collapse' ? () => { collapseObject(object.id); }
+              : undefined
+            }
+            delay={2000}
+          />
+        ))}
       </div>
 
       {/* Cross-object contextual actions — appear on hover */}
