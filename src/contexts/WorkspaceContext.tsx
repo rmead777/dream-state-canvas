@@ -11,6 +11,7 @@ const initialState: WorkspaceState = {
   objects: {},
   activeContext: {
     focusedObjectId: null,
+    immersiveObjectId: null,
     recentIntents: [],
     sessionStartedAt: Date.now(),
   },
@@ -179,6 +180,18 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
         },
       };
     }
+
+    case 'ENTER_IMMERSIVE':
+      return {
+        ...state,
+        activeContext: { ...state.activeContext, immersiveObjectId: action.payload.id },
+      };
+
+    case 'EXIT_IMMERSIVE':
+      return {
+        ...state,
+        activeContext: { ...state.activeContext, immersiveObjectId: null },
+      };
 
     default:
       return state;

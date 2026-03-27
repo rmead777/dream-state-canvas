@@ -4,12 +4,16 @@ import { WorkspaceObject as WO } from '@/lib/workspace-types';
 import { useWorkspaceActions } from '@/hooks/useWorkspaceActions';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useCrossObjectBehavior } from '@/hooks/useCrossObjectBehavior';
+import { useAmbientSherpa } from '@/hooks/useAmbientSherpa';
+import { AmbientHint } from '@/components/workspace/AmbientHint';
 import { MetricDetail } from '@/components/objects/MetricDetail';
 import { ComparisonPanel } from '@/components/objects/ComparisonPanel';
 import { AlertRiskPanel } from '@/components/objects/AlertRiskPanel';
 import { DataInspector } from '@/components/objects/DataInspector';
 import { AIBrief } from '@/components/objects/AIBrief';
 import { Timeline } from '@/components/objects/Timeline';
+import { DocumentReader } from '@/components/objects/DocumentReader';
+import { DatasetView } from '@/components/objects/DatasetView';
 
 const typeLabels: Record<string, string> = {
   metric: 'Metric',
@@ -19,6 +23,8 @@ const typeLabels: Record<string, string> = {
   brief: 'Brief',
   timeline: 'Timeline',
   monitor: 'Monitor',
+  document: 'Document',
+  dataset: 'Dataset',
 };
 
 function ObjectContent({ object }: { object: WO }) {
@@ -29,6 +35,8 @@ function ObjectContent({ object }: { object: WO }) {
     case 'inspector': return <DataInspector object={object} />;
     case 'brief': return <AIBrief object={object} />;
     case 'timeline': return <Timeline object={object} />;
+    case 'document': return <DocumentReader object={object} />;
+    case 'dataset': return <DatasetView object={object} />;
     default: return <div className="text-sm text-workspace-text-secondary">Unknown object type</div>;
   }
 }
@@ -37,13 +45,16 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
   const { collapseObject, dissolveObject, pinObject, unpinObject, focusObject, processIntent } = useWorkspaceActions();
   const { state } = useWorkspace();
   const { shouldDim, shouldHighlight, getContextualActions, cascadeDissolve } = useCrossObjectBehavior();
+  const ambientHints = useAmbientSherpa();
   const [size, setSize] = useState<{ width: number | null; height: number | null }>({ width: null, height: null });
+  const [dismissedHints, setDismissedHints] = useState<Set<string>>(new Set());
 
   const isFocused = state.activeContext.focusedObjectId === object.id;
   const isDimmed = shouldDim(object.id);
   const isHighlighted = shouldHighlight(object.id);
   const isMaterializing = object.status === 'materializing';
   const contextualActions = getContextualActions(object.id);
+  const objectHints = ambientHints.filter((h) => h.objectId === object.id && !dismissedHints.has(h.hint));
 
   const handleDissolve = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -138,6 +149,22 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
       {/* Content */}
       <div className="px-5 pb-4">
         <ObjectContent object={object} />
+
+        {/* Ambient Sherpa hints — contextual, inline */}
+        {objectHints.map((h) => (
+          <AmbientHint
+            key={h.hint}
+            hint={h.hint}
+            acceptLabel={h.acceptLabel}
+            onDismiss={() => setDismissedHints((prev) => new Set(prev).add(h.hint))}
+            onAccept={
+              h.action === 'pin' ? () => { pinObject(object.id); setDismissedHints((prev) => new Set(prev).add(h.hint)); }
+              : h.action === 'collapse' ? () => { collapseObject(object.id); }
+              : undefined
+            }
+            delay={2000}
+          />
+        ))}
       </div>
 
       {/* Cross-object contextual actions — appear on hover */}

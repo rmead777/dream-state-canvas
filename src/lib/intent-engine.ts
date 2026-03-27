@@ -10,6 +10,8 @@ import {
   MOCK_INSPECTOR_DATA,
   MOCK_BRIEF_DATA,
   MOCK_TIMELINE_DATA,
+  MOCK_DOCUMENT_DATA,
+  MOCK_DATASET_DATA,
 } from './mock-data';
 
 // Intent patterns — keyword-based for v1, structured for future LLM replacement
@@ -113,6 +115,30 @@ const patterns: IntentPattern[] = [
         objectType: 'timeline',
         title: 'Activity Timeline',
         data: MOCK_TIMELINE_DATA,
+      },
+    ],
+  },
+  {
+    keywords: ['document', 'report', 'pdf', 'read', 'assessment'],
+    generate: () => [
+      { type: 'respond', message: 'I\'ve opened the Q3 risk assessment. You can enter immersive mode for deep reading.' },
+      {
+        type: 'create',
+        objectType: 'document',
+        title: 'Q3 Risk Assessment',
+        data: MOCK_DOCUMENT_DATA,
+      },
+    ],
+  },
+  {
+    keywords: ['dataset', 'spreadsheet', 'full data', 'all funds', 'full dataset'],
+    generate: () => [
+      { type: 'respond', message: 'Full portfolio dataset ready. Expand it for sorting, filtering, and AI-driven insights.' },
+      {
+        type: 'create',
+        objectType: 'dataset',
+        title: 'Portfolio Dataset',
+        data: MOCK_DATASET_DATA,
       },
     ],
   },

@@ -22,6 +22,8 @@ export function generateSuggestions(
   const hasMetric = openObjects.some((o) => o.type === 'metric');
   const hasComparison = openObjects.some((o) => o.type === 'comparison');
   const hasAlert = openObjects.some((o) => o.type === 'alert');
+  const hasDocument = openObjects.some((o) => o.type === 'document');
+  const hasDataset = openObjects.some((o) => o.type === 'dataset');
 
   if (hasMetric && !hasComparison) {
     suggestions.push({
@@ -41,21 +43,30 @@ export function generateSuggestions(
     });
   }
 
+  if (!hasDocument) {
+    suggestions.push({
+      id: 'sg-document',
+      label: 'Open Q3 risk assessment',
+      query: 'open the risk assessment document',
+      priority: 3,
+    });
+  }
+
+  if (!hasDataset) {
+    suggestions.push({
+      id: 'sg-dataset',
+      label: 'Explore full dataset',
+      query: 'show the full dataset',
+      priority: 4,
+    });
+  }
+
   if (!openObjects.some((o) => o.type === 'brief')) {
     suggestions.push({
       id: 'sg-brief',
       label: 'Generate risk brief',
       query: 'give me a summary',
-      priority: 3,
-    });
-  }
-
-  if (!openObjects.some((o) => o.type === 'timeline')) {
-    suggestions.push({
-      id: 'sg-timeline',
-      label: 'Show activity',
-      query: 'show recent activity',
-      priority: 4,
+      priority: 5,
     });
   }
 
