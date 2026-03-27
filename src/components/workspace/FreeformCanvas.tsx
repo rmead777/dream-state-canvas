@@ -121,7 +121,19 @@ ${JSON.stringify(source.context).slice(0, 800)}
 OBJECT B — [${target.type}] "${target.title}":
 ${JSON.stringify(target.context).slice(0, 800)}
 
-Produce a deep, specific synthesis. Do NOT write generic introductions like "This synthesis combines..." — go straight into the analysis. Reference actual data points, numbers, and specifics from both objects.`,
+RULES:
+- Only produce this synthesis if the combination reveals something non-obvious or decision-useful. If the two objects are too similar or unrelated, set synthesisType to "low-value".
+- Do NOT write generic introductions like "This synthesis combines..." — go straight into the analysis.
+- Reference actual data points, numbers, and specifics from both objects.
+
+Return JSON with these fields:
+{
+  "title": "short synthesis title",
+  "summary": "the deep analytical synthesis text",
+  "insights": ["insight 1", "insight 2"],
+  "synthesisType": "direct-extraction" | "inferred-pattern" | "speculative-synthesis" | "low-value",
+  "confidence": 0.0-1.0
+}`,
           },
         ],
         'fusion'
