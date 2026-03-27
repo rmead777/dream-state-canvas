@@ -84,7 +84,9 @@
   }
 }
 
-/* Workspace materialize animation — motion as causality */
+/* ─── Workspace Animations ─── */
+
+/* Materialize — motion as causality */
 @keyframes materialize {
   from {
     opacity: 0;
@@ -118,4 +120,41 @@
     opacity: 0.5;
     transform: scale(0.98);
   }
+}
+
+/* Sparkline draw-in */
+@keyframes sparkline-draw {
+  from {
+    stroke-dashoffset: 200;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Fusion glow pulse */
+@keyframes fusion-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px hsl(234 60% 60% / 0.1);
+  }
+  50% {
+    box-shadow: 0 0 40px hsl(234 60% 60% / 0.25);
+  }
+}
+
+/* Breathing border glow for live objects */
+@keyframes breathing-glow {
+  0%, 100% {
+    border-color: hsl(234 60% 60% / 0.05);
+  }
+  50% {
+    border-color: hsl(234 60% 60% / 0.12);
+  }
+}
+
+/* Cognitive mode transitions are handled via JS on :root */
+:root {
+  transition: --workspace-bg 1.5s ease,
+              --workspace-accent 1.5s ease,
+              --workspace-surface 1.5s ease;
 }
