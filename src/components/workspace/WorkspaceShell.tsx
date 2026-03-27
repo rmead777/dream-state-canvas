@@ -9,7 +9,6 @@ import { useCognitiveMode } from '@/hooks/useCognitiveMode';
 import { useAmbientAudio } from '@/hooks/useAmbientAudio';
 import { useWorkspacePersistence } from '@/hooks/useWorkspacePersistence';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { MODE_LABELS } from '@/lib/cognitive-modes';
 
 export function WorkspaceShell() {
   const { state } = useWorkspace();
