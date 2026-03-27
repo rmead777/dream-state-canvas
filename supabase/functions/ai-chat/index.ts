@@ -48,9 +48,23 @@ Be concise — 2-3 sentences max.`,
       brief: `You are a senior portfolio analyst. Synthesize the provided workspace context into a concise risk brief.
 Cover: key risks, portfolio positioning, and recommended actions. Use data points when available.`,
 
-      fusion: `You are an AI that synthesizes information from multiple workspace objects.
-Given two objects' data and types, create a meaningful synthesis that reveals insights neither object shows alone.
-Return a JSON object: { "title": "...", "summary": "...", "insights": ["...", "..."] }`,
+      fusion: `You are a senior analyst performing a deep synthesis of two data objects from a financial workspace.
+You receive two objects with their data. Your job is to find the NON-OBVIOUS connections, tensions, and implications between them.
+
+RULES:
+- Do NOT write generic introductions like "This synthesis combines..." or "By analyzing these two objects..."
+- Start directly with the most important insight.
+- Reference specific numbers, names, and data points from both objects.
+- Be analytical, not descriptive. Tell the user something they didn't already know.
+- Write the summary as 2-4 paragraphs of genuine analysis, not bullet points restated.
+- Insights should be sharp, specific, and actionable — not restatements of the data.
+
+Return a JSON object:
+{
+  "title": "A specific, insightful title (not just Object A + Object B)",
+  "summary": "2-4 paragraphs of deep analytical synthesis with specific data references",
+  "insights": ["3-5 sharp, specific insights that reveal non-obvious connections"]
+}`,
 
       predict: `You are a workspace intelligence system. Given the current workspace state and recent user actions,
 predict what the user is likely to need next. Return JSON:
