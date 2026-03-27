@@ -4,12 +4,15 @@ import { useWorkspaceActions } from '@/hooks/useWorkspaceActions';
 import { useSherpa } from '@/contexts/SherpaContext';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
 import { useAmbientAudio } from '@/hooks/useAmbientAudio';
+import { useCognitiveMode } from '@/hooks/useCognitiveMode';
+import { MODE_LABELS } from '@/lib/cognitive-modes';
 import { VoiceIndicator } from './VoiceIndicator';
 
 export function SherpaRail() {
   const { state } = useWorkspace();
   const { processIntent } = useWorkspaceActions();
   const { suggestions, observations, lastResponse, isProcessing } = useSherpa();
+  const cognitiveMode = useCognitiveMode();
   const { play } = useAmbientAudio();
   const [input, setInput] = useState('');
   const [isExpanded, setIsExpanded] = useState(true);
@@ -64,6 +67,11 @@ export function SherpaRail() {
           <span className="text-xs font-semibold uppercase tracking-widest text-workspace-text">
             Sherpa
           </span>
+          {cognitiveMode !== 'neutral' && (
+            <span className="rounded-full bg-workspace-accent/8 border border-workspace-accent/10 px-2 py-0.5 text-[8px] uppercase tracking-widest text-workspace-accent/60 animate-[materialize_0.4s_cubic-bezier(0.16,1,0.3,1)_forwards]">
+              {MODE_LABELS[cognitiveMode]}
+            </span>
+          )}
         </div>
         <button
           onClick={() => setIsExpanded(false)}
