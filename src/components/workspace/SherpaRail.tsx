@@ -7,6 +7,7 @@ import { useAmbientAudio } from '@/hooks/useAmbientAudio';
 import { useCognitiveMode } from '@/hooks/useCognitiveMode';
 import { MODE_LABELS } from '@/lib/cognitive-modes';
 import { VoiceIndicator } from './VoiceIndicator';
+import { toast } from 'sonner';
 
 export function SherpaRail() {
   const { state } = useWorkspace();

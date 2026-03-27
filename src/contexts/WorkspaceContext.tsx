@@ -205,6 +205,42 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
         activeContext: { ...state.activeContext, immersiveObjectId: null },
       };
 
+    case 'CLEAR_SHERPA':
+      return {
+        ...state,
+        sherpa: { ...initialState.sherpa },
+      };
+
+    case 'COLLAPSE_ALL_OBJECTS': {
+      const newObjects: Record<string, WorkspaceObject> = {};
+      for (const [id, obj] of Object.entries(state.objects)) {
+        if (obj.status !== 'dissolved') {
+          newObjects[id] = { ...obj, status: 'collapsed' as const };
+        } else {
+          newObjects[id] = obj;
+        }
+      }
+      return {
+        ...state,
+        objects: newObjects,
+        spatialLayout: computeLayout(newObjects),
+        activeContext: { ...state.activeContext, focusedObjectId: null },
+      };
+    }
+
+    case 'DISSOLVE_ALL_OBJECTS': {
+      const newObjects: Record<string, WorkspaceObject> = {};
+      for (const [id, obj] of Object.entries(state.objects)) {
+        newObjects[id] = { ...obj, status: 'dissolved' as const };
+      }
+      return {
+        ...state,
+        objects: newObjects,
+        spatialLayout: { primary: [], secondary: [], peripheral: [] },
+        activeContext: { ...state.activeContext, focusedObjectId: null, immersiveObjectId: null },
+      };
+    }
+
     default:
       return state;
   }
