@@ -102,7 +102,55 @@ interface IntentPattern {
   generate: (input: string, existingObjects: Record<string, WorkspaceObject>) => WorkspaceAction[];
 }
 
+// Helper: find objects by fuzzy title match
+function findObjectByName(name: string, objects: Record<string, WorkspaceObject>): WorkspaceObject | undefined {
+  const lower = name.toLowerCase().trim();
+  const active = Object.values(objects).filter(o => o.status !== 'dissolved');
+  // Exact match first
+  const exact = active.find(o => o.title.toLowerCase() === lower);
+  if (exact) return exact;
+  // Partial match
+  return active.find(o => o.title.toLowerCase().includes(lower) || lower.includes(o.title.toLowerCase()));
+}
+
 const patterns: IntentPattern[] = [
+  {
+    keywords: ['fuse', 'combine', 'merge', 'synthesize', 'blend'],
+    generate: (input, existing) => {
+      const active = Object.values(existing).filter(o => o.status !== 'dissolved');
+      if (active.length < 2) {
+        return [{ type: 'respond', message: 'You need at least two objects in your workspace to fuse. Create some objects first.' }];
+      }
+
+      // Try to extract two object names from patterns like "fuse X and Y" or "combine X with Y"
+      const connectors = /(?:\band\b|\bwith\b|\b\+\b|\b&\b)/i;
+      const fuseKeywords = /^(?:fuse|combine|merge|synthesize|blend)\s+/i;
+      const stripped = input.replace(fuseKeywords, '').trim();
+      const parts = stripped.split(connectors).map(s => s.trim()).filter(Boolean);
+
+      if (parts.length >= 2) {
+        const objA = findObjectByName(parts[0], existing);
+        const objB = findObjectByName(parts[1], existing);
+        if (objA && objB && objA.id !== objB.id) {
+          return [
+            { type: 'respond', message: `Fusing "${objA.title}" with "${objB.title}"...` },
+            { type: 'fuse', objectIdA: objA.id, objectIdB: objB.id },
+          ];
+        }
+      }
+
+      // If we can't identify specific objects, fuse the two most recently interacted
+      const sorted = [...active].sort((a, b) => b.lastInteractedAt - a.lastInteractedAt);
+      if (sorted.length >= 2) {
+        return [
+          { type: 'respond', message: `Fusing "${sorted[0].title}" with "${sorted[1].title}"...` },
+          { type: 'fuse', objectIdA: sorted[0].id, objectIdB: sorted[1].id },
+        ];
+      }
+
+      return [{ type: 'respond', message: 'Could not identify two objects to fuse.' }];
+    },
+  },
   {
     keywords: ['leverage', 'debt', 'ratio'],
     generate: (input, existing) => {
