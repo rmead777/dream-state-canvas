@@ -4,6 +4,8 @@ import { parseIntentAI, parseIntent } from '@/lib/intent-engine';
 import { generateSuggestions } from '@/lib/sherpa-engine';
 import { WorkspaceObject, IntentOrigin } from '@/lib/workspace-types';
 import { computeFreeformPosition } from '@/lib/freeform-placement';
+import { executeFusion } from '@/lib/fusion-executor';
+import { toast } from '@/hooks/use-toast';
 
 let objectCounter = 0;
 
@@ -74,6 +76,55 @@ export function useWorkspaceActions() {
         case 'dissolve':
           dispatch({ type: 'DISSOLVE_OBJECT', payload: { id: action.objectId } });
           break;
+
+        case 'fuse': {
+          const objA = state.objects[action.objectIdA];
+          const objB = state.objects[action.objectIdB];
+          if (!objA || !objB) {
+            dispatch({ type: 'SET_SHERPA_RESPONSE', payload: 'Could not find the specified objects to fuse.' });
+            break;
+          }
+          // Run fusion asynchronously
+          (async () => {
+            dispatch({ type: 'SET_SHERPA_PROCESSING', payload: true });
+            const result = await executeFusion(objA, objB);
+            if (!result.success) {
+              if (result.lowValue) {
+                toast({ title: 'Fusion not productive', description: result.errorMessage });
+              }
+              dispatch({ type: 'SET_SHERPA_RESPONSE', payload: result.errorMessage || 'Fusion failed.' });
+              dispatch({ type: 'SET_SHERPA_PROCESSING', payload: false });
+              return;
+            }
+
+            const freeformPosition =
+              state.layoutMode === 'freeform'
+                ? {
+                    x: ((objA.freeformPosition?.x ?? 200) + (objB.freeformPosition?.x ?? 400)) / 2,
+                    y: Math.max(objA.freeformPosition?.y ?? 100, objB.freeformPosition?.y ?? 100) + 120,
+                  }
+                : undefined;
+
+            dispatch({
+              type: 'MATERIALIZE_OBJECT',
+              payload: {
+                id: result.id!,
+                type: 'brief',
+                title: result.title!,
+                pinned: false,
+                origin: { type: 'fusion' as any, query: `Fusion of ${objA.title} and ${objB.title}` },
+                relationships: [objA.id, objB.id],
+                context: result.context!,
+                position: { zone: 'primary', order: 0 },
+                freeformPosition,
+              },
+            });
+            dispatch({ type: 'SET_SHERPA_RESPONSE', payload: `Synthesized "${objA.title}" and "${objB.title}" into a new insight.` });
+            setTimeout(() => dispatch({ type: 'OPEN_OBJECT', payload: { id: result.id! } }), 400);
+            dispatch({ type: 'SET_SHERPA_PROCESSING', payload: false });
+          })();
+          break;
+        }
       }
     }
 

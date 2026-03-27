@@ -3,7 +3,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useWorkspaceActions } from '@/hooks/useWorkspaceActions';
 import { WorkspaceObjectWrapper } from './WorkspaceObject';
 import { FusionZone } from './FusionZone';
-import { callAI } from '@/hooks/useAI';
+import { executeFusion } from '@/lib/fusion-executor';
 import { canFuse, SynthesisType } from '@/lib/fusion-rules';
 import { toast } from '@/hooks/use-toast';
 
@@ -108,109 +108,39 @@ export function FreeformCanvas() {
     const source = objects[fusionTarget.sourceId];
     const target = objects[fusionTarget.targetId];
 
-    try {
-      const result = await callAI(
-        [
-          {
-            role: 'user',
-            content: `Fuse these two workspace objects into a single, original analytical synthesis.
+    const result = await executeFusion(source, target);
 
-OBJECT A — [${source.type}] "${source.title}":
-${JSON.stringify(source.context).slice(0, 800)}
-
-OBJECT B — [${target.type}] "${target.title}":
-${JSON.stringify(target.context).slice(0, 800)}
-
-RULES:
-- Only produce this synthesis if the combination reveals something non-obvious or decision-useful. If the two objects are too similar or unrelated, set synthesisType to "low-value".
-- Do NOT write generic introductions like "This synthesis combines..." — go straight into the analysis.
-- Reference actual data points, numbers, and specifics from both objects.
-
-Return JSON with these fields:
-{
-  "title": "short synthesis title",
-  "summary": "the deep analytical synthesis text",
-  "insights": ["insight 1", "insight 2"],
-  "synthesisType": "direct-extraction" | "inferred-pattern" | "speculative-synthesis" | "low-value",
-  "confidence": 0.0-1.0
-}`,
-          },
-        ],
-        'fusion'
-      );
-
-      let title = `${source.title} ✦ ${target.title}`;
-      let summary = '';
-      let insights: string[] = [];
-      let synthesisType: SynthesisType = 'inferred-pattern';
-      let confidence = 0.7;
-
-      try {
-        const jsonMatch = (result || '').match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          if (parsed.title) title = parsed.title;
-          if (parsed.summary) summary = parsed.summary;
-          if (parsed.insights && Array.isArray(parsed.insights)) insights = parsed.insights;
-          if (parsed.synthesisType) synthesisType = parsed.synthesisType as SynthesisType;
-          if (parsed.confidence) confidence = parsed.confidence;
-        }
-      } catch { /* fallback */ }
-
-      // Low-value gate — don't create clutter
-      if (synthesisType === 'low-value') {
-        toast({ title: 'Fusion not productive', description: 'These objects don\'t reveal non-obvious relationships when combined. Try a different pair.' });
-        setFusionProcessing(false);
-        setFusionTarget(null);
-        return;
+    if (!result.success) {
+      if (result.lowValue) {
+        toast({ title: 'Fusion not productive', description: result.errorMessage });
+      } else {
+        dispatch({ type: 'SET_SHERPA_RESPONSE', payload: result.errorMessage || 'Fusion failed.' });
       }
-
-      // If JSON parsing failed, use the raw text as the summary
-      if (!summary && result) {
-        summary = result.replace(/```json[\s\S]*?```/g, '').replace(/\{[\s\S]*\}/g, '').trim();
-      }
-      if (!summary) summary = 'Synthesis could not be generated. Try again.';
-
-      const id = `wo-fusion-${Date.now()}`;
-      const fusionData: Record<string, any> = {
-        content: summary,
-        summary,
-        insights: insights.length > 0 ? insights : undefined,
-        synthesisType,
-        confidence,
-        sourceObjects: [
-          { id: source.id, type: source.type, title: source.title },
-          { id: target.id, type: target.type, title: target.title },
-        ],
-        generatedAt: new Date().toISOString(),
-      };
-
-      dispatch({
-        type: 'MATERIALIZE_OBJECT',
-        payload: {
-          id,
-          type: 'brief',
-          title,
-          pinned: false,
-          origin: { type: 'fusion' as any, query: `Fusion of ${source.title} and ${target.title}` },
-          relationships: [source.id, target.id],
-          context: fusionData,
-          position: { zone: 'primary', order: 0 },
-          freeformPosition: {
-            x: ((source.freeformPosition?.x ?? 200) + (target.freeformPosition?.x ?? 400)) / 2,
-            y: Math.max(source.freeformPosition?.y ?? 100, target.freeformPosition?.y ?? 100) + 120,
-          },
-        },
-      });
-
-      dispatch({ type: 'SET_SHERPA_RESPONSE', payload: `Synthesized "${source.title}" and "${target.title}" into a new insight.` });
-
-      setTimeout(() => {
-        dispatch({ type: 'OPEN_OBJECT', payload: { id } });
-      }, 400);
-    } catch {
-      dispatch({ type: 'SET_SHERPA_RESPONSE', payload: 'Fusion failed — try again or ask the Sherpa directly.' });
+      setFusionProcessing(false);
+      setFusionTarget(null);
+      return;
     }
+
+    dispatch({
+      type: 'MATERIALIZE_OBJECT',
+      payload: {
+        id: result.id!,
+        type: 'brief',
+        title: result.title!,
+        pinned: false,
+        origin: { type: 'fusion' as any, query: `Fusion of ${source.title} and ${target.title}` },
+        relationships: [source.id, target.id],
+        context: result.context!,
+        position: { zone: 'primary', order: 0 },
+        freeformPosition: {
+          x: ((source.freeformPosition?.x ?? 200) + (target.freeformPosition?.x ?? 400)) / 2,
+          y: Math.max(source.freeformPosition?.y ?? 100, target.freeformPosition?.y ?? 100) + 120,
+        },
+      },
+    });
+
+    dispatch({ type: 'SET_SHERPA_RESPONSE', payload: `Synthesized "${source.title}" and "${target.title}" into a new insight.` });
+    setTimeout(() => dispatch({ type: 'OPEN_OBJECT', payload: { id: result.id! } }), 400);
 
     setFusionProcessing(false);
     setFusionTarget(null);

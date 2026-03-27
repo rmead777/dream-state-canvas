@@ -1,0 +1,102 @@
+import { WorkspaceObject } from './workspace-types';
+import { canFuse, SynthesisType } from './fusion-rules';
+import { callAI } from '@/hooks/useAI';
+
+export interface FusionResult {
+  success: boolean;
+  lowValue?: boolean;
+  id?: string;
+  title?: string;
+  context?: Record<string, any>;
+  errorMessage?: string;
+}
+
+/**
+ * Execute a fusion between two workspace objects via AI synthesis.
+ * Returns the fusion result without dispatching — caller handles state updates.
+ */
+export async function executeFusion(
+  source: WorkspaceObject,
+  target: WorkspaceObject
+): Promise<FusionResult> {
+  if (!canFuse(source.type, target.type)) {
+    return { success: false, errorMessage: `Cannot fuse ${source.type} with ${target.type}.` };
+  }
+
+  try {
+    const result = await callAI(
+      [
+        {
+          role: 'user',
+          content: `Fuse these two workspace objects into a single, original analytical synthesis.
+
+OBJECT A — [${source.type}] "${source.title}":
+${JSON.stringify(source.context).slice(0, 800)}
+
+OBJECT B — [${target.type}] "${target.title}":
+${JSON.stringify(target.context).slice(0, 800)}
+
+RULES:
+- Only produce this synthesis if the combination reveals something non-obvious or decision-useful. If the two objects are too similar or unrelated, set synthesisType to "low-value".
+- Do NOT write generic introductions like "This synthesis combines..." — go straight into the analysis.
+- Reference actual data points, numbers, and specifics from both objects.
+
+Return JSON with these fields:
+{
+  "title": "short synthesis title",
+  "summary": "the deep analytical synthesis text",
+  "insights": ["insight 1", "insight 2"],
+  "synthesisType": "direct-extraction" | "inferred-pattern" | "speculative-synthesis" | "low-value",
+  "confidence": 0.0-1.0
+}`,
+        },
+      ],
+      'fusion'
+    );
+
+    let title = `${source.title} ✦ ${target.title}`;
+    let summary = '';
+    let insights: string[] = [];
+    let synthesisType: SynthesisType = 'inferred-pattern';
+    let confidence = 0.7;
+
+    try {
+      const jsonMatch = (result || '').match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (parsed.title) title = parsed.title;
+        if (parsed.summary) summary = parsed.summary;
+        if (parsed.insights && Array.isArray(parsed.insights)) insights = parsed.insights;
+        if (parsed.synthesisType) synthesisType = parsed.synthesisType as SynthesisType;
+        if (parsed.confidence) confidence = parsed.confidence;
+      }
+    } catch { /* fallback */ }
+
+    if (synthesisType === 'low-value') {
+      return { success: false, lowValue: true, errorMessage: 'These objects don\'t reveal non-obvious relationships when combined. Try a different pair.' };
+    }
+
+    if (!summary && result) {
+      summary = result.replace(/```json[\s\S]*?```/g, '').replace(/\{[\s\S]*\}/g, '').trim();
+    }
+    if (!summary) summary = 'Synthesis could not be generated. Try again.';
+
+    const id = `wo-fusion-${Date.now()}`;
+    const fusionData: Record<string, any> = {
+      content: summary,
+      summary,
+      insights: insights.length > 0 ? insights : undefined,
+      synthesisType,
+      confidence,
+      sourceObjects: [
+        { id: source.id, type: source.type, title: source.title },
+        { id: target.id, type: target.type, title: target.title },
+      ],
+      generatedAt: new Date().toISOString(),
+    };
+
+    return { success: true, id, title, context: fusionData };
+  } catch {
+    return { success: false, errorMessage: 'Fusion failed — try again or ask the Sherpa directly.' };
+  }
+}
