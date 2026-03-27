@@ -26,7 +26,8 @@ You MUST respond with valid JSON matching this schema:
   "actions": [
     { "type": "create", "objectType": "metric|comparison|alert|inspector|brief|timeline|document|dataset", "title": "...", "relatedTo": [] },
     { "type": "focus", "objectId": "..." },
-    { "type": "dissolve", "objectId": "..." }
+    { "type": "dissolve", "objectId": "..." },
+    { "type": "fuse", "objectIdA": "id-of-first-object", "objectIdB": "id-of-second-object" }
   ]
 }
 Rules:
