@@ -60,7 +60,7 @@ export function useAmbientSherpa(): AmbientHintData[] {
       ) {
         hints.push({
           objectId: obj.id,
-          hint: 'This hasn't been touched recently. Collapse to reduce noise?',
+          hint: 'This has not been touched recently. Collapse to reduce noise?',
           acceptLabel: 'Collapse',
           action: 'collapse',
         });
