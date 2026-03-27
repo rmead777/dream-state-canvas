@@ -69,7 +69,7 @@ export function MetricDetail({ object }: { object: WorkspaceObject }) {
             <div key={item.name} className="flex items-center justify-between">
               <span className="text-sm text-workspace-text">{item.name}</span>
               <div className="flex items-center gap-2">
-                <div className="h-1.5 w-16 rounded-full bg-workspace-surface overflow-hidden">
+                <div className="h-1.5 w-20 rounded-full bg-workspace-border/50 overflow-hidden">
                   <div
                     className="h-full rounded-full transition-all duration-500"
                     style={{
@@ -77,7 +77,7 @@ export function MetricDetail({ object }: { object: WorkspaceObject }) {
                       backgroundColor:
                         item.value >= (d.threshold?.warning || 3)
                           ? 'hsl(var(--workspace-accent))'
-                          : 'hsl(220 10% 70%)',
+                          : 'hsl(220 15% 55%)',
                     }}
                   />
                 </div>
