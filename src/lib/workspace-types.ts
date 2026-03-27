@@ -109,6 +109,7 @@ export interface WorkspaceState {
   activeContext: ActiveContext;
   sherpa: SherpaState;
   spatialLayout: SpatialLayout;
+  layoutMode: LayoutMode;
 }
 
 // ─── Reducer Actions ──────────────────────────────────────────────────────────
