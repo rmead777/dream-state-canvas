@@ -108,9 +108,22 @@ export function SherpaRail() {
           )}
         </div>
         <div className="flex items-center gap-1">
+          {promptHistory.length > 0 && (
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className={`rounded-md p-1 transition-colors text-[10px] ${
+                showHistory
+                  ? 'bg-workspace-accent/10 text-workspace-accent'
+                  : 'text-workspace-text-secondary/40 hover:bg-workspace-surface hover:text-workspace-text-secondary'
+              }`}
+              title={showHistory ? 'Hide conversation' : 'Show conversation'}
+            >
+              ≡
+            </button>
+          )}
           {(lastResponse || observations.length > 0) && (
             <button
-              onClick={handleClearSherpa}
+              onClick={handleClearSherpaFull}
               className="rounded-md p-1 text-workspace-text-secondary/40 transition-colors hover:bg-workspace-surface hover:text-workspace-text-secondary text-[10px]"
               title="Clear conversation"
             >
@@ -127,6 +140,23 @@ export function SherpaRail() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-5">
+        {/* Conversation history (optional) */}
+        {showHistory && promptHistory.length > 0 && (
+          <div className="space-y-3 pb-4 border-b border-workspace-border/30 mb-4">
+            <span className="text-[9px] uppercase tracking-widest text-workspace-text-secondary/40">
+              History
+            </span>
+            {promptHistory.map((entry, i) => (
+              <div key={entry.timestamp} className="space-y-1.5">
+                <div className="flex items-start gap-2">
+                  <span className="text-[9px] text-workspace-accent/50 mt-0.5 shrink-0">→</span>
+                  <p className="text-[11px] text-workspace-text font-medium leading-relaxed">{entry.query}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Response area */}
         <div className="space-y-4 pb-4">
           {!lastResponse && (
@@ -135,7 +165,7 @@ export function SherpaRail() {
                 Good morning. What would you like to focus on?
               </p>
               <p className="mt-2 text-xs text-workspace-text-secondary">
-                I can surface metrics, compare entities, highlight risks, or prepare a brief. Try voice input or ⌘K for commands.
+                I can surface metrics, compare entities, highlight risks, or prepare a brief. Hold the mic button to speak, or ⌘K for commands.
               </p>
             </div>
           )}
