@@ -131,7 +131,6 @@ export function useCrossObjectBehavior(): CrossObjectBehavior {
 
       const actions: ContextualAction[] = [];
 
-      // Metric objects can offer comparison
       if (obj.type === 'metric') {
         actions.push({
           id: `ctx-compare-${objectId}`,
@@ -141,7 +140,6 @@ export function useCrossObjectBehavior(): CrossObjectBehavior {
         });
       }
 
-      // Alert objects can offer "show related metric"
       if (obj.type === 'alert') {
         actions.push({
           id: `ctx-metric-${objectId}`,
@@ -151,17 +149,33 @@ export function useCrossObjectBehavior(): CrossObjectBehavior {
         });
       }
 
-      // Comparison objects can offer drill-down
       if (obj.type === 'comparison') {
         actions.push({
           id: `ctx-inspect-${objectId}`,
           label: 'Inspect underlying data',
-          query: 'show me the data',
+          query: 'show the full dataset',
           icon: '⊞',
         });
       }
 
-      // Any object with relationships can offer to show related
+      if (obj.type === 'dataset' || obj.type === 'inspector') {
+        actions.push({
+          id: `ctx-brief-${objectId}`,
+          label: 'Generate brief from this data',
+          query: 'give me a summary',
+          icon: '✦',
+        });
+      }
+
+      if (obj.type === 'document') {
+        actions.push({
+          id: `ctx-extract-${objectId}`,
+          label: 'Extract key metrics',
+          query: 'show me leverage exposure',
+          icon: '◈',
+        });
+      }
+
       if (obj.relationships.length > 0) {
         const related = obj.relationships
           .map((id) => objects[id])
