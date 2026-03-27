@@ -40,14 +40,7 @@ export function WorkspaceShell() {
 
   return (
     <div className={`flex h-screen flex-col bg-workspace-bg transition-colors duration-1500`}>
-      {/* Cognitive mode indicator */}
-      {cognitiveMode !== 'neutral' && !isImmersive && (
-        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-40 animate-[materialize_0.4s_cubic-bezier(0.16,1,0.3,1)_forwards]">
-          <div className="rounded-full bg-workspace-accent/6 border border-workspace-accent/10 px-3.5 py-1 text-[9px] uppercase tracking-widest text-workspace-accent/60 backdrop-blur-sm">
-            {MODE_LABELS[cognitiveMode]}
-          </div>
-        </div>
-      )}
+      {/* Cognitive mode passed to SherpaRail via context */}
 
       {/* Audio mute toggle */}
       <button
