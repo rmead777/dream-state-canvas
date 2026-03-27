@@ -1,25 +1,73 @@
+import { useEffect, useRef, useState } from 'react';
 import { WorkspaceObject } from '@/lib/workspace-types';
 
-/** Tiny inline SVG sparkline */
-function Sparkline({ data, color = 'hsl(220, 60%, 55%)' }: { data: number[]; color?: string }) {
+/** Animated sparkline matching MetricDetail style — draw-in + pulse dot */
+function AnimatedSparkline({ data, color = 'hsl(var(--workspace-accent))' }: { data: number[]; color?: string }) {
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    let start: number | null = null;
+    const duration = 700;
+    const animate = (ts: number) => {
+      if (!start) start = ts;
+      const p = Math.min((ts - start) / duration, 1);
+      setProgress(p);
+      if (p < 1) requestAnimationFrame(animate);
+    };
+    requestAnimationFrame(animate);
+  }, []);
+
   if (!data || data.length < 2) return null;
   const min = Math.min(...data);
   const max = Math.max(...data);
   const range = max - min || 1;
-  const w = 64, h = 20;
-  const points = data.map((v, i) => `${(i / (data.length - 1)) * w},${h - ((v - min) / range) * h}`).join(' ');
+  const w = 80, h = 24;
+  const visibleCount = Math.ceil(data.length * progress);
+  const points = data
+    .slice(0, visibleCount)
+    .map((v, i) => `${(i / (data.length - 1)) * w},${h - ((v - min) / range) * h}`)
+    .join(' ');
+
+  const lastIdx = visibleCount - 1;
+  const lastX = lastIdx >= 0 ? (lastIdx / (data.length - 1)) * w : 0;
+  const lastY = lastIdx >= 0 ? h - ((data[lastIdx] - min) / range) * h : 0;
+
   return (
     <svg width={w} height={h} className="inline-block align-middle">
       <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      {progress >= 1 && (
+        <circle cx={lastX} cy={lastY} r="2" fill={color} className="animate-pulse" />
+      )}
     </svg>
   );
 }
 
-/** Conditional formatting for cell values */
+/** Animated progress bar like MetricDetail breakdown rows */
+function MiniBar({ value, max, warn }: { value: number; max: number; warn?: number }) {
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    requestAnimationFrame(() => setWidth((value / max) * 100));
+  }, [value, max]);
+
+  const isWarn = warn !== undefined && value >= warn;
+
+  return (
+    <div className="h-1.5 w-16 rounded-full bg-workspace-border/40 overflow-hidden">
+      <div
+        className="h-full rounded-full transition-all duration-700 ease-out"
+        style={{
+          width: `${Math.min(width, 100)}%`,
+          backgroundColor: isWarn ? 'hsl(var(--workspace-accent))' : 'hsl(160 50% 45%)',
+        }}
+      />
+    </div>
+  );
+}
+
+/** Conditional formatting badges — same style as DataInspector */
 function FormattedCell({ value }: { value: string }) {
   if (!value || typeof value !== 'string') return <span>{value}</span>;
 
-  // Risk / status badges
   const badges: Record<string, string> = {
     'High': 'bg-red-100 text-red-700',
     'Critical': 'bg-red-100 text-red-700',
@@ -33,15 +81,18 @@ function FormattedCell({ value }: { value: string }) {
     return <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${badges[value]}`}>{value}</span>;
   }
 
-  // Positive/negative number coloring
-  if (value.startsWith('+')) {
-    return <span className="text-emerald-600 font-medium">{value}</span>;
-  }
-  if (value.startsWith('-') && /^-[\d.]/.test(value)) {
-    return <span className="text-red-500 font-medium">{value}</span>;
-  }
+  if (value.startsWith('+')) return <span className="text-emerald-600 font-medium">{value}</span>;
+  if (value.startsWith('-') && /^-[\d.]/.test(value)) return <span className="text-red-500 font-medium">{value}</span>;
 
   return <span>{value}</span>;
+}
+
+/** Parse a numeric-ish string like "$2.4B", "3.6x", "+12.4%" */
+function parseNum(val: string): number | null {
+  if (!val || typeof val !== 'string') return null;
+  const cleaned = val.replace(/[$%xBMK,+]/g, '').trim();
+  const n = parseFloat(cleaned);
+  return isNaN(n) ? null : n;
 }
 
 /** Extract table-like data from source objects */
@@ -52,8 +103,6 @@ function extractTableData(sources: WorkspaceObject[]): { columns: string[]; rows
       return { columns: ctx.columns, rows: ctx.rows };
     }
   }
-
-  // Try building from comparison entities
   for (const obj of sources) {
     if (obj.context?.entities?.length > 0) {
       const entities = obj.context.entities;
@@ -64,48 +113,88 @@ function extractTableData(sources: WorkspaceObject[]): { columns: string[]; rows
       return { columns, rows };
     }
   }
-
-  // Try from metric breakdown
-  for (const obj of sources) {
-    if (obj.context?.breakdown?.length > 0) {
-      const columns = ['Name', obj.title];
-      const rows = obj.context.breakdown.map((b: any) => [b.name, String(b.value)]);
-      return { columns, rows };
-    }
-  }
-
   return null;
 }
 
-/** Extract sparkline data from sources */
-function extractSparklines(sources: WorkspaceObject[]): { title: string; data: number[] }[] {
+/** Extract sparkline + metric headline from sources */
+function extractMetricCards(sources: WorkspaceObject[]): { title: string; value: string; unit: string; change: string; trend: string; sparkline: number[]; breakdown: any[]; threshold: any }[] {
   return sources
-    .filter(o => o.context?.sparkline?.length >= 2)
-    .map(o => ({ title: o.title, data: o.context.sparkline }));
+    .filter(o => o.context?.currentValue !== undefined)
+    .map(o => ({
+      title: o.title,
+      value: String(o.context.currentValue),
+      unit: o.context.unit || '',
+      change: `${o.context.change > 0 ? '+' : ''}${o.context.change}${o.context.unit || ''}`,
+      trend: o.context.trend || '',
+      sparkline: o.context.sparkline || [],
+      breakdown: o.context.breakdown || [],
+      threshold: o.context.threshold || null,
+    }));
 }
 
 export function FusionDataVisuals({ sources }: { sources: WorkspaceObject[] }) {
   const table = extractTableData(sources);
-  const sparklines = extractSparklines(sources);
+  const metrics = extractMetricCards(sources);
 
-  if (!table && sparklines.length === 0) return null;
+  if (!table && metrics.length === 0) return null;
 
   return (
     <div className="space-y-3">
-      {/* Inline sparklines */}
-      {sparklines.length > 0 && (
-        <div className="flex flex-wrap gap-4">
-          {sparklines.map((s, i) => (
-            <div key={i} className="flex items-center gap-2 rounded-lg border border-workspace-border/30 bg-workspace-surface/20 px-3 py-2">
-              <span className="text-[10px] font-medium uppercase tracking-wider text-workspace-text-secondary">{s.title}</span>
-              <Sparkline data={s.data} />
-              <span className="text-xs font-medium text-workspace-text">{s.data[s.data.length - 1]?.toFixed?.(1) ?? s.data[s.data.length - 1]}</span>
+      {/* Metric headline cards — same visual language as MetricDetail */}
+      {metrics.map((m, i) => (
+        <div key={i} className="rounded-xl border border-workspace-border/30 bg-workspace-surface/20 p-3 space-y-2">
+          <div className="text-[10px] font-medium uppercase tracking-wider text-workspace-text-secondary">
+            {m.title}
+          </div>
+          <div className="flex items-end justify-between">
+            <div>
+              <span className="text-2xl font-light tracking-tight text-workspace-text">
+                {m.value}{m.unit}
+              </span>
+              <div className="mt-0.5 text-[11px] text-workspace-text-secondary">
+                {m.change} over 30d
+                <span className={`ml-1.5 ${m.trend === 'increasing' ? 'text-amber-600' : 'text-emerald-600'}`}>
+                  {m.trend === 'increasing' ? '↑' : '↓'}
+                </span>
+              </div>
             </div>
-          ))}
-        </div>
-      )}
+            {m.sparkline.length >= 2 && <AnimatedSparkline data={m.sparkline} />}
+          </div>
 
-      {/* Formatted data table */}
+          {/* Breakdown with progress bars */}
+          {m.breakdown.length > 0 && (
+            <div className="space-y-1.5 pt-1">
+              {m.breakdown.map((b: any) => (
+                <div key={b.name} className="flex items-center justify-between text-xs">
+                  <span className="text-workspace-text">{b.name}</span>
+                  <div className="flex items-center gap-2">
+                    <MiniBar
+                      value={b.value}
+                      max={m.threshold?.critical || Math.max(...m.breakdown.map((x: any) => x.value), 5)}
+                      warn={m.threshold?.warning}
+                    />
+                    <span className="font-medium text-workspace-text w-10 text-right">{b.value}{m.unit}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Threshold pills */}
+          {m.threshold && (
+            <div className="flex gap-2 pt-0.5">
+              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] text-amber-700">
+                Warning: {m.threshold.warning}{m.unit}
+              </span>
+              <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] text-red-700">
+                Critical: {m.threshold.critical}{m.unit}
+              </span>
+            </div>
+          )}
+        </div>
+      ))}
+
+      {/* Formatted data table with badges */}
       {table && (
         <div className="overflow-hidden rounded-lg border border-workspace-border/30">
           <table className="w-full text-xs">
