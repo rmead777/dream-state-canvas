@@ -142,6 +142,8 @@ Return JSON with these fields:
       let title = `${source.title} ✦ ${target.title}`;
       let summary = '';
       let insights: string[] = [];
+      let synthesisType: SynthesisType = 'inferred-pattern';
+      let confidence = 0.7;
 
       try {
         const jsonMatch = (result || '').match(/\{[\s\S]*\}/);
@@ -150,8 +152,18 @@ Return JSON with these fields:
           if (parsed.title) title = parsed.title;
           if (parsed.summary) summary = parsed.summary;
           if (parsed.insights && Array.isArray(parsed.insights)) insights = parsed.insights;
+          if (parsed.synthesisType) synthesisType = parsed.synthesisType as SynthesisType;
+          if (parsed.confidence) confidence = parsed.confidence;
         }
       } catch { /* fallback */ }
+
+      // Low-value gate — don't create clutter
+      if (synthesisType === 'low-value') {
+        toast({ title: 'Fusion not productive', description: 'These objects don\'t reveal non-obvious relationships when combined. Try a different pair.' });
+        setFusionProcessing(false);
+        setFusionTarget(null);
+        return;
+      }
 
       // If JSON parsing failed, use the raw text as the summary
       if (!summary && result) {
@@ -164,6 +176,8 @@ Return JSON with these fields:
         content: summary,
         summary,
         insights: insights.length > 0 ? insights : undefined,
+        synthesisType,
+        confidence,
         sourceObjects: [
           { id: source.id, type: source.type, title: source.title },
           { id: target.id, type: target.type, title: target.title },
