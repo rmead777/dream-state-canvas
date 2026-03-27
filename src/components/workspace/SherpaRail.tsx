@@ -4,6 +4,8 @@ import { useWorkspaceActions } from '@/hooks/useWorkspaceActions';
 import { useSherpa } from '@/contexts/SherpaContext';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
 import { useAmbientAudio } from '@/hooks/useAmbientAudio';
+import { useCognitiveMode } from '@/hooks/useCognitiveMode';
+import { MODE_LABELS } from '@/lib/cognitive-modes';
 import { VoiceIndicator } from './VoiceIndicator';
 
 export function SherpaRail() {
