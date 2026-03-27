@@ -15,10 +15,12 @@ import {
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { SortableObject } from './SortableObject';
 import { RelationshipConnector } from './RelationshipConnector';
+import { FreeformCanvas } from './FreeformCanvas';
+import { LayoutToggle } from './LayoutToggle';
 
 export function PanelCanvas() {
   const { state, dispatch } = useWorkspace();
-  const { spatialLayout, objects } = state;
+  const { spatialLayout, objects, layoutMode } = state;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
@@ -42,7 +44,6 @@ export function PanelCanvas() {
       const activeId = String(active.id);
       const overId = String(over.id);
 
-      // Determine which zone the active item belongs to
       for (const zone of ['primary', 'secondary'] as const) {
         const ids = spatialLayout[zone];
         const oldIdx = ids.indexOf(activeId);
@@ -59,48 +60,58 @@ export function PanelCanvas() {
     [spatialLayout, dispatch]
   );
 
+  if (layoutMode === 'freeform') {
+    return (
+      <>
+        <FreeformCanvas />
+        <LayoutToggle />
+      </>
+    );
+  }
+
   return (
-    <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 lg:p-10">
-      {!hasObjects ? (
-        <div className="flex h-full items-center justify-center">
-          <div className="max-w-md text-center">
-            <div className="mx-auto mb-6 h-px w-16 bg-workspace-border" />
-            <p className="text-sm text-workspace-text-secondary/50 leading-relaxed">
-              Your workspace is clear. Ask the Sherpa to surface what matters, or explore a suggestion.
-            </p>
+    <>
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 lg:p-10">
+        {!hasObjects ? (
+          <div className="flex h-full items-center justify-center">
+            <div className="max-w-md text-center">
+              <div className="mx-auto mb-6 h-px w-16 bg-workspace-border" />
+              <p className="text-sm text-workspace-text-secondary/50 leading-relaxed">
+                Your workspace is clear. Ask the Sherpa to surface what matters, or explore a suggestion.
+              </p>
+            </div>
           </div>
-        </div>
-      ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <div className="mx-auto max-w-4xl space-y-4">
-            {/* Primary zone */}
-            {primaryObjects.length > 0 && (
-              <SortableContext items={primaryObjects.map((o) => o.id)} strategy={verticalListSortingStrategy}>
-                <div className="space-y-5">
-                  {primaryObjects.map((obj) => (
-                    <SortableObject key={obj.id} object={obj} />
-                  ))}
-                </div>
-              </SortableContext>
-            )}
-
-            <RelationshipConnector />
-
-            {/* Secondary zone */}
-            {secondaryObjects.length > 0 && (
-              <SortableContext items={secondaryObjects.map((o) => o.id)} strategy={verticalListSortingStrategy}>
-                <div className="space-y-5">
-                  <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                    {secondaryObjects.map((obj) => (
+        ) : (
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <div className="mx-auto max-w-4xl space-y-4">
+              {primaryObjects.length > 0 && (
+                <SortableContext items={primaryObjects.map((o) => o.id)} strategy={verticalListSortingStrategy}>
+                  <div className="space-y-5">
+                    {primaryObjects.map((obj) => (
                       <SortableObject key={obj.id} object={obj} />
                     ))}
                   </div>
-                </div>
-              </SortableContext>
-            )}
-          </div>
-        </DndContext>
-      )}
-    </div>
+                </SortableContext>
+              )}
+
+              <RelationshipConnector />
+
+              {secondaryObjects.length > 0 && (
+                <SortableContext items={secondaryObjects.map((o) => o.id)} strategy={verticalListSortingStrategy}>
+                  <div className="space-y-5">
+                    <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                      {secondaryObjects.map((obj) => (
+                        <SortableObject key={obj.id} object={obj} />
+                      ))}
+                    </div>
+                  </div>
+                </SortableContext>
+              )}
+            </div>
+          </DndContext>
+        )}
+      </div>
+      <LayoutToggle />
+    </>
   );
 }
