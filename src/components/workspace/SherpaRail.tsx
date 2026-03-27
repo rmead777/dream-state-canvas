@@ -10,14 +10,34 @@ import { VoiceIndicator } from './VoiceIndicator';
 import { toast } from 'sonner';
 
 export function SherpaRail() {
-  const { state } = useWorkspace();
+  const { state, dispatch } = useWorkspace();
   const { processIntent } = useWorkspaceActions();
   const { suggestions, observations, lastResponse, isProcessing } = useSherpa();
   const cognitiveMode = useCognitiveMode();
   const { play } = useAmbientAudio();
   const [input, setInput] = useState('');
   const [isExpanded, setIsExpanded] = useState(true);
+  const [showCanvasMenu, setShowCanvasMenu] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const activeObjectCount = Object.values(state.objects).filter(o => o.status !== 'dissolved').length;
+
+  const handleClearSherpa = useCallback(() => {
+    dispatch({ type: 'CLEAR_SHERPA' });
+    toast.success('Conversation cleared');
+  }, [dispatch]);
+
+  const handleCollapseAll = useCallback(() => {
+    dispatch({ type: 'COLLAPSE_ALL_OBJECTS' });
+    setShowCanvasMenu(false);
+    toast.success('All objects minimized');
+  }, [dispatch]);
+
+  const handleDissolveAll = useCallback(() => {
+    dispatch({ type: 'DISSOLVE_ALL_OBJECTS' });
+    setShowCanvasMenu(false);
+    toast.success('Canvas cleared');
+  }, [dispatch]);
 
   const handleSubmit = useCallback(() => {
     const trimmed = input.trim();
