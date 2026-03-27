@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities';
 import { WorkspaceObject as WO } from '@/lib/workspace-types';
 import { useWorkspaceActions } from '@/hooks/useWorkspaceActions';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
