@@ -19,6 +19,13 @@ export interface SpatialPosition {
   order: number;
 }
 
+export interface FreeformPosition {
+  x: number;
+  y: number;
+}
+
+export type LayoutMode = 'auto' | 'freeform';
+
 export interface WorkspaceObject {
   id: string;
   type: ObjectType;
