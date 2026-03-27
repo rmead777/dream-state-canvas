@@ -181,6 +181,18 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
       };
     }
 
+    case 'UPDATE_OBJECT_CONTEXT': {
+      const obj = state.objects[action.payload.id];
+      if (!obj) return state;
+      return {
+        ...state,
+        objects: {
+          ...state.objects,
+          [obj.id]: { ...obj, context: action.payload.context },
+        },
+      };
+    }
+
     case 'ENTER_IMMERSIVE':
       return {
         ...state,

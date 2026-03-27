@@ -8,6 +8,33 @@ import { callAI } from '@/hooks/useAI';
 const FUSION_THRESHOLD = 120;
 const FUSION_GLOW_THRESHOLD = 200;
 
+const IMAGE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-image`;
+
+async function generateFusionImage(title: string, summary: string, insights: string[]): Promise<string | null> {
+  try {
+    const prompt = `Create an abstract, minimal data visualization or conceptual diagram for a financial analysis titled "${title}". 
+The visual should represent: ${insights.slice(0, 3).join('; ')}.
+Style: Clean, modern, uses geometric shapes, subtle gradients, muted professional color palette (slate blues, warm grays, accent gold). 
+No text or labels. Abstract and elegant — like a premium financial research report illustration. 
+Aspect ratio: wide landscape (roughly 2:1). White or very light background.`;
+
+    const resp = await fetch(IMAGE_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+      },
+      body: JSON.stringify({ prompt }),
+    });
+
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    return data.imageUrl || null;
+  } catch {
+    return null;
+  }
+}
+
 export function FreeformCanvas() {
   const { state, dispatch } = useWorkspace();
   const { processIntent } = useWorkspaceActions();
@@ -144,7 +171,7 @@ Produce a deep, specific synthesis. Do NOT write generic introductions like "Thi
       if (!summary) summary = 'Synthesis could not be generated. Try again.';
 
       const id = `wo-fusion-${Date.now()}`;
-      const fusionData = {
+      const fusionData: Record<string, any> = {
         content: summary,
         summary,
         insights: insights.length > 0 ? insights : undefined,
@@ -153,6 +180,7 @@ Produce a deep, specific synthesis. Do NOT write generic introductions like "Thi
           { id: target.id, type: target.type, title: target.title },
         ],
         generatedAt: new Date().toISOString(),
+        generatingImage: true,
       };
 
       dispatch({
@@ -178,6 +206,21 @@ Produce a deep, specific synthesis. Do NOT write generic introductions like "Thi
       setTimeout(() => {
         dispatch({ type: 'OPEN_OBJECT', payload: { id } });
       }, 400);
+
+      // Fire-and-forget image generation
+      generateFusionImage(title, summary, insights).then((imageUrl) => {
+        if (imageUrl) {
+          dispatch({
+            type: 'UPDATE_OBJECT_CONTEXT',
+            payload: { id, context: { ...fusionData, fusionImage: imageUrl, generatingImage: false } },
+          });
+        } else {
+          dispatch({
+            type: 'UPDATE_OBJECT_CONTEXT',
+            payload: { id, context: { ...fusionData, generatingImage: false } },
+          });
+        }
+      });
     } catch {
       dispatch({ type: 'SET_SHERPA_RESPONSE', payload: 'Fusion failed — try again or ask the Sherpa directly.' });
     }
