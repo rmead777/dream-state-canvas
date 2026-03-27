@@ -66,7 +66,7 @@ export function WorkspaceObjectWrapper({ object }: { object: WO }) {
           : isHighlighted
             ? 'border-workspace-accent/15 shadow-[0_2px_16px_rgba(0,0,0,0.04)] ring-1 ring-workspace-accent/10'
             : isDimmed
-              ? 'border-workspace-border opacity-50 shadow-sm'
+              ? 'border-workspace-border opacity-65 shadow-sm'
               : 'border-workspace-border shadow-[0_2px_12px_rgba(0,0,0,0.04)]'
         }
       `}
