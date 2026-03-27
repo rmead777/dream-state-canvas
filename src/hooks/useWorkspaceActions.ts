@@ -4,6 +4,8 @@ import { parseIntentAI, parseIntent } from '@/lib/intent-engine';
 import { generateSuggestions } from '@/lib/sherpa-engine';
 import { WorkspaceObject, IntentOrigin } from '@/lib/workspace-types';
 import { computeFreeformPosition } from '@/lib/freeform-placement';
+import { executeFusion } from '@/lib/fusion-executor';
+import { toast } from '@/hooks/use-toast';
 
 let objectCounter = 0;
 

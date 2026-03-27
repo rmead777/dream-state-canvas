@@ -84,6 +84,8 @@ export async function parseIntentAI(
           actions.push({ type: 'focus', objectId: action.objectId });
         } else if (action.type === 'dissolve' && action.objectId) {
           actions.push({ type: 'dissolve', objectId: action.objectId });
+        } else if (action.type === 'fuse' && action.objectIdA && action.objectIdB) {
+          actions.push({ type: 'fuse', objectIdA: action.objectIdA, objectIdB: action.objectIdB });
         }
       }
     }
