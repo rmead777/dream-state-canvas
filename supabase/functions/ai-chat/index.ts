@@ -26,7 +26,8 @@ You MUST respond with valid JSON matching this schema:
   "actions": [
     { "type": "create", "objectType": "metric|comparison|alert|inspector|brief|timeline|document|dataset", "title": "...", "relatedTo": [] },
     { "type": "focus", "objectId": "..." },
-    { "type": "dissolve", "objectId": "..." }
+    { "type": "dissolve", "objectId": "..." },
+    { "type": "fuse", "objectIdA": "id-of-first-object", "objectIdB": "id-of-second-object" }
   ]
 }
 Rules:
@@ -35,6 +36,8 @@ Rules:
 - Use "create" to materialize new workspace objects. Pick the most appropriate objectType.
 - Use "focus" if the user asks about something already in the workspace.
 - Use "dissolve" to remove objects the user no longer needs.
+- Use "fuse" when the user wants to combine, merge, synthesize, or fuse two objects. Match object names to their IDs from the workspace state. If the user doesn't specify which objects, pick the two most relevant active objects.
+- IMPORTANT: When the user says "fuse", "combine", "merge", or "synthesize" — ALWAYS use the "fuse" action type, NEVER create a brief instead.
 - Be concise, insightful, and proactive. You are a financial intelligence assistant.
 - If the user asks something vague, respond helpfully and suggest workspace actions.`,
 
