@@ -41,12 +41,17 @@ export function SherpaRail() {
     toast.success('Canvas cleared');
   }, [dispatch]);
 
+  const trackAndProcess = useCallback((text: string) => {
+    setPromptHistory(prev => [...prev, { query: text, response: null, timestamp: Date.now() }]);
+    processIntent(text);
+  }, [processIntent]);
+
   const handleSubmit = useCallback(() => {
     const trimmed = input.trim();
     if (!trimmed) return;
-    processIntent(trimmed);
+    trackAndProcess(trimmed);
     setInput('');
-  }, [input, processIntent]);
+  }, [input, trackAndProcess]);
 
   const handleVoiceResult = useCallback(
     (transcript: string) => {
