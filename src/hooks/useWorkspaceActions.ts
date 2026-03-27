@@ -3,6 +3,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { parseIntent } from '@/lib/intent-engine';
 import { generateSuggestions } from '@/lib/sherpa-engine';
 import { WorkspaceObject, IntentOrigin } from '@/lib/workspace-types';
+import { computeFreeformPosition } from '@/lib/freeform-placement';
 
 let objectCounter = 0;
 
