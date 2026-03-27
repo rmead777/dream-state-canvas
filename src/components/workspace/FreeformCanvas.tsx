@@ -4,6 +4,8 @@ import { useWorkspaceActions } from '@/hooks/useWorkspaceActions';
 import { WorkspaceObjectWrapper } from './WorkspaceObject';
 import { FusionZone } from './FusionZone';
 import { callAI } from '@/hooks/useAI';
+import { canFuse, SynthesisType } from '@/lib/fusion-rules';
+import { toast } from '@/hooks/use-toast';
 
 const FUSION_THRESHOLD = 120;
 const FUSION_GLOW_THRESHOLD = 200;
