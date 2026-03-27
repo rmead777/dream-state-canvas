@@ -179,6 +179,21 @@ Produce a deep, specific synthesis. Do NOT write generic introductions like "Thi
       setTimeout(() => {
         dispatch({ type: 'OPEN_OBJECT', payload: { id } });
       }, 400);
+
+      // Fire-and-forget image generation
+      generateFusionImage(title, summary, insights).then((imageUrl) => {
+        if (imageUrl) {
+          dispatch({
+            type: 'UPDATE_OBJECT_CONTEXT',
+            payload: { id, context: { ...fusionData, fusionImage: imageUrl, generatingImage: false } },
+          });
+        } else {
+          dispatch({
+            type: 'UPDATE_OBJECT_CONTEXT',
+            payload: { id, context: { ...fusionData, generatingImage: false } },
+          });
+        }
+      });
     } catch {
       dispatch({ type: 'SET_SHERPA_RESPONSE', payload: 'Fusion failed — try again or ask the Sherpa directly.' });
     }
