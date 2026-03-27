@@ -154,9 +154,25 @@ export function SherpaRail() {
           </div>
         )}
 
+        {/* Fusion processing animation */}
+        {isProcessing && (
+          <div className="flex items-center gap-3 rounded-xl border border-workspace-accent/15 bg-workspace-accent/[0.03] px-4 py-3 animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards]">
+            <div className="relative flex items-center gap-2">
+              <div className="h-6 w-6 rounded-full border border-workspace-accent/20 bg-workspace-accent/5 flex items-center justify-center">
+                <span className="text-workspace-accent text-[10px] animate-pulse">✦</span>
+              </div>
+              <div className="absolute inset-0 w-6 h-6 rounded-full border-2 border-workspace-accent/20 border-t-workspace-accent animate-spin" />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-workspace-text">Synthesizing…</p>
+              <p className="text-[10px] text-workspace-text-secondary">Analyzing cross-object patterns</p>
+            </div>
+          </div>
+        )}
+
         {/* Response area */}
         <div className="space-y-4 pb-4">
-          {!lastResponse && (
+          {!lastResponse && !isProcessing && (
             <div className="animate-[materialize_0.5s_cubic-bezier(0.16,1,0.3,1)_forwards]">
               <p className="text-sm leading-relaxed text-workspace-text">
                 Good morning. What would you like to focus on?
