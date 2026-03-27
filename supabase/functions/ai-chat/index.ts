@@ -75,6 +75,7 @@ Return 1-2 predictions max.`,
             ...messages,
           ],
           stream: true,
+          max_tokens: 8192,
         }),
       }
     );
