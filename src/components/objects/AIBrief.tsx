@@ -19,6 +19,14 @@ export function AIBrief({ object }: { object: WorkspaceObject }) {
   return (
     <div className="space-y-4">
       {/* Real data visualizations for fusion objects */}
+      {/* Inline sparklines + formatted table from source data */}
+      {sourceObjects.length > 0 && (
+        <div className="animate-[materialize_0.5s_cubic-bezier(0.16,1,0.3,1)_forwards]">
+          <FusionDataVisuals sources={sourceObjects} />
+        </div>
+      )}
+
+      {/* Richer charts when two sources have enough numeric data */}
       {hasFusionData && (
         <div className="animate-[materialize_0.5s_cubic-bezier(0.16,1,0.3,1)_forwards]">
           <FusionCharts sourceA={sourceA} sourceB={sourceB} />
