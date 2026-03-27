@@ -1,6 +1,6 @@
 // ─── Workspace Object Model ───────────────────────────────────────────────────
 
-export type ObjectType = 'metric' | 'comparison' | 'alert' | 'inspector' | 'brief' | 'timeline' | 'monitor';
+export type ObjectType = 'metric' | 'comparison' | 'alert' | 'inspector' | 'brief' | 'timeline' | 'monitor' | 'document' | 'dataset';
 
 export type ObjectStatus = 'materializing' | 'open' | 'collapsed' | 'dissolved';
 
