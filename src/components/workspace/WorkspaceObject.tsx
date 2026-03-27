@@ -37,7 +37,7 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
   const { collapseObject, dissolveObject, pinObject, unpinObject, focusObject, processIntent } = useWorkspaceActions();
   const { state } = useWorkspace();
   const { shouldDim, shouldHighlight, getContextualActions, cascadeDissolve } = useCrossObjectBehavior();
-  const [height, setHeight] = useState<number | null>(null);
+  const [size, setSize] = useState<{ width: number | null; height: number | null }>({ width: null, height: null });
 
   const isFocused = state.activeContext.focusedObjectId === object.id;
   const isDimmed = shouldDim(object.id);
@@ -72,7 +72,10 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
               : 'border-workspace-border shadow-[0_2px_12px_rgba(0,0,0,0.04)]'
         }
       `}
-      style={height ? { height: `${height}px`, overflow: 'auto' } : undefined}
+      style={{
+        ...(size.width ? { width: size.width } : {}),
+        ...(size.height ? { height: size.height, overflow: 'auto' } : {}),
+      }}
       onClick={() => focusObject(object.id)}
     >
       {/* Relationship highlight pulse */}
@@ -166,18 +169,23 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
         </div>
       )}
 
-      {/* Resize handle */}
+      {/* Resize handle — diagonal (both width + height) */}
       <div
-        className="absolute bottom-0 right-0 w-4 h-4 cursor-ns-resize opacity-0 group-hover:opacity-40 transition-opacity flex items-end justify-end pr-1 pb-1"
+        className="absolute bottom-0 right-0 w-5 h-5 cursor-nwse-resize opacity-0 group-hover:opacity-40 transition-opacity flex items-end justify-end pr-1 pb-1"
         title="Drag to resize"
         onMouseDown={(e) => {
           e.stopPropagation();
           e.preventDefault();
+          const startX = e.clientX;
           const startY = e.clientY;
-          const startH = (e.currentTarget.parentElement?.getBoundingClientRect().height) ?? 200;
+          const rect = e.currentTarget.parentElement?.getBoundingClientRect();
+          const startW = rect?.width ?? 400;
+          const startH = rect?.height ?? 200;
           const onMove = (ev: MouseEvent) => {
-            const newH = Math.max(120, startH + ev.clientY - startY);
-            setHeight(newH);
+            setSize({
+              width: Math.max(280, startW + ev.clientX - startX),
+              height: Math.max(120, startH + ev.clientY - startY),
+            });
           };
           const onUp = () => {
             window.removeEventListener('mousemove', onMove);
