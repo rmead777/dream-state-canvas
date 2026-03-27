@@ -4,12 +4,16 @@ import { WorkspaceObject as WO } from '@/lib/workspace-types';
 import { useWorkspaceActions } from '@/hooks/useWorkspaceActions';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useCrossObjectBehavior } from '@/hooks/useCrossObjectBehavior';
+import { useAmbientSherpa } from '@/hooks/useAmbientSherpa';
+import { AmbientHint } from '@/components/workspace/AmbientHint';
 import { MetricDetail } from '@/components/objects/MetricDetail';
 import { ComparisonPanel } from '@/components/objects/ComparisonPanel';
 import { AlertRiskPanel } from '@/components/objects/AlertRiskPanel';
 import { DataInspector } from '@/components/objects/DataInspector';
 import { AIBrief } from '@/components/objects/AIBrief';
 import { Timeline } from '@/components/objects/Timeline';
+import { DocumentReader } from '@/components/objects/DocumentReader';
+import { DatasetView } from '@/components/objects/DatasetView';
 
 const typeLabels: Record<string, string> = {
   metric: 'Metric',
@@ -19,6 +23,8 @@ const typeLabels: Record<string, string> = {
   brief: 'Brief',
   timeline: 'Timeline',
   monitor: 'Monitor',
+  document: 'Document',
+  dataset: 'Dataset',
 };
 
 function ObjectContent({ object }: { object: WO }) {
@@ -29,6 +35,8 @@ function ObjectContent({ object }: { object: WO }) {
     case 'inspector': return <DataInspector object={object} />;
     case 'brief': return <AIBrief object={object} />;
     case 'timeline': return <Timeline object={object} />;
+    case 'document': return <DocumentReader object={object} />;
+    case 'dataset': return <DatasetView object={object} />;
     default: return <div className="text-sm text-workspace-text-secondary">Unknown object type</div>;
   }
 }
