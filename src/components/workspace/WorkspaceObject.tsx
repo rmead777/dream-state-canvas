@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities';
 import { WorkspaceObject as WO } from '@/lib/workspace-types';
 import { useWorkspaceActions } from '@/hooks/useWorkspaceActions';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
@@ -31,10 +33,11 @@ function ObjectContent({ object }: { object: WO }) {
   }
 }
 
-export function WorkspaceObjectWrapper({ object }: { object: WO }) {
+export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; dragListeners?: SyntheticListenerMap }) {
   const { collapseObject, dissolveObject, pinObject, unpinObject, focusObject, processIntent } = useWorkspaceActions();
   const { state } = useWorkspace();
   const { shouldDim, shouldHighlight, getContextualActions, cascadeDissolve } = useCrossObjectBehavior();
+  const [height, setHeight] = useState<number | null>(null);
 
   const isFocused = state.activeContext.focusedObjectId === object.id;
   const isDimmed = shouldDim(object.id);
@@ -45,7 +48,6 @@ export function WorkspaceObjectWrapper({ object }: { object: WO }) {
   const handleDissolve = (e: React.MouseEvent) => {
     e.stopPropagation();
     const cascadeTargets = cascadeDissolve(object.id);
-    // Dissolve children first, then parent
     for (const childId of cascadeTargets) {
       dissolveObject(childId);
     }
@@ -70,6 +72,7 @@ export function WorkspaceObjectWrapper({ object }: { object: WO }) {
               : 'border-workspace-border shadow-[0_2px_12px_rgba(0,0,0,0.04)]'
         }
       `}
+      style={height ? { height: `${height}px`, overflow: 'auto' } : undefined}
       onClick={() => focusObject(object.id)}
     >
       {/* Relationship highlight pulse */}
@@ -80,6 +83,14 @@ export function WorkspaceObjectWrapper({ object }: { object: WO }) {
       {/* Header — actions appear on hover only (anti-drift: no always-visible action bars) */}
       <div className="flex items-center justify-between px-5 pt-4 pb-3">
         <div className="flex items-center gap-2.5">
+          {/* Drag handle */}
+          <span
+            {...dragListeners}
+            className="cursor-grab text-workspace-text-secondary/30 hover:text-workspace-text-secondary/60 transition-colors active:cursor-grabbing select-none"
+            title="Drag to reorder"
+          >
+            ⠿
+          </span>
           <span className="text-[10px] font-medium uppercase tracking-widest text-workspace-accent">
             {typeLabels[object.type] || object.type}
           </span>
@@ -154,6 +165,32 @@ export function WorkspaceObjectWrapper({ object }: { object: WO }) {
           ← "{object.origin.query}"
         </div>
       )}
+
+      {/* Resize handle */}
+      <div
+        className="absolute bottom-0 right-0 w-4 h-4 cursor-ns-resize opacity-0 group-hover:opacity-40 transition-opacity flex items-end justify-end pr-1 pb-1"
+        title="Drag to resize"
+        onMouseDown={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          const startY = e.clientY;
+          const startH = (e.currentTarget.parentElement?.getBoundingClientRect().height) ?? 200;
+          const onMove = (ev: MouseEvent) => {
+            const newH = Math.max(120, startH + ev.clientY - startY);
+            setHeight(newH);
+          };
+          const onUp = () => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+          };
+          window.addEventListener('mousemove', onMove);
+          window.addEventListener('mouseup', onUp);
+        }}
+      >
+        <svg width="8" height="8" viewBox="0 0 8 8" className="text-workspace-text-secondary">
+          <path d="M7 1L1 7M7 4L4 7M7 7L7 7" stroke="currentColor" strokeWidth="1" fill="none" />
+        </svg>
+      </div>
     </div>
   );
 }
