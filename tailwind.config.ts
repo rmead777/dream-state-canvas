@@ -57,6 +57,14 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        // Workspace design tokens
+        "workspace-bg": "hsl(var(--workspace-bg))",
+        "workspace-surface": "hsl(var(--workspace-surface))",
+        "workspace-accent": "hsl(var(--workspace-accent))",
+        "workspace-accent-subtle": "hsl(var(--workspace-accent-subtle))",
+        "workspace-text": "hsl(var(--workspace-text))",
+        "workspace-text-secondary": "hsl(var(--workspace-text-secondary))",
+        "workspace-border": "hsl(var(--workspace-border))",
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -65,20 +73,12 @@ export default {
       },
       keyframes: {
         "accordion-down": {
-          from: {
-            height: "0",
-          },
-          to: {
-            height: "var(--radix-accordion-content-height)",
-          },
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
         },
         "accordion-up": {
-          from: {
-            height: "var(--radix-accordion-content-height)",
-          },
-          to: {
-            height: "0",
-          },
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
         },
       },
       animation: {
