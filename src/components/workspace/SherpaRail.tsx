@@ -12,6 +12,7 @@ export function SherpaRail() {
   const { state } = useWorkspace();
   const { processIntent } = useWorkspaceActions();
   const { suggestions, observations, lastResponse, isProcessing } = useSherpa();
+  const cognitiveMode = useCognitiveMode();
   const { play } = useAmbientAudio();
   const [input, setInput] = useState('');
   const [isExpanded, setIsExpanded] = useState(true);
