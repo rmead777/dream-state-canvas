@@ -10,6 +10,8 @@ import {
   MOCK_INSPECTOR_DATA,
   MOCK_BRIEF_DATA,
   MOCK_TIMELINE_DATA,
+  MOCK_DOCUMENT_DATA,
+  MOCK_DATASET_DATA,
 } from './mock-data';
 
 // Intent patterns — keyword-based for v1, structured for future LLM replacement
