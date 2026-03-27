@@ -156,6 +156,14 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
         },
       };
 
+    case 'REORDER_ZONE': {
+      const { zone, ids } = action.payload;
+      return {
+        ...state,
+        spatialLayout: { ...state.spatialLayout, [zone]: ids },
+      };
+    }
+
     default:
       return state;
   }

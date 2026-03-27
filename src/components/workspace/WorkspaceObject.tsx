@@ -165,6 +165,32 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
           ← "{object.origin.query}"
         </div>
       )}
+
+      {/* Resize handle */}
+      <div
+        className="absolute bottom-0 right-0 w-4 h-4 cursor-ns-resize opacity-0 group-hover:opacity-40 transition-opacity flex items-end justify-end pr-1 pb-1"
+        title="Drag to resize"
+        onMouseDown={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          const startY = e.clientY;
+          const startH = (e.currentTarget.parentElement?.getBoundingClientRect().height) ?? 200;
+          const onMove = (ev: MouseEvent) => {
+            const newH = Math.max(120, startH + ev.clientY - startY);
+            setHeight(newH);
+          };
+          const onUp = () => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+          };
+          window.addEventListener('mousemove', onMove);
+          window.addEventListener('mouseup', onUp);
+        }}
+      >
+        <svg width="8" height="8" viewBox="0 0 8 8" className="text-workspace-text-secondary">
+          <path d="M7 1L1 7M7 4L4 7M7 7L7 7" stroke="currentColor" strokeWidth="1" fill="none" />
+        </svg>
+      </div>
     </div>
   );
 }
