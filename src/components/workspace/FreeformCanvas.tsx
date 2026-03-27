@@ -144,7 +144,7 @@ Produce a deep, specific synthesis. Do NOT write generic introductions like "Thi
       if (!summary) summary = 'Synthesis could not be generated. Try again.';
 
       const id = `wo-fusion-${Date.now()}`;
-      const fusionData = {
+      const fusionData: Record<string, any> = {
         content: summary,
         summary,
         insights: insights.length > 0 ? insights : undefined,
@@ -153,6 +153,7 @@ Produce a deep, specific synthesis. Do NOT write generic introductions like "Thi
           { id: target.id, type: target.type, title: target.title },
         ],
         generatedAt: new Date().toISOString(),
+        generatingImage: true,
       };
 
       dispatch({
