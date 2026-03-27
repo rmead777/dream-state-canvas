@@ -217,9 +217,35 @@ export function SherpaRail() {
           )}
         </div>
 
-        {/* Keyboard hint */}
-        <div className="text-center text-[9px] text-workspace-text-secondary/30">
-          ⌘K for command palette
+        {/* Canvas controls + keyboard hint */}
+        <div className="flex items-center justify-between text-[9px] text-workspace-text-secondary/30">
+          <span>⌘K for command palette</span>
+          {activeObjectCount > 0 && (
+            <div className="relative">
+              <button
+                onClick={() => setShowCanvasMenu(!showCanvasMenu)}
+                className="rounded px-1.5 py-0.5 text-workspace-text-secondary/40 transition-colors hover:text-workspace-text-secondary hover:bg-workspace-surface"
+              >
+                Canvas ▾
+              </button>
+              {showCanvasMenu && (
+                <div className="absolute bottom-full right-0 mb-1 w-40 rounded-lg border border-workspace-border bg-white shadow-lg overflow-hidden animate-[materialize_0.2s_cubic-bezier(0.16,1,0.3,1)_forwards]">
+                  <button
+                    onClick={handleCollapseAll}
+                    className="block w-full px-3 py-2 text-left text-[11px] text-workspace-text transition-colors hover:bg-workspace-surface"
+                  >
+                    Minimize all
+                  </button>
+                  <button
+                    onClick={handleDissolveAll}
+                    className="block w-full px-3 py-2 text-left text-[11px] text-red-500 transition-colors hover:bg-red-50"
+                  >
+                    Clear canvas
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
