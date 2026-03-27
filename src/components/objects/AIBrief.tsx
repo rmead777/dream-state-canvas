@@ -1,6 +1,5 @@
 import { WorkspaceObject } from '@/lib/workspace-types';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { FusionCharts } from './FusionCharts';
 import { FusionDataVisuals } from './FusionTable';
 
 export function AIBrief({ object }: { object: WorkspaceObject }) {
