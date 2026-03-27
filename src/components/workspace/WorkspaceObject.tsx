@@ -37,7 +37,7 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
   const { collapseObject, dissolveObject, pinObject, unpinObject, focusObject, processIntent } = useWorkspaceActions();
   const { state } = useWorkspace();
   const { shouldDim, shouldHighlight, getContextualActions, cascadeDissolve } = useCrossObjectBehavior();
-  const [height, setHeight] = useState<number | null>(null);
+  const [size, setSize] = useState<{ width: number | null; height: number | null }>({ width: null, height: null });
 
   const isFocused = state.activeContext.focusedObjectId === object.id;
   const isDimmed = shouldDim(object.id);
