@@ -1,20 +1,32 @@
 import { WorkspaceObject } from '@/lib/workspace-types';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { FusionCharts } from './FusionCharts';
+import { FusionDataVisuals } from './FusionTable';
 
 export function AIBrief({ object }: { object: WorkspaceObject }) {
   const { state } = useWorkspace();
   const d = object.context;
   const text = d.content || d.summary || '';
 
-  // Resolve source objects for fusion charts
-  const sourceA = d.sourceObjects?.[0]?.id ? state.objects[d.sourceObjects[0].id] : null;
-  const sourceB = d.sourceObjects?.[1]?.id ? state.objects[d.sourceObjects[1].id] : null;
+  // Resolve source objects for fusion visuals
+  const sourceObjects = (d.sourceObjects || [])
+    .map((s: any) => s.id ? state.objects[s.id] : null)
+    .filter(Boolean) as WorkspaceObject[];
+  const sourceA = sourceObjects[0] ?? null;
+  const sourceB = sourceObjects[1] ?? null;
   const hasFusionData = sourceA && sourceB;
 
   return (
     <div className="space-y-4">
       {/* Real data visualizations for fusion objects */}
+      {/* Inline sparklines + formatted table from source data */}
+      {sourceObjects.length > 0 && (
+        <div className="animate-[materialize_0.5s_cubic-bezier(0.16,1,0.3,1)_forwards]">
+          <FusionDataVisuals sources={sourceObjects} />
+        </div>
+      )}
+
+      {/* Richer charts when two sources have enough numeric data */}
       {hasFusionData && (
         <div className="animate-[materialize_0.5s_cubic-bezier(0.16,1,0.3,1)_forwards]">
           <FusionCharts sourceA={sourceA} sourceB={sourceB} />
