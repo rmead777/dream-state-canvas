@@ -98,6 +98,14 @@
   }
 }
 
+/* Fusion proximity dash animation */
+@keyframes dash {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+
 /* Immersive mode entry — depth layer transition */
 @keyframes immersive-enter {
   from {
