@@ -169,18 +169,23 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
         </div>
       )}
 
-      {/* Resize handle */}
+      {/* Resize handle — diagonal (both width + height) */}
       <div
-        className="absolute bottom-0 right-0 w-4 h-4 cursor-ns-resize opacity-0 group-hover:opacity-40 transition-opacity flex items-end justify-end pr-1 pb-1"
+        className="absolute bottom-0 right-0 w-5 h-5 cursor-nwse-resize opacity-0 group-hover:opacity-40 transition-opacity flex items-end justify-end pr-1 pb-1"
         title="Drag to resize"
         onMouseDown={(e) => {
           e.stopPropagation();
           e.preventDefault();
+          const startX = e.clientX;
           const startY = e.clientY;
-          const startH = (e.currentTarget.parentElement?.getBoundingClientRect().height) ?? 200;
+          const rect = e.currentTarget.parentElement?.getBoundingClientRect();
+          const startW = rect?.width ?? 400;
+          const startH = rect?.height ?? 200;
           const onMove = (ev: MouseEvent) => {
-            const newH = Math.max(120, startH + ev.clientY - startY);
-            setHeight(newH);
+            setSize({
+              width: Math.max(280, startW + ev.clientX - startX),
+              height: Math.max(120, startH + ev.clientY - startY),
+            });
           };
           const onUp = () => {
             window.removeEventListener('mousemove', onMove);
