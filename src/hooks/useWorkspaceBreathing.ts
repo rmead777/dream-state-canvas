@@ -16,7 +16,7 @@ export function useWorkspaceBreathing() {
   const breathe = useCallback(() => {
     const now = Date.now();
     const openObjects = Object.values(state.objects).filter(
-      (o) => (o.status === 'open' || o.status === 'materializing') && o.status !== 'dissolved'
+      (o) => o.status === 'open' || o.status === 'materializing'
     );
 
     if (openObjects.length <= MAX_OPEN) return;

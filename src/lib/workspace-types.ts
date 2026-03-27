@@ -133,4 +133,6 @@ export type WorkspaceReducerAction =
   | { type: 'ADD_RECENT_INTENT'; payload: IntentOrigin }
   | { type: 'REORDER_ZONE'; payload: { zone: 'primary' | 'secondary'; ids: string[] } }
   | { type: 'SET_LAYOUT_MODE'; payload: LayoutMode }
-  | { type: 'UPDATE_FREEFORM_POSITION'; payload: { id: string; position: FreeformPosition } };
+  | { type: 'UPDATE_FREEFORM_POSITION'; payload: { id: string; position: FreeformPosition } }
+  | { type: 'ENTER_IMMERSIVE'; payload: { id: string } }
+  | { type: 'EXIT_IMMERSIVE' };
