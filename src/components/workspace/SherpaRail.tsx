@@ -24,10 +24,7 @@ export function SherpaRail() {
 
   const activeObjectCount = Object.values(state.objects).filter(o => o.status !== 'dissolved').length;
 
-  const handleClearSherpa = useCallback(() => {
-    dispatch({ type: 'CLEAR_SHERPA' });
-    toast.success('Conversation cleared');
-  }, [dispatch]);
+  // handleClearSherpa is now handleClearSherpaFull below
 
   const handleCollapseAll = useCallback(() => {
     dispatch({ type: 'COLLAPSE_ALL_OBJECTS' });
