@@ -1,64 +1,55 @@
 
 
-# Fusion Discipline & Drillback System
+# Updated Plan: Meta-Rule Framework with Dataset Caching + Rename
 
-## What GPT 5.4 identified correctly
+## Two additions to the approved plan
 
-The fusion system currently allows any two objects to fuse with no quality gates, no drillback, and no synthesis-type labeling. This risks "AI compost heap" accumulation. The fixes are concrete and implementable now.
+### 1. Persist DataProfile per dataset (avoid re-analysis on reload)
 
-## Changes
+Generate a fingerprint for each dataset (hash of column names + row count + first/last row values). Store the `DataProfile` keyed by this fingerprint in `localStorage` alongside the workspace state.
 
-### 1. Synthesis Quality Framing (AIBrief.tsx)
-Add a visible synthesis-type label to every fused object. The AI prompt already returns structured JSON — we add a `synthesisType` field to the fusion prompt and display it as a subtle badge:
-- **Direct Extraction** — data was pulled and combined
-- **Inferred Pattern** — AI detected a non-obvious relationship
-- **Speculative Synthesis** — AI is extrapolating beyond the data
+On load:
+- Compute fingerprint of current dataset
+- Check localStorage for a cached profile matching that fingerprint
+- If found, use it immediately (no AI call)
+- If not found, run the AI analysis, then cache the result
 
-Display as a small pill next to the confidence bar. The AI chooses the type; no user input needed.
+This means the same dataset never gets re-analyzed across reloads or sessions. A different dataset (new upload) gets a fresh analysis automatically since its fingerprint won't match.
 
-### 2. Fusion Compatibility Rules (FreeformCanvas.tsx)
-Add a compatibility matrix that gates which object pairs can fuse. Compatible pairs:
-- metric + dataset ✓
-- metric + metric ✓
-- document + dataset ✓
-- brief + dataset ✓
-- document + metric ✓
-- comparison + metric ✓
-- alert + metric ✓
-- dataset + dataset ✓
+**Implementation**: Add fingerprint + cache logic to `src/lib/data-analyzer.ts`:
+```text
+fingerprint = hash(columns + rowCount + rows[0] + rows[-1])
+localStorage key: "dataset-profile-{fingerprint}"
+```
 
-Incompatible (no fusion glow, no drop):
-- brief + brief (prevents recursive summary sludge)
-- timeline + timeline
-- two objects with no data context
+### 2. Rename all "mock" references to "seed" or "canonical"
 
-When incompatible objects are dragged near each other, the proximity glow simply doesn't appear. No error message needed.
+Since the data is real INCOA data, not mock:
 
-### 3. Ancestry & Unfuse (AIBrief.tsx)
-Upgrade the existing "Synthesized From" section:
-- Make source pills **clickable** — clicking focuses that source object in the workspace (dispatch `FOCUS_OBJECT`)
-- Add a **"Reopen Sources"** button that restores collapsed/dissolved source objects
-- Add an **"Unfuse"** button that dissolves the synthesis and restores both sources to visible state
+- **Rename file**: `src/lib/mock-data.ts` → `src/lib/seed-data.ts`
+- **Rename exports**:
+  - `MOCK_LEVERAGE_DATA` → `SEED_LEVERAGE_DATA`
+  - `MOCK_COMPARISON_DATA` → `SEED_COMPARISON_DATA`
+  - `MOCK_ALERT_DATA` → `SEED_ALERT_DATA`
+  - `MOCK_INSPECTOR_DATA` → `SEED_INSPECTOR_DATA`
+  - `MOCK_BRIEF_DATA` → `SEED_BRIEF_DATA`
+  - `MOCK_TIMELINE_DATA` → `SEED_TIMELINE_DATA`
+  - `MOCK_DOCUMENT_DATA` → `SEED_DOCUMENT_DATA`
+  - `MOCK_DATASET_DATA` → `CANONICAL_DATASET`
+  - `DEFAULT_SUGGESTIONS` stays as-is
+- **Update all imports** in `intent-engine.ts` and `sherpa-engine.ts`
+- **Rename internal references**: `MOCK_DATA_BY_TYPE` → `SEED_DATA_BY_TYPE`, comments like "Mock data lookup" → "Seed data lookup"
 
-### 4. Drillback — Expandable Source Context (AIBrief.tsx)
-When the AI synthesis references data from a source, users should be able to drill back:
-- Below the "Synthesized From" pills, add an expandable section per source showing a compact preview of that source's data (reuse existing object renderers in read-only/compact mode)
-- Click to expand inline; click again to collapse
-- This avoids needing to leave the synthesis to verify claims
+Note: Once the data-slicer is built, `SEED_INSPECTOR_DATA`, `SEED_ALERT_DATA`, and `SEED_COMPARISON_DATA` get removed entirely (replaced by dynamic derivation from `CANONICAL_DATASET`). The remaining seed objects (leverage, brief, timeline, document) stay as narrative/aggregate seeds.
 
-### 5. Prompt Refinement (FreeformCanvas.tsx)
-Update the fusion AI prompt to:
-- Include `synthesisType` in the required JSON output schema
-- Explicitly instruct: "Only produce this synthesis if the combination reveals something non-obvious. If the two objects are too similar or unrelated, say so in the response and set synthesisType to 'low-value'."
-- If AI returns `synthesisType: 'low-value'`, show a toast suggesting the fusion isn't productive instead of creating a new object
+## Updated file list
 
-## Files Modified
-- `src/components/workspace/FreeformCanvas.tsx` — Compatibility matrix, prompt update, low-value gate
-- `src/components/objects/AIBrief.tsx` — Synthesis type badge, clickable ancestry, unfuse button, drillback sections
-- `src/components/workspace/FusionZone.tsx` — Show incompatibility state if needed (minor)
-
-## What This Does NOT Change
-- Existing drag mechanics, proximity glow, or canvas layout
-- The AI model or edge function
-- Any other workspace object types
+- **Create** `src/lib/data-analyzer.ts` — DataProfile type, AI analysis, fingerprint-based localStorage caching, deterministic fallback
+- **Create** `src/lib/data-slicer.ts` — pure derivation functions
+- **Rename** `src/lib/mock-data.ts` → `src/lib/seed-data.ts` (update all export names)
+- **Edit** `supabase/functions/ai-chat/index.ts` — add `analyze-schema` mode
+- **Edit** `src/lib/intent-engine.ts` — use slicer + renamed imports
+- **Edit** `src/lib/sherpa-engine.ts` — update import path
+- **Edit** `src/components/objects/DataInspector.tsx` — previewCount, "N of M"
+- **Edit** `src/components/objects/AlertRiskPanel.tsx` — derive from slicer
 
