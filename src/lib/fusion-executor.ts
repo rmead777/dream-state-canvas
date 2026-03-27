@@ -28,24 +28,27 @@ export async function executeFusion(
       [
         {
           role: 'user',
-          content: `Fuse these two workspace objects into a single, original analytical synthesis.
+          content: `You are an analytical synthesis engine. You must produce NEW analysis that NEITHER input contains on its own.
 
 OBJECT A — [${source.type}] "${source.title}":
-${JSON.stringify(source.context).slice(0, 800)}
+${JSON.stringify(source.context).slice(0, 1200)}
 
 OBJECT B — [${target.type}] "${target.title}":
-${JSON.stringify(target.context).slice(0, 800)}
+${JSON.stringify(target.context).slice(0, 1200)}
 
-RULES:
-- Only produce this synthesis if the combination reveals something non-obvious or decision-useful. If the two objects are too similar or unrelated, set synthesisType to "low-value".
-- Do NOT write generic introductions like "This synthesis combines..." — go straight into the analysis.
-- Reference actual data points, numbers, and specifics from both objects.
+CRITICAL RULES:
+1. Your output must be ORIGINAL — do NOT copy, paraphrase, or summarize either input. Instead, find the RELATIONSHIP between them.
+2. Identify cross-cutting patterns, contradictions, or implications that only emerge when both are viewed together.
+3. If the two objects are too similar or unrelated to produce a non-obvious insight, set synthesisType to "low-value".
+4. Do NOT write generic introductions. Go straight into the novel analysis.
+5. Reference specific data points from BOTH objects to support your synthesis.
+6. The title must be a new concept name, NOT a combination of the input titles.
 
-Return JSON with these fields:
+Return ONLY valid JSON:
 {
-  "title": "short synthesis title",
-  "summary": "the deep analytical synthesis text",
-  "insights": ["insight 1", "insight 2"],
+  "title": "a new concept name (not 'A + B')",
+  "summary": "2-4 sentences of original cross-cutting analysis",
+  "insights": ["novel insight 1", "novel insight 2", "novel insight 3"],
   "synthesisType": "direct-extraction" | "inferred-pattern" | "speculative-synthesis" | "low-value",
   "confidence": 0.0-1.0
 }`,
