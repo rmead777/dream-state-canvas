@@ -72,7 +72,10 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
               : 'border-workspace-border shadow-[0_2px_12px_rgba(0,0,0,0.04)]'
         }
       `}
-      style={height ? { height: `${height}px`, overflow: 'auto' } : undefined}
+      style={{
+        ...(size.width ? { width: size.width } : {}),
+        ...(size.height ? { height: size.height, overflow: 'auto' } : {}),
+      }}
       onClick={() => focusObject(object.id)}
     >
       {/* Relationship highlight pulse */}
