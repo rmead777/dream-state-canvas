@@ -134,5 +134,6 @@ export type WorkspaceReducerAction =
   | { type: 'REORDER_ZONE'; payload: { zone: 'primary' | 'secondary'; ids: string[] } }
   | { type: 'SET_LAYOUT_MODE'; payload: LayoutMode }
   | { type: 'UPDATE_FREEFORM_POSITION'; payload: { id: string; position: FreeformPosition } }
+  | { type: 'UPDATE_OBJECT_CONTEXT'; payload: { id: string; context: Record<string, any> } }
   | { type: 'ENTER_IMMERSIVE'; payload: { id: string } }
   | { type: 'EXIT_IMMERSIVE' };
