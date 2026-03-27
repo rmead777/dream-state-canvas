@@ -94,12 +94,23 @@ export function SherpaRail() {
             </span>
           )}
         </div>
-        <button
-          onClick={() => setIsExpanded(false)}
-          className="rounded-md p-1 text-workspace-text-secondary transition-colors hover:bg-workspace-surface text-xs"
-        >
-          ▸
-        </button>
+        <div className="flex items-center gap-1">
+          {(lastResponse || observations.length > 0) && (
+            <button
+              onClick={handleClearSherpa}
+              className="rounded-md p-1 text-workspace-text-secondary/40 transition-colors hover:bg-workspace-surface hover:text-workspace-text-secondary text-[10px]"
+              title="Clear conversation"
+            >
+              ⌫
+            </button>
+          )}
+          <button
+            onClick={() => setIsExpanded(false)}
+            className="rounded-md p-1 text-workspace-text-secondary transition-colors hover:bg-workspace-surface text-xs"
+          >
+            ▸
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5">
