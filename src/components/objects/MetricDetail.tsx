@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { WorkspaceObject } from '@/lib/workspace-types';
 
+// Format a number as currency: $1,234,567
+function formatCurrency(value: number): string {
+  return '$' + value.toLocaleString('en-US', { maximumFractionDigits: 0 });
+}
+
+// Format a number with unit prefix
+function formatValue(value: number, unit: string): string {
+  if (unit === '$') return formatCurrency(value);
+  return value.toLocaleString('en-US') + unit;
+}
+
 // Animated sparkline with draw-in effect
 function Sparkline({ data }: { data: number[] }) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -39,7 +50,6 @@ function Sparkline({ data }: { data: number[] }) {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      {/* Live pulse dot at the end */}
       {visibleCount > 0 && progress >= 1 && (
         <circle
           cx={(visibleCount - 1) / (data.length - 1) * w}
@@ -54,35 +64,25 @@ function Sparkline({ data }: { data: number[] }) {
 }
 
 // Count-up animation for metric values
-function AnimatedValue({ value, unit }: { value: string; unit: string }) {
-  const numericMatch = value.match(/^(\d+\.?\d*)/);
-  const [display, setDisplay] = useState(numericMatch ? '0' : value);
+function AnimatedValue({ value, unit }: { value: number; unit: string }) {
+  const [display, setDisplay] = useState(unit === '$' ? '$0' : '0');
 
   useEffect(() => {
-    if (!numericMatch) {
-      setDisplay(value);
-      return;
-    }
-
-    const target = parseFloat(numericMatch[1]);
-    const suffix = value.slice(numericMatch[0].length);
     const duration = 600;
     let start: number | null = null;
 
     const animate = (ts: number) => {
       if (!start) start = ts;
       const p = Math.min((ts - start) / duration, 1);
-      const eased = 1 - Math.pow(1 - p, 3); // ease-out cubic
-      const current = target * eased;
-      setDisplay(
-        (Number.isInteger(target) ? Math.round(current).toString() : current.toFixed(1)) + suffix
-      );
+      const eased = 1 - Math.pow(1 - p, 3);
+      const current = value * eased;
+      setDisplay(formatValue(Math.round(current), unit));
       if (p < 1) requestAnimationFrame(animate);
     };
     requestAnimationFrame(animate);
-  }, [value]);
+  }, [value, unit]);
 
-  return <>{display}{unit}</>;
+  return <>{display}</>;
 }
 
 export function MetricDetail({ object }: { object: WorkspaceObject }) {
@@ -93,10 +93,11 @@ export function MetricDetail({ object }: { object: WorkspaceObject }) {
       <div className="flex items-end justify-between">
         <div>
           <div className="text-3xl font-light tracking-tight text-workspace-text">
-            <AnimatedValue value={String(d.currentValue)} unit={d.unit} />
+            <AnimatedValue value={d.currentValue} unit={d.unit} />
           </div>
           <div className="mt-1 text-xs text-workspace-text-secondary">
-            {d.change > 0 ? '+' : ''}{d.change}{d.unit} over {d.changePeriod}
+            {d.unit === '$' ? (d.change > 0 ? '+' : '') + formatCurrency(d.change) : (d.change > 0 ? '+' : '') + d.change + d.unit}
+            {' '}over {d.changePeriod}
             <span className={`ml-2 ${d.trend === 'increasing' ? 'text-amber-600' : 'text-emerald-600'}`}>
               {d.trend === 'increasing' ? '↑ trending up' : '↓ trending down'}
             </span>
@@ -108,10 +109,10 @@ export function MetricDetail({ object }: { object: WorkspaceObject }) {
       {d.threshold && (
         <div className="flex gap-3 text-xs">
           <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">
-            Warning: {d.threshold.warning}{d.unit}
+            Warning: {formatValue(d.threshold.warning, d.unit)}
           </span>
           <span className="rounded-full bg-red-50 px-2.5 py-1 text-red-700">
-            Critical: {d.threshold.critical}{d.unit}
+            Critical: {formatValue(d.threshold.critical, d.unit)}
           </span>
         </div>
       )}
@@ -142,12 +143,13 @@ export function MetricDetail({ object }: { object: WorkspaceObject }) {
 
 function BreakdownRow({ item, unit, threshold }: { item: any; unit: string; threshold: any }) {
   const [width, setWidth] = useState(0);
+  const maxVal = threshold?.critical || Math.max(item.value * 2, 1);
 
   useEffect(() => {
     requestAnimationFrame(() => {
-      setWidth((item.value / (threshold?.critical || 5)) * 100);
+      setWidth((item.value / maxVal) * 100);
     });
-  }, [item.value, threshold]);
+  }, [item.value, maxVal]);
 
   return (
     <div className="flex items-center justify-between">
@@ -159,13 +161,15 @@ function BreakdownRow({ item, unit, threshold }: { item: any; unit: string; thre
             style={{
               width: `${Math.min(width, 100)}%`,
               backgroundColor:
-                item.value >= (threshold?.warning || 3)
+                item.value >= (threshold?.warning || Infinity)
                   ? 'hsl(var(--workspace-accent))'
                   : 'hsl(220 15% 55%)',
             }}
           />
         </div>
-        <span className="text-sm font-medium text-workspace-text">{item.value}{unit}</span>
+        <span className="text-sm font-medium text-workspace-text tabular-nums">
+          {formatValue(item.value, unit)}
+        </span>
       </div>
     </div>
   );
