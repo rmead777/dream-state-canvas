@@ -43,7 +43,7 @@ export interface WorkspaceObject {
 
 // ─── Intent Engine Types ──────────────────────────────────────────────────────
 
-export type WorkspaceActionType = 'create' | 'focus' | 'dissolve' | 'respond';
+export type WorkspaceActionType = 'create' | 'focus' | 'dissolve' | 'respond' | 'fuse';
 
 export interface CreateAction {
   type: 'create';
@@ -68,7 +68,13 @@ export interface RespondAction {
   message: string;
 }
 
-export type WorkspaceAction = CreateAction | FocusAction | DissolveAction | RespondAction;
+export interface FuseAction {
+  type: 'fuse';
+  objectIdA: string;
+  objectIdB: string;
+}
+
+export type WorkspaceAction = CreateAction | FocusAction | DissolveAction | RespondAction | FuseAction;
 
 export interface IntentResult {
   actions: WorkspaceAction[];
