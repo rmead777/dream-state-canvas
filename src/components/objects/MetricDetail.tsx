@@ -12,7 +12,7 @@ function Sparkline({ data }: { data: number[] }) {
     .join(' ');
 
   return (
-    <svg width={w} height={h} className="opacity-60">
+    <svg width={w} height={h} className="opacity-80">
       <polyline
         points={points}
         fill="none"
