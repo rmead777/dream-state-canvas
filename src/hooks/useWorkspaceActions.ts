@@ -3,6 +3,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { parseIntent } from '@/lib/intent-engine';
 import { generateSuggestions } from '@/lib/sherpa-engine';
 import { WorkspaceObject, IntentOrigin } from '@/lib/workspace-types';
+import { computeFreeformPosition } from '@/lib/freeform-placement';
 
 let objectCounter = 0;
 
@@ -29,15 +30,21 @@ export function useWorkspaceActions() {
             case 'create': {
               objectCounter++;
               const id = `wo-${Date.now()}-${objectCounter}`;
+              const relationships = action.relatedTo ?? [];
+              const freeformPosition =
+                state.layoutMode === 'freeform'
+                  ? computeFreeformPosition(state.objects, { relationships }, window.innerWidth, window.innerHeight)
+                  : undefined;
               const obj: Omit<WorkspaceObject, 'status' | 'createdAt' | 'lastInteractedAt'> = {
                 id,
                 type: action.objectType,
                 title: action.title,
                 pinned: false,
                 origin,
-                relationships: action.relatedTo ?? [],
+                relationships,
                 context: action.data,
                 position: { zone: 'primary', order: 0 },
+                freeformPosition,
               };
               dispatch({ type: 'MATERIALIZE_OBJECT', payload: obj });
 

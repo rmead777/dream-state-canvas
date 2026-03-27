@@ -19,6 +19,13 @@ export interface SpatialPosition {
   order: number;
 }
 
+export interface FreeformPosition {
+  x: number;
+  y: number;
+}
+
+export type LayoutMode = 'auto' | 'freeform';
+
 export interface WorkspaceObject {
   id: string;
   type: ObjectType;
@@ -29,6 +36,7 @@ export interface WorkspaceObject {
   relationships: string[];
   context: Record<string, any>;
   position: SpatialPosition;
+  freeformPosition?: FreeformPosition;
   createdAt: number;
   lastInteractedAt: number;
 }
@@ -101,6 +109,7 @@ export interface WorkspaceState {
   activeContext: ActiveContext;
   sherpa: SherpaState;
   spatialLayout: SpatialLayout;
+  layoutMode: LayoutMode;
 }
 
 // ─── Reducer Actions ──────────────────────────────────────────────────────────
@@ -121,4 +130,6 @@ export type WorkspaceReducerAction =
   | { type: 'ADD_SHERPA_OBSERVATION'; payload: string }
   | { type: 'SET_SHERPA_PROCESSING'; payload: boolean }
   | { type: 'ADD_RECENT_INTENT'; payload: IntentOrigin }
-  | { type: 'REORDER_ZONE'; payload: { zone: 'primary' | 'secondary'; ids: string[] } };
+  | { type: 'REORDER_ZONE'; payload: { zone: 'primary' | 'secondary'; ids: string[] } }
+  | { type: 'SET_LAYOUT_MODE'; payload: LayoutMode }
+  | { type: 'UPDATE_FREEFORM_POSITION'; payload: { id: string; position: FreeformPosition } };

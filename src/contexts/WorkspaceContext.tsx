@@ -25,6 +25,7 @@ const initialState: WorkspaceState = {
     secondary: [],
     peripheral: [],
   },
+  layoutMode: 'auto',
 };
 
 function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction): WorkspaceState {
@@ -161,6 +162,21 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
       return {
         ...state,
         spatialLayout: { ...state.spatialLayout, [zone]: ids },
+      };
+    }
+
+    case 'SET_LAYOUT_MODE':
+      return { ...state, layoutMode: action.payload };
+
+    case 'UPDATE_FREEFORM_POSITION': {
+      const obj = state.objects[action.payload.id];
+      if (!obj) return state;
+      return {
+        ...state,
+        objects: {
+          ...state.objects,
+          [obj.id]: { ...obj, freeformPosition: action.payload.position },
+        },
       };
     }
 
