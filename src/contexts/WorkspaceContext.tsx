@@ -11,6 +11,7 @@ const initialState: WorkspaceState = {
   objects: {},
   activeContext: {
     focusedObjectId: null,
+    immersiveObjectId: null,
     recentIntents: [],
     sessionStartedAt: Date.now(),
   },
