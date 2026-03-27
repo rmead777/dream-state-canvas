@@ -1,6 +1,5 @@
 import { WorkspaceObject } from '@/lib/workspace-types';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { FusionCharts } from './FusionCharts';
 import { FusionDataVisuals } from './FusionTable';
 
 export function AIBrief({ object }: { object: WorkspaceObject }) {
@@ -26,12 +25,6 @@ export function AIBrief({ object }: { object: WorkspaceObject }) {
         </div>
       )}
 
-      {/* Richer charts when two sources have enough numeric data */}
-      {hasFusionData && (
-        <div className="animate-[materialize_0.5s_cubic-bezier(0.16,1,0.3,1)_forwards]">
-          <FusionCharts sourceA={sourceA} sourceB={sourceB} />
-        </div>
-      )}
 
       {d.confidence && (
         <div className="flex items-center gap-2 text-xs text-workspace-text-secondary">
