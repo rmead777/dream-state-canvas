@@ -1,21 +1,15 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useWorkspaceActions } from '@/hooks/useWorkspaceActions';
-import { generateSuggestions } from '@/lib/sherpa-engine';
+import { useSherpa } from '@/contexts/SherpaContext';
 
 export function SherpaRail() {
-  const { state, dispatch } = useWorkspace();
+  const { state } = useWorkspace();
   const { processIntent } = useWorkspaceActions();
+  const { suggestions, observations, lastResponse, isProcessing } = useSherpa();
   const [input, setInput] = useState('');
   const [isExpanded, setIsExpanded] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  // Update suggestions when objects change
-  const objectCount = Object.keys(state.objects).length;
-  useEffect(() => {
-    const suggestions = generateSuggestions(state.objects);
-    dispatch({ type: 'SET_SHERPA_SUGGESTIONS', payload: suggestions });
-  }, [objectCount]);
 
   const handleSubmit = () => {
     const trimmed = input.trim();
@@ -27,9 +21,6 @@ export function SherpaRail() {
   const handleSuggestionClick = (query: string) => {
     processIntent(query);
   };
-
-  const suggestions = state.sherpa.suggestions;
-  const response = state.sherpa.lastResponse;
 
   if (!isExpanded) {
     return (
@@ -64,7 +55,7 @@ export function SherpaRail() {
       <div className="flex-1 overflow-y-auto px-5">
         {/* Greeting / Response area — NOT chat bubbles (anti-drift) */}
         <div className="space-y-4 pb-4">
-          {!response && (
+          {!lastResponse && (
             <div className="animate-[materialize_0.5s_cubic-bezier(0.16,1,0.3,1)_forwards]">
               <p className="text-sm leading-relaxed text-workspace-text">
                 Good morning. What would you like to focus on?
@@ -75,22 +66,30 @@ export function SherpaRail() {
             </div>
           )}
 
-          {response && (
+          {lastResponse && (
             <div
-              key={response}
+              key={lastResponse}
               className="animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards]"
             >
-              <p className="text-sm leading-relaxed text-workspace-text">{response}</p>
+              <p className="text-sm leading-relaxed text-workspace-text">{lastResponse}</p>
             </div>
           )}
 
-          {/* Observations */}
-          {state.sherpa.observations.length > 0 && (
+          {/* Proactive observations — the Sherpa noticing things */}
+          {observations.length > 0 && (
             <div className="space-y-2 border-t border-workspace-border/30 pt-3">
-              {state.sherpa.observations.slice(-2).map((obs, i) => (
-                <p key={i} className="text-xs text-workspace-text-secondary italic">
-                  {obs}
-                </p>
+              <span className="text-[9px] uppercase tracking-widest text-workspace-accent/50">
+                Noticed
+              </span>
+              {observations.slice(-3).map((obs, i) => (
+                <div
+                  key={i}
+                  className="animate-[materialize_0.4s_cubic-bezier(0.16,1,0.3,1)_forwards] rounded-lg bg-workspace-accent-subtle/20 px-3 py-2"
+                >
+                  <p className="text-[11px] text-workspace-text-secondary leading-relaxed">
+                    {obs}
+                  </p>
+                </div>
               ))}
             </div>
           )}
@@ -127,7 +126,7 @@ export function SherpaRail() {
             className="flex-1 bg-transparent text-sm text-workspace-text placeholder:text-workspace-text-secondary/40
               outline-none"
           />
-          {state.sherpa.isProcessing && (
+          {isProcessing && (
             <div className="h-3 w-3 rounded-full border-2 border-workspace-accent/30 border-t-workspace-accent animate-spin" />
           )}
         </div>

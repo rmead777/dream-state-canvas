@@ -1,6 +1,7 @@
 import { WorkspaceObject as WO } from '@/lib/workspace-types';
 import { useWorkspaceActions } from '@/hooks/useWorkspaceActions';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { useCrossObjectBehavior } from '@/hooks/useCrossObjectBehavior';
 import { MetricDetail } from '@/components/objects/MetricDetail';
 import { ComparisonPanel } from '@/components/objects/ComparisonPanel';
 import { AlertRiskPanel } from '@/components/objects/AlertRiskPanel';
@@ -31,12 +32,25 @@ function ObjectContent({ object }: { object: WO }) {
 }
 
 export function WorkspaceObjectWrapper({ object }: { object: WO }) {
-  const { collapseObject, dissolveObject, pinObject, unpinObject, focusObject } = useWorkspaceActions();
+  const { collapseObject, dissolveObject, pinObject, unpinObject, focusObject, processIntent } = useWorkspaceActions();
   const { state } = useWorkspace();
-  const isFocused = state.activeContext.focusedObjectId === object.id;
-  const hasFocusedSibling = state.activeContext.focusedObjectId !== null && !isFocused;
+  const { shouldDim, shouldHighlight, getContextualActions, cascadeDissolve } = useCrossObjectBehavior();
 
+  const isFocused = state.activeContext.focusedObjectId === object.id;
+  const isDimmed = shouldDim(object.id);
+  const isHighlighted = shouldHighlight(object.id);
   const isMaterializing = object.status === 'materializing';
+  const contextualActions = getContextualActions(object.id);
+
+  const handleDissolve = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const cascadeTargets = cascadeDissolve(object.id);
+    // Dissolve children first, then parent
+    for (const childId of cascadeTargets) {
+      dissolveObject(childId);
+    }
+    dissolveObject(object.id);
+  };
 
   return (
     <div
@@ -49,13 +63,20 @@ export function WorkspaceObjectWrapper({ object }: { object: WO }) {
         }
         ${isFocused
           ? 'border-workspace-accent/20 shadow-[0_4px_24px_rgba(0,0,0,0.06)] scale-[1.01]'
-          : hasFocusedSibling
-            ? 'border-workspace-border opacity-60 shadow-sm'
-            : 'border-workspace-border shadow-[0_2px_12px_rgba(0,0,0,0.04)]'
+          : isHighlighted
+            ? 'border-workspace-accent/15 shadow-[0_2px_16px_rgba(0,0,0,0.04)] ring-1 ring-workspace-accent/10'
+            : isDimmed
+              ? 'border-workspace-border opacity-50 shadow-sm'
+              : 'border-workspace-border shadow-[0_2px_12px_rgba(0,0,0,0.04)]'
         }
       `}
       onClick={() => focusObject(object.id)}
     >
+      {/* Relationship highlight pulse */}
+      {isHighlighted && (
+        <div className="absolute inset-0 rounded-xl bg-workspace-accent/[0.02] animate-pulse pointer-events-none" />
+      )}
+
       {/* Header — actions appear on hover only (anti-drift: no always-visible action bars) */}
       <div className="flex items-center justify-between px-5 pt-4 pb-3">
         <div className="flex items-center gap-2.5">
@@ -63,6 +84,11 @@ export function WorkspaceObjectWrapper({ object }: { object: WO }) {
             {typeLabels[object.type] || object.type}
           </span>
           <h3 className="text-sm font-semibold text-workspace-text">{object.title}</h3>
+          {object.relationships.length > 0 && (
+            <span className="text-[9px] text-workspace-accent/40" title="Has relationships">
+              ◈ {object.relationships.length}
+            </span>
+          )}
         </div>
 
         {/* Contextual actions — visible on hover */}
@@ -86,7 +112,7 @@ export function WorkspaceObjectWrapper({ object }: { object: WO }) {
             ↓ Collapse
           </button>
           <button
-            onClick={(e) => { e.stopPropagation(); dissolveObject(object.id); }}
+            onClick={handleDissolve}
             className="rounded-md px-2 py-1 text-[10px] text-workspace-text-secondary transition-colors hover:bg-workspace-surface hover:text-red-500"
             title="Dissolve"
           >
@@ -96,9 +122,31 @@ export function WorkspaceObjectWrapper({ object }: { object: WO }) {
       </div>
 
       {/* Content */}
-      <div className="px-5 pb-5">
+      <div className="px-5 pb-4">
         <ObjectContent object={object} />
       </div>
+
+      {/* Cross-object contextual actions — appear on hover */}
+      {contextualActions.length > 0 && (
+        <div className="border-t border-workspace-border/20 px-5 py-2 opacity-0 transition-opacity group-hover:opacity-100">
+          <div className="flex items-center gap-2">
+            {contextualActions.map((action) => (
+              <button
+                key={action.id}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (action.query) processIntent(action.query);
+                }}
+                className="flex items-center gap-1 rounded-md px-2 py-1 text-[10px] text-workspace-text-secondary
+                  transition-colors hover:bg-workspace-accent-subtle/40 hover:text-workspace-accent"
+              >
+                <span>{action.icon}</span>
+                <span>{action.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Origin trace — subtle, bottom */}
       {object.origin.query && (
