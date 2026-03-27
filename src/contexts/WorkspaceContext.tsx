@@ -25,6 +25,7 @@ const initialState: WorkspaceState = {
     secondary: [],
     peripheral: [],
   },
+  layoutMode: 'auto',
 };
 
 function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction): WorkspaceState {
