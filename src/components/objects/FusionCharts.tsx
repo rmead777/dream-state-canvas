@@ -154,11 +154,6 @@ function formatLabel(key: string): string {
     .replace('Aum', 'AUM');
 }
 
-export function FusionChart({ sourceObjects }: { sourceObjects: { id: string; type: string; title: string }[]; allObjects: Record<string, WorkspaceObject> }) {
-  // This is rendered with allObjects context passed separately
-  return null;
-}
-
 export function FusionCharts({ sourceA, sourceB }: { sourceA: WorkspaceObject; sourceB: WorkspaceObject }) {
   const charts = extractChartsFromObjects(sourceA, sourceB);
 
