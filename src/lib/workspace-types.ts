@@ -94,6 +94,7 @@ export interface SherpaState {
 
 export interface ActiveContext {
   focusedObjectId: string | null;
+  immersiveObjectId: string | null;
   recentIntents: IntentOrigin[];
   sessionStartedAt: number;
 }
