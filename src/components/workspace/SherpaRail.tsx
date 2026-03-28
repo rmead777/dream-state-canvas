@@ -372,9 +372,20 @@ export function SherpaRail() {
           )}
         </div>
 
-        {/* Canvas controls + keyboard hint */}
+        {/* Canvas controls + user */}
         <div className="flex items-center justify-between text-[9px] text-workspace-text-secondary/30">
-          <span>⌘K for command palette</span>
+          <div className="flex items-center gap-2">
+            <span>⌘K</span>
+            {user && (
+              <button
+                onClick={signOut}
+                className="rounded px-1.5 py-0.5 text-workspace-text-secondary/40 transition-colors hover:text-destructive hover:bg-destructive/5"
+                title={`Sign out (${user.email})`}
+              >
+                Sign out
+              </button>
+            )}
+          </div>
           {activeObjectCount > 0 && (
             <div className="relative">
               <button
