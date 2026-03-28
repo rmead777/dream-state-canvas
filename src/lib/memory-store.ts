@@ -87,7 +87,7 @@ export async function createMemory(params: {
 }
 
 export async function getMemories(userId: string): Promise<SherpaMemory[]> {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('sherpa_memories')
     .select('*')
     .eq('user_id', userId)
