@@ -365,14 +365,17 @@ export async function uploadDocument(
       } catch (e) { console.warn('[document-store] Failed to read as text (binary doc), falling back to base64:', e); }
     }
 
-    // 3. Call ingestion edge function
+    // 3. Call ingestion edge function — use session token for user-scoped RLS
+    const { data: { session } } = await supabase.auth.getSession();
+    const authToken = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
     const resp = await fetch(
       `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ingest-document`,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify(payload),
       }

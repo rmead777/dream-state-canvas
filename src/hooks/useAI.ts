@@ -1,8 +1,15 @@
 import { useState, useCallback, useRef } from 'react';
 
 import { getAdminSettings } from '@/lib/admin-settings';
+import { supabase } from '@/integrations/supabase/client';
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`;
+
+/** Get the user's session token for authenticated edge function calls */
+async function getAuthToken(): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+}
 
 interface Message {
   role: 'user' | 'assistant' | 'system';
@@ -42,11 +49,12 @@ export function useAI() {
           body.adminMaxTokens = admin.maxTokens;
         }
 
+        const token = await getAuthToken();
         const resp = await fetch(CHAT_URL, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify(body),
           signal: controller.signal,
@@ -165,11 +173,12 @@ export async function callAI(
       body.adminMaxTokens = admin.maxTokens;
     }
 
+    const token = await getAuthToken();
     const resp = await fetch(CHAT_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(body),
       signal: controller.signal,
