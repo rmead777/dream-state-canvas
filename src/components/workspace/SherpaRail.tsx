@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useWorkspaceActions } from '@/hooks/useWorkspaceActions';
 import { useSherpa } from '@/contexts/SherpaContext';
@@ -9,6 +9,7 @@ import { MODE_LABELS } from '@/lib/cognitive-modes';
 import { VoiceIndicator } from './VoiceIndicator';
 import { RulesEditor } from './RulesEditor';
 import { DocumentUpload } from './DocumentUpload';
+import { DocumentContextSelector, ContextMode } from './DocumentContextSelector';
 import { useDocuments } from '@/contexts/DocumentContext';
 import { getDocument, extractDataset } from '@/lib/document-store';
 import { setActiveDataset } from '@/lib/active-dataset';
@@ -18,7 +19,7 @@ import { toast } from 'sonner';
 
 export function SherpaRail() {
   const { state, dispatch } = useWorkspace();
-  const { processIntent } = useWorkspaceActions();
+  const { processIntent, setDocumentIds } = useWorkspaceActions();
   const { suggestions, observations, lastResponse, isProcessing } = useSherpa();
   const cognitiveMode = useCognitiveMode();
   const { play } = useAmbientAudio();
@@ -29,8 +30,20 @@ export function SherpaRail() {
   const [showHistory, setShowHistory] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [promptHistory, setPromptHistory] = useState<Array<{ query: string; response: string | null; timestamp: number }>>([]);
+  const [contextMode, setContextMode] = useState<ContextMode>('auto');
+  const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { addDocument } = useDocuments();
+  const { addDocument, documents } = useDocuments();
+
+  // Sync document IDs to the workspace actions layer
+  useEffect(() => {
+    if (contextMode === 'auto') {
+      // In auto mode, pass all document IDs — the AI will select relevant ones
+      setDocumentIds(documents.map((d) => d.id));
+    } else {
+      setDocumentIds(selectedDocIds);
+    }
+  }, [contextMode, selectedDocIds, documents, setDocumentIds]);
 
   const handleDocumentIngested = useCallback(async (docId: string) => {
     const doc = await getDocument(docId);
@@ -199,6 +212,14 @@ export function SherpaRail() {
             <RulesEditor onClose={() => setShowRules(false)} />
           </div>
         )}
+
+        {/* Document context selector */}
+        <DocumentContextSelector
+          selectedDocIds={selectedDocIds}
+          onSelectionChange={setSelectedDocIds}
+          contextMode={contextMode}
+          onModeChange={setContextMode}
+        />
 
         {/* Upload panel */}
         {showUpload && (

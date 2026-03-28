@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { parseIntentAI, parseIntent, refineDataRules, invalidateProfileCache } from '@/lib/intent-engine';
 import { generateSuggestions } from '@/lib/sherpa-engine';
@@ -9,10 +9,17 @@ import { toast } from '@/hooks/use-toast';
 import { getActiveDataset } from '@/lib/active-dataset';
 import { previewRows, alertRows, metricAggregate, comparisonPairs } from '@/lib/data-slicer';
 
+// Store document IDs ref for context injection
+let _documentIdsRef: string[] = [];
+
 let objectCounter = 0;
 
 export function useWorkspaceActions() {
   const { state, dispatch } = useWorkspace();
+
+  const setDocumentIds = useCallback((ids: string[]) => {
+    _documentIdsRef = ids;
+  }, []);
 
   const processIntent = useCallback(
     async (query: string) => {
@@ -22,11 +29,9 @@ export function useWorkspaceActions() {
       dispatch({ type: 'ADD_RECENT_INTENT', payload: origin });
 
       try {
-        // Try AI-powered intent parsing first
-        const result = await parseIntentAI(query, state.objects);
+        const result = await parseIntentAI(query, state.objects, _documentIdsRef);
         applyResult(result, origin);
       } catch {
-        // Fallback to keyword matching
         const result = await parseIntent(query, state.objects);
         applyResult(result, origin);
       }
@@ -232,6 +237,7 @@ export function useWorkspaceActions() {
 
   return {
     processIntent,
+    setDocumentIds,
     collapseObject,
     restoreObject,
     dissolveObject,
