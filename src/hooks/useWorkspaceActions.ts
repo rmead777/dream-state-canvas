@@ -1,11 +1,13 @@
 import { useCallback } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { parseIntentAI, parseIntent } from '@/lib/intent-engine';
+import { parseIntentAI, parseIntent, refineDataRules, invalidateProfileCache } from '@/lib/intent-engine';
 import { generateSuggestions } from '@/lib/sherpa-engine';
 import { WorkspaceObject, IntentOrigin } from '@/lib/workspace-types';
 import { computeFreeformPosition } from '@/lib/freeform-placement';
 import { executeFusion } from '@/lib/fusion-executor';
 import { toast } from '@/hooks/use-toast';
+import { CANONICAL_DATASET } from '@/lib/seed-data';
+import { previewRows, alertRows, metricAggregate, comparisonPairs } from '@/lib/data-slicer';
 
 let objectCounter = 0;
 
