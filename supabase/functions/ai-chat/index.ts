@@ -73,6 +73,11 @@ Return 1-2 predictions max.`,
 Your job: analyze the schema and values to determine how to prioritize rows for preview displays.
 You must be domain-agnostic — this could be financial data, sports stats, scientific measurements, etc.
 
+CRITICAL RULE: If the dataset contains a column that represents an EXPLICIT priority/tier/rank hierarchy
+(e.g. "Tier 1 — Act Now", "Priority: High", "Severity: Critical"), you MUST identify it as the
+ordinalPriorityColumn. This column's rank order takes PRECEDENCE over numeric value sorting.
+Do NOT let large numeric values override explicit priority rankings defined by the data.
+
 Return ONLY a JSON object with these fields:
 - "domain": string (what domain this data is about)
 - "primaryIdColumn": string (which column is the entity identifier)
@@ -80,8 +85,9 @@ Return ONLY a JSON object with these fields:
 - "measureFormat": "currency" | "number" | "percentage"
 - "sortDirection": "desc" | "asc"
 - "groupByColumn": string or null (categorical grouping column)
+- "ordinalPriorityColumn": { "column": string, "rankOrder": string[] } or null — If any column has values that form an explicit priority hierarchy (numbered tiers, severity levels, etc.), list them here from HIGHEST priority to LOWEST. This is the most important field for correct sorting.
 - "urgencySignal": { "column": string, "hotValues": string[] } or null
-- "previewStrategy": string (one sentence: how to pick the most important rows)
+- "previewStrategy": string (if ordinalPriorityColumn exists, MUST mention sorting by rank order first)
 - "cardRecommendations": {
     "metric": { "title": string, "aggregateColumn": string },
     "alert": { "filterColumn": string, "filterValues": string[] },
