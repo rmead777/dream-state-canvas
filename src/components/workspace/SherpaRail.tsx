@@ -151,6 +151,13 @@ export function SherpaRail() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-5">
+        {/* Rules editor panel */}
+        {showRules && (
+          <div className="pb-4 border-b border-workspace-border/30 mb-4">
+            <RulesEditor onClose={() => setShowRules(false)} />
+          </div>
+        )}
+
         {/* Conversation history (optional) */}
         {showHistory && promptHistory.length > 0 && (
           <div className="space-y-3 pb-4 border-b border-workspace-border/30 mb-4">
