@@ -10,6 +10,7 @@ import { MODE_LABELS } from '@/lib/cognitive-modes';
 import { VoiceIndicator } from './VoiceIndicator';
 import { RulesEditor } from './RulesEditor';
 import { DocumentUpload } from './DocumentUpload';
+import { MemoryPanel } from './MemoryPanel';
 import { DocumentContextSelector, ContextMode } from './DocumentContextSelector';
 import { useDocuments } from '@/contexts/DocumentContext';
 import { getDocument, extractDataset } from '@/lib/document-store';
@@ -35,6 +36,7 @@ export function SherpaRail() {
   const [showRules, setShowRules] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
+  const [showMemory, setShowMemory] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [adminUnlocked, setAdminUnlocked] = useState(isAdminUnlocked());
   const [adminState, setAdminState] = useState(getAdminSettings());
@@ -271,6 +273,18 @@ export function SherpaRail() {
             >
               ⚙
             </button>
+            {/* Memory toggle */}
+            <button
+              onClick={() => setShowMemory(!showMemory)}
+              className={`${railControlsBase} ${
+                showMemory
+                  ? 'border-workspace-accent/15 bg-workspace-accent/10 text-workspace-accent shadow-[0_10px_20px_rgba(99,102,241,0.12)]'
+                  : 'text-workspace-text-secondary/45 hover:border-workspace-border/70 hover:bg-white/90 hover:text-workspace-text-secondary'
+              }`}
+              title={showMemory ? 'Hide memory' : 'Sherpa memory'}
+            >
+              ◈
+            </button>
             {promptHistory.length > 0 && (
               <button
                 onClick={() => setShowHistory(!showHistory)}
@@ -432,6 +446,12 @@ export function SherpaRail() {
             <p className="text-[9px] text-workspace-text-secondary/40 mt-2">
               XLSX, CSV, PDF, DOCX, TXT, MD, Images
             </p>
+          </div>
+        )}
+
+        {showMemory && (
+          <div className="workspace-card-surface mb-4 rounded-2xl border border-workspace-border/45 px-4 py-4">
+            <MemoryPanel />
           </div>
         )}
 
