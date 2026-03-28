@@ -32,10 +32,18 @@ export const DissolveActionSchema = z.object({
   objectId: z.string().min(1),
 });
 
+const SectionOperationSchema = z.discriminatedUnion('op', [
+  z.object({ op: z.literal('add'), section: CardSection }),
+  z.object({ op: z.literal('remove'), sectionIndex: z.number() }),
+  z.object({ op: z.literal('replace'), sectionIndex: z.number(), section: CardSection }),
+  z.object({ op: z.literal('requery'), dataQuery: DataQuerySchema }),
+]);
+
 export const UpdateActionSchema = z.object({
   type: z.literal('update'),
   objectId: z.string().min(1),
   instruction: z.string().min(1),
+  sectionOperations: z.array(SectionOperationSchema).optional(),
 });
 
 export const FuseActionSchema = z.object({

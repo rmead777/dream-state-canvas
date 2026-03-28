@@ -186,6 +186,7 @@ export function useWorkspaceActions() {
               target,
               instruction: action.instruction,
               documentIds: _documentIdsRef,
+              sectionOperations: (action as any).sectionOperations,
             });
             const execution = executeResult(handlerResult);
             outcome.response = execution.response || outcome.response;
