@@ -6,6 +6,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useAI } from '@/hooks/useAI';
 import MarkdownRenderer from '@/components/objects/MarkdownRenderer';
 import { getDisplayColumns, filterRowToColumns } from '@/lib/smart-columns';
+import { getActiveDataset } from '@/lib/active-dataset';
 
 interface DatasetViewProps {
   object: WorkspaceObject;
@@ -18,8 +19,12 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
   const { dispatch } = useWorkspace();
   const { streamChat, isStreaming } = useAI();
   const d = object.context;
-  const allColumns: string[] = d.columns || [];
-  const rawRows: string[][] = d.rows || [];
+
+  // Use live active dataset for full column set — object context may have been
+  // captured from seed data before the real document loaded.
+  const liveDs = getActiveDataset();
+  const allColumns: string[] = (liveDs.columns.length > (d.columns || []).length) ? liveDs.columns : (d.columns || []);
+  const rawRows: string[][] = (liveDs.columns.length > (d.columns || []).length) ? liveDs.rows : (d.rows || []);
   const [sortCol, setSortCol] = useState<number | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>(null);
   const [filterText, setFilterText] = useState('');
