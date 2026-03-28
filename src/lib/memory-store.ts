@@ -83,7 +83,7 @@ export async function createMemory(params: {
     console.warn('[memory-store] Failed to create memory:', error);
     return null;
   }
-  return rowToMemory(data as MemoryRow);
+  return rowToMemory(data as unknown as MemoryRow);
 }
 
 export async function getMemories(userId: string): Promise<SherpaMemory[]> {
