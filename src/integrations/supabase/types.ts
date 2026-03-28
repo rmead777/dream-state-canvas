@@ -27,6 +27,7 @@ export type Database = {
           mime_type: string
           storage_path: string
           structured_data: Json | null
+          user_id: string | null
         }
         Insert: {
           created_at?: string
@@ -40,6 +41,7 @@ export type Database = {
           mime_type: string
           storage_path: string
           structured_data?: Json | null
+          user_id?: string | null
         }
         Update: {
           created_at?: string
@@ -53,6 +55,7 @@ export type Database = {
           mime_type?: string
           storage_path?: string
           structured_data?: Json | null
+          user_id?: string | null
         }
         Relationships: []
       }
