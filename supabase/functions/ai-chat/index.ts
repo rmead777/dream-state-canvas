@@ -28,7 +28,7 @@ You MUST respond with valid JSON matching this schema:
 {
   "response": "your natural language response to the user",
   "actions": [
-    { "type": "create", "objectType": "...", "title": "...", "relatedTo": [], "sections": [], "dataQuery": {} },
+    { "type": "create", "objectType": "metric|comparison|alert|inspector|brief|timeline|dataset|analysis|action-queue|vendor-dossier|cash-planner|escalation-tracker|outreach-tracker|production-risk", "title": "...", "relatedTo": [], "sections": [], "dataQuery": {} },
     { "type": "focus", "objectId": "..." },
     { "type": "dissolve", "objectId": "..." },
     { "type": "update", "objectId": "...", "instruction": "...", "dataQuery": {}, "sections": [], "sectionOperations": [] },
