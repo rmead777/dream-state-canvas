@@ -8,6 +8,7 @@ import { toast } from '@/hooks/use-toast';
 import { buildDocumentObjectContext, resolveDocumentRecord } from '@/lib/document-store';
 import { addQuery, updateLastResponse } from '@/lib/conversation-memory';
 import { retrieveRelevantMemories, formatMemoriesForPrompt, determineWorkspaceState } from '@/lib/memory-retriever';
+import { recordAction, detectLearningSignals } from '@/lib/memory-detector';
 import { supabase } from '@/integrations/supabase/client';
 
 // Store document IDs ref for context injection
@@ -252,6 +253,16 @@ export function useWorkspaceActions() {
     }
 
     outcome.summary = summaryParts.join(' ');
+
+    // Detect implicit learning signals (non-blocking)
+    for (const action of result.actions) {
+      recordAction({ action, query: origin.query || '', timestamp: Date.now() });
+    }
+    if (result.actions.length > 0) {
+      const lastAction = result.actions[result.actions.length - 1];
+      detectLearningSignals(origin.query || '', lastAction, state.objects).catch(() => {});
+    }
+
     return outcome;
   }
 
