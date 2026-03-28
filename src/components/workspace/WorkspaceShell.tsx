@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { PanelCanvas } from './PanelCanvas';
 import { SherpaRail } from './SherpaRail';
-import { CollapsedBar } from './CollapsedBar';
+import { WorkspaceBar } from './WorkspaceBar';
 import { ImmersiveOverlay } from './ImmersiveOverlay';
 import { CommandPalette } from './CommandPalette';
 import { useWorkspaceBreathing } from '@/hooks/useWorkspaceBreathing';
@@ -75,8 +75,8 @@ export function WorkspaceShell() {
         <SherpaRail />
       </div>
 
-      {/* Collapsed bar */}
-      {!isImmersive && <CollapsedBar />}
+      {/* Workspace bar (collapsed objects + utilities) */}
+      {!isImmersive && <WorkspaceBar />}
 
       {/* Over-capacity indicator */}
       {isOverCapacity && !isImmersive && (

@@ -8,12 +8,8 @@ import { useCognitiveMode } from '@/hooks/useCognitiveMode';
 import { useAuth } from '@/hooks/useAuth';
 import { MODE_LABELS } from '@/lib/cognitive-modes';
 import { VoiceIndicator } from './VoiceIndicator';
-import { RulesEditor } from './RulesEditor';
-import { DocumentUpload } from './DocumentUpload';
-import { MemoryPanel } from './MemoryPanel';
 import { DocumentContextSelector, ContextMode } from './DocumentContextSelector';
 import { useDocuments } from '@/contexts/DocumentContext';
-import { getDocument, extractDataset } from '@/lib/document-store';
 import { setActiveDataset } from '@/lib/active-dataset';
 import { invalidateProfileCache } from '@/lib/intent-engine';
 import { clearProfileCache } from '@/lib/data-analyzer';
@@ -32,11 +28,7 @@ export function SherpaRail() {
   const { user, signOut } = useAuth();
   const [input, setInput] = useState('');
   const [isExpanded, setIsExpanded] = useState(true);
-  const [showCanvasMenu, setShowCanvasMenu] = useState(false);
-  const [showRules, setShowRules] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [showUpload, setShowUpload] = useState(false);
-  const [showMemory, setShowMemory] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [adminUnlocked, setAdminUnlocked] = useState(isAdminUnlocked());
   const [adminState, setAdminState] = useState(getAdminSettings());
@@ -60,43 +52,7 @@ export function SherpaRail() {
     }
   }, [contextMode, selectedDocIds, documents, setDocumentIds]);
 
-  const handleDocumentIngested = useCallback(async (docId: string) => {
-    const doc = await getDocument(docId);
-    if (!doc) return;
-    addDocument(doc);
-
-    // If it's a spreadsheet, set as active dataset
-    if (doc.file_type === 'xlsx' || doc.file_type === 'csv') {
-      const dataset = extractDataset(doc);
-      if (dataset && dataset.rows.length > 0) {
-        setActiveDataset({
-          columns: dataset.columns,
-          rows: dataset.rows,
-          sourceLabel: doc.filename,
-          sourceDocId: doc.id,
-        });
-        clearProfileCache();
-        invalidateProfileCache();
-        toast.success(`${doc.filename} is now the active dataset (${dataset.rows.length} rows)`);
-      }
-    }
-  }, [addDocument]);
-
-  const activeObjectCount = Object.values(state.objects).filter(o => o.status !== 'dissolved').length;
-
-  // handleClearSherpa is now handleClearSherpaFull below
-
-  const handleCollapseAll = useCallback(() => {
-    dispatch({ type: 'COLLAPSE_ALL_OBJECTS' });
-    setShowCanvasMenu(false);
-    toast.success('All objects minimized');
-  }, [dispatch]);
-
-  const handleDissolveAll = useCallback(() => {
-    dispatch({ type: 'DISSOLVE_ALL_OBJECTS' });
-    setShowCanvasMenu(false);
-    toast.success('Canvas cleared');
-  }, [dispatch]);
+  // handleDocumentIngested, handleCollapseAll, handleDissolveAll moved to WorkspaceBar
 
   const trackAndProcess = useCallback((text: string) => {
     setPromptHistory(prev => [...prev, { query: text, response: null, timestamp: Date.now() }]);
@@ -249,42 +205,7 @@ export function SherpaRail() {
                 ⚡
               </button>
             )}
-            {/* Upload toggle */}
-            <button
-              onClick={() => setShowUpload(!showUpload)}
-              className={`${railControlsBase} ${
-                showUpload
-                  ? 'border-workspace-accent/15 bg-workspace-accent/10 text-workspace-accent shadow-[0_10px_20px_rgba(99,102,241,0.12)]'
-                  : 'text-workspace-text-secondary/45 hover:border-workspace-border/70 hover:bg-white/90 hover:text-workspace-text-secondary'
-              }`}
-              title={showUpload ? 'Hide upload' : 'Upload documents'}
-            >
-              ↑
-            </button>
-            {/* Rules toggle */}
-            <button
-              onClick={() => setShowRules(!showRules)}
-              className={`${railControlsBase} ${
-                showRules
-                  ? 'border-workspace-accent/15 bg-workspace-accent/10 text-workspace-accent shadow-[0_10px_20px_rgba(99,102,241,0.12)]'
-                  : 'text-workspace-text-secondary/45 hover:border-workspace-border/70 hover:bg-white/90 hover:text-workspace-text-secondary'
-              }`}
-              title={showRules ? 'Hide rules' : 'Data rules'}
-            >
-              ⚙
-            </button>
-            {/* Memory toggle */}
-            <button
-              onClick={() => setShowMemory(!showMemory)}
-              className={`${railControlsBase} ${
-                showMemory
-                  ? 'border-workspace-accent/15 bg-workspace-accent/10 text-workspace-accent shadow-[0_10px_20px_rgba(99,102,241,0.12)]'
-                  : 'text-workspace-text-secondary/45 hover:border-workspace-border/70 hover:bg-white/90 hover:text-workspace-text-secondary'
-              }`}
-              title={showMemory ? 'Hide memory' : 'Sherpa memory'}
-            >
-              ◈
-            </button>
+            {/* Upload, Rules, Memory moved to WorkspaceBar bottom bar */}
             {promptHistory.length > 0 && (
               <button
                 onClick={() => setShowHistory(!showHistory)}
@@ -327,12 +248,7 @@ export function SherpaRail() {
           </p>
         </div>
 
-        {/* Rules editor panel */}
-        {showRules && (
-          <div className="workspace-card-surface mb-4 rounded-2xl border border-workspace-border/45 px-4 py-4">
-            <RulesEditor onClose={() => setShowRules(false)} />
-          </div>
-        )}
+        {/* Rules, Upload, Memory panels moved to WorkspaceBar */}
 
         {/* Document context selector */}
         <DocumentContextSelector
@@ -434,24 +350,6 @@ export function SherpaRail() {
               <span>1 turn</span>
               <span>50 turns</span>
             </div>
-          </div>
-        )}
-
-        {showUpload && (
-          <div className="workspace-card-surface mb-4 rounded-2xl border border-workspace-border/45 px-4 py-4">
-            <span className="text-[9px] uppercase tracking-widest text-workspace-text-secondary/40 block mb-2">
-              Upload Documents
-            </span>
-            <DocumentUpload onDocumentIngested={handleDocumentIngested} />
-            <p className="text-[9px] text-workspace-text-secondary/40 mt-2">
-              XLSX, CSV, PDF, DOCX, TXT, MD, Images
-            </p>
-          </div>
-        )}
-
-        {showMemory && (
-          <div className="workspace-card-surface mb-4 rounded-2xl border border-workspace-border/45 px-4 py-4">
-            <MemoryPanel />
           </div>
         )}
 
@@ -682,7 +580,7 @@ export function SherpaRail() {
           Press Enter to send, hold the mic to dictate, or use ⌘K for direct object commands.
         </p>
 
-        {/* Canvas controls + user */}
+        {/* Footer utilities — Canvas menu moved to WorkspaceBar */}
         <div className="flex items-center justify-between text-[9px] text-workspace-text-secondary/35">
           <div className="flex items-center gap-2">
             <span>⌘K</span>
@@ -696,32 +594,6 @@ export function SherpaRail() {
               </button>
             )}
           </div>
-          {activeObjectCount > 0 && (
-            <div className="relative">
-              <button
-                onClick={() => setShowCanvasMenu(!showCanvasMenu)}
-                className="workspace-focus-ring workspace-pill rounded-full px-2 py-1 text-workspace-text-secondary/55 transition-colors hover:text-workspace-text-secondary"
-              >
-                Canvas ▾
-              </button>
-              {showCanvasMenu && (
-                <div className="workspace-card-surface absolute bottom-full right-0 mb-2 w-40 rounded-2xl border border-workspace-border/55 overflow-hidden animate-[materialize_0.2s_cubic-bezier(0.16,1,0.3,1)_forwards]">
-                  <button
-                    onClick={handleCollapseAll}
-                    className="workspace-focus-ring block w-full px-3 py-2 text-left text-[11px] text-workspace-text transition-colors hover:bg-workspace-surface"
-                  >
-                    Minimize all
-                  </button>
-                  <button
-                    onClick={handleDissolveAll}
-                    className="workspace-focus-ring block w-full px-3 py-2 text-left text-[11px] text-destructive transition-colors hover:bg-destructive/5"
-                  >
-                    Clear canvas
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
     </div>

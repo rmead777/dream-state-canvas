@@ -20,7 +20,6 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { SortableObject } from './SortableObject';
 import { RelationshipConnector } from './RelationshipConnector';
 import { FreeformCanvas } from './FreeformCanvas';
-import { LayoutToggle } from './LayoutToggle';
 import { FusionZone } from './FusionZone';
 import { canFuse, getFusionOutputType } from '@/lib/fusion-rules';
 import { executeFusion } from '@/lib/fusion-executor';
@@ -159,12 +158,7 @@ export function PanelCanvas() {
   }, []);
 
   if (layoutMode === 'freeform') {
-    return (
-      <>
-        <FreeformCanvas />
-        <LayoutToggle />
-      </>
-    );
+    return <FreeformCanvas />;
   }
 
   return (
@@ -265,7 +259,6 @@ export function PanelCanvas() {
           />
         )}
       </div>
-      <LayoutToggle />
     </>
   );
 }
