@@ -214,13 +214,24 @@ export async function parseIntentAI(
             title: action.title || seedInfo?.defaultTitle || 'Untitled',
             data,
             relatedTo: action.relatedTo || [],
+            // Pass through AI-generated rich content — don't discard it
+            ...(action.sections ? { sections: action.sections } : {}),
+            ...(action.dataQuery ? { dataQuery: action.dataQuery } : {}),
           });
         } else if (action.type === 'focus') {
           actions.push({ type: 'focus', objectId: action.objectId });
         } else if (action.type === 'dissolve') {
           actions.push({ type: 'dissolve', objectId: action.objectId });
         } else if (action.type === 'update') {
-          actions.push({ type: 'update', objectId: action.objectId, instruction: action.instruction });
+          // Pass through ALL AI-provided fields — dataQuery, sections, sectionOperations
+          actions.push({
+            type: 'update',
+            objectId: action.objectId,
+            instruction: action.instruction,
+            ...(action.dataQuery ? { dataQuery: action.dataQuery } : {}),
+            ...(action.sections ? { sections: action.sections } : {}),
+            ...(action.sectionOperations ? { sectionOperations: action.sectionOperations } : {}),
+          });
         } else if (action.type === 'fuse') {
           actions.push({ type: 'fuse', objectIdA: action.objectIdA, objectIdB: action.objectIdB });
         } else if (action.type === 'refine-rules') {
