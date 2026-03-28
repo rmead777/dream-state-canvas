@@ -208,7 +208,13 @@ export async function parseIntentAI(
     // Validate with Zod — rejects unknown objectTypes, malformed actions
     const validated = IntentLLMOutputSchema.safeParse(raw);
     if (!validated.success) {
-      console.warn('[intent-engine] LLM output failed Zod validation:', validated.error.issues);
+      console.error('[intent-engine] LLM raw output:', JSON.stringify(raw, null, 2));
+      console.error('[intent-engine] Zod validation errors:', validated.error.issues);
+      // Don't throw — try to use the response even if actions are invalid
+      // The AI's text response is still valuable even if the actions schema is wrong
+      if (raw.response && typeof raw.response === 'string') {
+        return { actions: [{ type: 'respond', message: raw.response }] };
+      }
       throw new Error('Invalid LLM output');
     }
 
