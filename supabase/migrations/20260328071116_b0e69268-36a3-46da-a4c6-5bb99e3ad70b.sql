@@ -1,0 +1,1 @@
+UPDATE public.documents SET user_id = (SELECT id FROM auth.users LIMIT 1) WHERE user_id IS NULL
