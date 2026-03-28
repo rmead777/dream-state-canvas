@@ -237,6 +237,7 @@ export function useWorkspaceActions() {
 
   return {
     processIntent,
+    setDocumentIds,
     collapseObject,
     restoreObject,
     dissolveObject,
