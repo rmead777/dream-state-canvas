@@ -4,11 +4,28 @@ const MAX_PRIMARY = 2;
 const MAX_SECONDARY = 2;
 const MAX_VISIBLE = 4; // Anti-drift: never more than 4 full objects
 
+export interface ComputeLayoutResult {
+  layout: SpatialLayout;
+  /** Object IDs that overflow beyond MAX_VISIBLE — caller should collapse these */
+  overflow: string[];
+}
+
 /**
  * Pure function: given current objects, compute optimal spatial layout.
  * Enforces density ceiling and zone rules.
+ * Returns overflow IDs so the reducer can auto-collapse them —
+ * no open object should ever become unreachable.
  */
 export function computeLayout(objects: Record<string, WorkspaceObject>): SpatialLayout {
+  const result = computeLayoutWithOverflow(objects);
+  return result.layout;
+}
+
+/**
+ * Full layout computation with overflow detection.
+ * Use this when you need to know which objects overflowed.
+ */
+export function computeLayoutWithOverflow(objects: Record<string, WorkspaceObject>): ComputeLayoutResult {
   const open = Object.values(objects).filter(
     (o) => o.status === 'open' || o.status === 'materializing'
   );
@@ -22,20 +39,21 @@ export function computeLayout(objects: Record<string, WorkspaceObject>): Spatial
 
   const primary: string[] = [];
   const secondary: string[] = [];
+  const overflow: string[] = [];
 
   for (const obj of sorted) {
     if (primary.length < MAX_PRIMARY) {
       primary.push(obj.id);
     } else if (secondary.length < MAX_SECONDARY) {
       secondary.push(obj.id);
+    } else {
+      overflow.push(obj.id);
     }
-    // If we exceed MAX_VISIBLE, remaining stay in their current position
-    // but the UI will apply receded styling
   }
 
   const peripheral = collapsed.map((o) => o.id);
 
-  return { primary, secondary, peripheral };
+  return { layout: { primary, secondary, peripheral }, overflow };
 }
 
 /**

@@ -5,7 +5,7 @@ import {
   WorkspaceObject,
   SpatialLayout,
 } from '@/lib/workspace-types';
-import { computeLayout } from '@/lib/spatial-orchestrator';
+import { computeLayoutWithOverflow } from '@/lib/spatial-orchestrator';
 
 const initialState: WorkspaceState = {
   objects: {},
@@ -29,6 +29,28 @@ const initialState: WorkspaceState = {
   layoutMode: 'auto',
 };
 
+/**
+ * Compute layout and auto-collapse any overflow objects.
+ * Guarantees no open object becomes unreachable (invisible + not in collapsed bar).
+ */
+function layoutWithOverflowCollapse(objects: Record<string, WorkspaceObject>): {
+  objects: Record<string, WorkspaceObject>;
+  layout: SpatialLayout;
+} {
+  const { layout, overflow } = computeLayoutWithOverflow(objects);
+  if (overflow.length === 0) return { objects, layout };
+
+  const updated = { ...objects };
+  for (const id of overflow) {
+    if (updated[id]) {
+      updated[id] = { ...updated[id], status: 'collapsed' as const };
+    }
+  }
+  // Re-add collapsed overflow to peripheral
+  const peripheral = [...layout.peripheral, ...overflow];
+  return { objects: updated, layout: { ...layout, peripheral } };
+}
+
 function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction): WorkspaceState {
   const now = Date.now();
 
@@ -40,8 +62,9 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
         createdAt: now,
         lastInteractedAt: now,
       };
-      const newObjects = { ...state.objects, [obj.id]: obj };
-      const layout = computeLayout(newObjects);
+      const withNew = { ...state.objects, [obj.id]: obj };
+      // Auto-collapse overflow objects so nothing becomes unreachable
+      const { objects: newObjects, layout } = layoutWithOverflowCollapse(withNew);
       return {
         ...state,
         objects: newObjects,
@@ -55,7 +78,7 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
       if (!obj) return state;
       const updated = { ...obj, status: 'open' as const, lastInteractedAt: now };
       const newObjects = { ...state.objects, [obj.id]: updated };
-      return { ...state, objects: newObjects, spatialLayout: computeLayout(newObjects) };
+      return { ...state, objects: newObjects, spatialLayout: computeLayoutWithOverflow(newObjects).layout };
     }
 
     case 'DISSOLVE_OBJECT': {
@@ -63,11 +86,10 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
       if (!obj) return state;
       const updated = { ...obj, status: 'dissolved' as const };
       const newObjects = { ...state.objects, [obj.id]: updated };
-      const layout = computeLayout(newObjects);
       return {
         ...state,
         objects: newObjects,
-        spatialLayout: layout,
+        spatialLayout: computeLayoutWithOverflow(newObjects).layout,
         activeContext: {
           ...state.activeContext,
           focusedObjectId:
@@ -81,7 +103,7 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
       if (!obj) return state;
       const updated = { ...obj, status: 'collapsed' as const, lastInteractedAt: now };
       const newObjects = { ...state.objects, [obj.id]: updated };
-      return { ...state, objects: newObjects, spatialLayout: computeLayout(newObjects) };
+      return { ...state, objects: newObjects, spatialLayout: computeLayoutWithOverflow(newObjects).layout };
     }
 
     case 'RESTORE_OBJECT': {
@@ -92,7 +114,7 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
       return {
         ...state,
         objects: newObjects,
-        spatialLayout: computeLayout(newObjects),
+        spatialLayout: computeLayoutWithOverflow(newObjects).layout,
         activeContext: { ...state.activeContext, focusedObjectId: obj.id },
       };
     }
@@ -102,7 +124,7 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
       if (!obj) return state;
       const updated = { ...obj, pinned: true, lastInteractedAt: now };
       const newObjects = { ...state.objects, [obj.id]: updated };
-      return { ...state, objects: newObjects, spatialLayout: computeLayout(newObjects) };
+      return { ...state, objects: newObjects, spatialLayout: computeLayoutWithOverflow(newObjects).layout };
     }
 
     case 'UNPIN_OBJECT': {
@@ -110,7 +132,7 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
       if (!obj) return state;
       const updated = { ...obj, pinned: false };
       const newObjects = { ...state.objects, [obj.id]: updated };
-      return { ...state, objects: newObjects, spatialLayout: computeLayout(newObjects) };
+      return { ...state, objects: newObjects, spatialLayout: computeLayoutWithOverflow(newObjects).layout };
     }
 
     case 'FOCUS_OBJECT': {
@@ -123,7 +145,7 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
       return {
         ...state,
         objects: focusObjects,
-        spatialLayout: focusObjects !== state.objects ? computeLayout(focusObjects) : state.spatialLayout,
+        spatialLayout: focusObjects !== state.objects ? computeLayoutWithOverflow(focusObjects).layout : state.spatialLayout,
         activeContext: { ...state.activeContext, focusedObjectId: focusId },
       };
     }
@@ -232,7 +254,7 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
       return {
         ...state,
         objects: newObjects,
-        spatialLayout: computeLayout(newObjects),
+        spatialLayout: computeLayoutWithOverflow(newObjects).layout,
         activeContext: { ...state.activeContext, focusedObjectId: null },
       };
     }
