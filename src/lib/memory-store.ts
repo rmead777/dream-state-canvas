@@ -98,7 +98,7 @@ export async function getMemories(userId: string): Promise<SherpaMemory[]> {
     console.warn('[memory-store] Failed to fetch memories:', error);
     return [];
   }
-  return ((data || []) as MemoryRow[]).map(rowToMemory);
+  return ((data || []) as unknown as MemoryRow[]).map(rowToMemory);
 }
 
 export async function getOverrideMemories(userId: string): Promise<SherpaMemory[]> {
