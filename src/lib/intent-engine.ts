@@ -57,7 +57,10 @@ function buildWorkspaceContext(objects: Record<string, WorkspaceObject>): string
   if (active.length === 0) return 'Workspace is empty.';
 
   return `Current workspace objects:\n${active
-    .map((o) => `- [${o.type}] "${o.title}" (${o.status}${o.pinned ? ', pinned' : ''})${o.id ? ` id:${o.id}` : ''}`)
+    .map((o) => {
+      const fileInfo = o.context?.fileName ? ` file:"${o.context.fileName}"` : o.context?.fileType ? ` fileType:${o.context.fileType}` : '';
+      return `- [${o.type}] "${o.title}" (${o.status}${o.pinned ? ', pinned' : ''})${fileInfo}${o.id ? ` id:${o.id}` : ''}`;
+    })
     .join('\n')}`;
 }
 

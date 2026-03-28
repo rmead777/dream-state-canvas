@@ -123,7 +123,7 @@ IMPORTANT — DOCUMENT CONTEXT:
 
 Other action rules:
 - Use "focus" if the user asks about something already in the workspace.
-- Use "dissolve" to remove objects the user no longer needs.
+- IMPORTANT: [document] objects are PDF/text files. [dataset] objects are spreadsheet/data files. When the user says "source document", "open the PDF", or "open the report", focus the [document] object, NOT the [dataset]. Pay attention to the file name and file type in the workspace context.
 - Use "fuse" when the user wants to combine, merge, synthesize, or fuse two objects. Match object names to their IDs from the workspace state.
 - IMPORTANT: When the user says "fuse", "combine", "merge", or "synthesize" — ALWAYS use the "fuse" action type, NEVER create a brief instead.
 - Use "refine-rules" when the user wants to change how data is prioritized, sorted, filtered, or grouped.
