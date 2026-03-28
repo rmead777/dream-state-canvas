@@ -137,6 +137,18 @@ export function SherpaRail() {
           )}
         </div>
         <div className="flex items-center gap-1">
+          {/* Upload toggle */}
+          <button
+            onClick={() => setShowUpload(!showUpload)}
+            className={`rounded-md p-1 transition-colors text-[10px] ${
+              showUpload
+                ? 'bg-workspace-accent/10 text-workspace-accent'
+                : 'text-workspace-text-secondary/40 hover:bg-workspace-surface hover:text-workspace-text-secondary'
+            }`}
+            title={showUpload ? 'Hide upload' : 'Upload documents'}
+          >
+            ↑
+          </button>
           {/* Rules toggle */}
           <button
             onClick={() => setShowRules(!showRules)}
