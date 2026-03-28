@@ -132,7 +132,7 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
                 </tr>
               </thead>
               <tbody>
-                {rawRows.slice(0, 3).map((row, i) => {
+                {rawRows.slice(0, object.context?.dataQuery?.limit ?? (object.context?.queryMeta ? rawRows.length : 3)).map((row, i) => {
                   const cells = filterRowToColumns(row, allColumns, previewCols);
                   return (
                     <tr key={i} className={i < 2 ? 'border-b border-workspace-border/25' : ''}>

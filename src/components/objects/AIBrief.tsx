@@ -84,7 +84,7 @@ function SourceDrillback({ object }: { object: WorkspaceObject }) {
               </tr>
             </thead>
             <tbody>
-              {ctx.rows.slice(0, 3).map((row: string[], i: number) => (
+              {ctx.rows.slice(0, ctx.dataQuery?.limit ?? (ctx.queryMeta ? ctx.rows.length : 3)).map((row: string[], i: number) => (
                 <tr key={i} className="border-t border-workspace-border/10">
                   {filterRowToColumns(row, ctx.columns, previewColumns).map((cell: string, j: number) => (
                     <td key={j} className="px-2 py-1 text-workspace-text-secondary">{cell}</td>
