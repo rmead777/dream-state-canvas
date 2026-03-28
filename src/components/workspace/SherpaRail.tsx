@@ -27,8 +27,32 @@ export function SherpaRail() {
   const [showCanvasMenu, setShowCanvasMenu] = useState(false);
   const [showRules, setShowRules] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
   const [promptHistory, setPromptHistory] = useState<Array<{ query: string; response: string | null; timestamp: number }>>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { addDocument } = useDocuments();
+
+  const handleDocumentIngested = useCallback(async (docId: string) => {
+    const doc = await getDocument(docId);
+    if (!doc) return;
+    addDocument(doc);
+
+    // If it's a spreadsheet, set as active dataset
+    if (doc.file_type === 'xlsx' || doc.file_type === 'csv') {
+      const dataset = extractDataset(doc);
+      if (dataset && dataset.rows.length > 0) {
+        setActiveDataset({
+          columns: dataset.columns,
+          rows: dataset.rows,
+          sourceLabel: doc.filename,
+          sourceDocId: doc.id,
+        });
+        clearProfileCache();
+        invalidateProfileCache();
+        toast.success(`${doc.filename} is now the active dataset (${dataset.rows.length} rows)`);
+      }
+    }
+  }, [addDocument]);
 
   const activeObjectCount = Object.values(state.objects).filter(o => o.status !== 'dissolved').length;
 
