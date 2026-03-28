@@ -27,7 +27,8 @@ You MUST respond with valid JSON matching this schema:
     { "type": "create", "objectType": "metric|comparison|alert|inspector|brief|timeline|document|dataset", "title": "...", "relatedTo": [] },
     { "type": "focus", "objectId": "..." },
     { "type": "dissolve", "objectId": "..." },
-    { "type": "fuse", "objectIdA": "id-of-first-object", "objectIdB": "id-of-second-object" }
+    { "type": "fuse", "objectIdA": "id-of-first-object", "objectIdB": "id-of-second-object" },
+    { "type": "refine-rules", "feedback": "user's prioritization change request" }
   ]
 }
 Rules:
