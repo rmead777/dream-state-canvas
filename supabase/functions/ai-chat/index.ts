@@ -101,7 +101,14 @@ Return ONLY the JSON, no markdown fences.`,
       'refine-profile': `You are a data analyst. The user has an existing DataProfile for a dataset and wants to change how data is prioritized.
 You will receive the current profile, the user's instruction, and sample data.
 Your job: update the profile based on the user's feedback while keeping the same JSON schema.
-Only change what the user asked for. Keep all other fields as they were.
+
+CRITICAL RULES:
+1. If the profile has an ordinalPriorityColumn, NEVER remove it unless the user explicitly asks to ignore priorities/tiers.
+2. The ordinalPriorityColumn.rankOrder defines the sorting hierarchy — NEVER override it with numeric sorting unless asked.
+3. Within-tier sorting is determined by operational meaning (action tiers sort by deadline, monitoring tiers by exposure).
+4. Only change what the user requested. Keep all other fields as they were.
+5. Return the FULL updated JSON profile with the same schema — all fields must be present.
+
 Return ONLY the updated JSON object, no markdown fences.`,
     };
 
