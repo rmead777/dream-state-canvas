@@ -1,5 +1,7 @@
 import {
   IntentResult,
+  ActiveContext,
+  ObjectType,
   WorkspaceAction,
   WorkspaceObject,
 } from './workspace-types';
@@ -17,8 +19,9 @@ import {
 } from './seed-data';
 import { getActiveDataset } from './active-dataset';
 import { callAI } from '@/hooks/useAI';
-import { analyzeDataset, refineProfile, DataProfile } from './data-analyzer';
+import { analyzeDataset, refineProfile, DataProfile, getCurrentProfile } from './data-analyzer';
 import { previewRows, alertRows, metricAggregate, comparisonPairs } from './data-slicer';
+import { buildDefaultViewState, buildWorkspaceIntentContext } from './workspace-intelligence';
 
 // Cached profile promise (runs once, invalidated on refinement)
 let profilePromise: Promise<DataProfile> | null = null;
@@ -54,23 +57,32 @@ export async function refineDataRules(userFeedback: string): Promise<DataProfile
   return updated;
 }
 
-// Context builder — feeds workspace state to the LLM
-function buildWorkspaceContext(objects: Record<string, WorkspaceObject>): string {
-  const active = Object.values(objects).filter((o) => o.status !== 'dissolved');
-  if (active.length === 0) return 'Workspace is empty.';
+function withContextMeta(
+  objectType: string,
+  data: Record<string, unknown>,
+  profile: DataProfile | null
+): Record<string, unknown> {
+  const view = buildDefaultViewState(objectType as ObjectType, data, profile);
+  return Object.keys(view).length > 0 ? { ...data, view } : data;
+}
 
-  return `Current workspace objects:\n${active
-    .map((o) => {
-      const fileInfo = o.context?.fileName ? ` file:"${o.context.fileName}"` : o.context?.fileType ? ` fileType:${o.context.fileType}` : '';
-      return `- [${o.type}] "${o.title}" (${o.status}${o.pinned ? ', pinned' : ''})${fileInfo}${o.id ? ` id:${o.id}` : ''}`;
-    })
-    .join('\n')}`;
+async function buildIntentPayloadContext(
+  objects: Record<string, WorkspaceObject>,
+  activeContext?: ActiveContext
+): Promise<string> {
+  const ds = getActiveDataset();
+  const profile = getCurrentProfile(ds.columns, ds.rows) ?? await getProfile().catch(() => null);
+  return buildWorkspaceIntentContext({
+    objects,
+    activeContext,
+    profile,
+  });
 }
 
 // Seed data lookup for creating objects (used as fallback / for narrative types)
 // Note: dataset uses a getter so it always reflects the current active dataset,
 // not the one captured at module load time (HI-011 fix).
-const SEED_DATA_BY_TYPE: Record<string, { data: Record<string, any>; defaultTitle: string }> = {
+const SEED_DATA_BY_TYPE: Record<string, { data: Record<string, unknown>; defaultTitle: string }> = {
   metric: { data: SEED_LEVERAGE_DATA, defaultTitle: 'AP Exposure' },
   comparison: { data: SEED_COMPARISON_DATA, defaultTitle: 'Vendor Comparison' },
   alert: { data: SEED_ALERT_DATA, defaultTitle: 'Urgent Vendors' },
@@ -85,7 +97,7 @@ const SEED_DATA_BY_TYPE: Record<string, { data: Record<string, any>; defaultTitl
  * Build dynamic data for an object type using the DataProfile + slicer.
  * Falls back to seed data if profile isn't ready yet.
  */
-async function getDynamicData(objectType: string): Promise<Record<string, any>> {
+async function getDynamicData(objectType: string): Promise<Record<string, unknown>> {
   try {
     const profile = await getProfile();
     const { columns, rows } = getActiveDataset();
@@ -93,7 +105,7 @@ async function getDynamicData(objectType: string): Promise<Record<string, any>> 
     switch (objectType) {
       case 'metric': {
         const agg = metricAggregate(columns, rows, profile);
-        return {
+        return withContextMeta(objectType, {
           ...SEED_LEVERAGE_DATA,
           currentValue: agg.currentValue,
           unit: agg.unit,
@@ -102,30 +114,30 @@ async function getDynamicData(objectType: string): Promise<Record<string, any>> 
           sparklineLabels: agg.sparklineLabels,
           context: agg.context,
           label: 'ap-exposure',
-        };
+        }, profile);
       }
       case 'inspector': {
         const preview = previewRows(columns, rows, profile, 8);
-        return { columns: preview.columns, rows: preview.rows };
+        return withContextMeta(objectType, { columns: preview.columns, rows: preview.rows }, profile);
       }
       case 'alert': {
         const alerts = alertRows(columns, rows, profile);
-        return { alerts };
+        return withContextMeta(objectType, { alerts }, profile);
       }
       case 'comparison': {
         const comp = comparisonPairs(columns, rows, profile);
-        return comp;
+        return withContextMeta(objectType, comp, profile);
       }
       case 'dataset': {
         // Sort the full dataset by profile rules so preview shows correct order
         const sorted = previewRows(columns, rows, profile, rows.length);
-        return { columns: sorted.columns, rows: sorted.rows };
+        return withContextMeta(objectType, { columns: sorted.columns, rows: sorted.rows }, profile);
       }
       default:
-        return SEED_DATA_BY_TYPE[objectType]?.data || {};
+        return withContextMeta(objectType, SEED_DATA_BY_TYPE[objectType]?.data || {}, profile);
     }
   } catch {
-    return SEED_DATA_BY_TYPE[objectType]?.data || {};
+    return withContextMeta(objectType, SEED_DATA_BY_TYPE[objectType]?.data || {}, null);
   }
 }
 
@@ -135,10 +147,12 @@ async function getDynamicData(objectType: string): Promise<Record<string, any>> 
 export async function parseIntentAI(
   input: string,
   existingObjects: Record<string, WorkspaceObject> = {},
-  documentIds?: string[]
+  documentIds?: string[],
+  activeContext?: ActiveContext,
+  memories?: string
 ): Promise<IntentResult> {
   try {
-    const context = buildWorkspaceContext(existingObjects);
+    const context = await buildIntentPayloadContext(existingObjects, activeContext);
     const { contextWindow } = getAdminSettings();
 
     // Build conversation history for follow-up awareness
@@ -147,14 +161,21 @@ export async function parseIntentAI(
       ...history,
       {
         role: 'user' as const,
-        content: `Workspace context:\n${context}\n\nUser query: "${input}"`,
+        content: [
+          'Resolve the user intent against the current workspace snapshot.',
+          'If the user says "this", "that", "it", or "current view", target the focused object first.',
+          'Prefer update or focus over create when an existing object can satisfy the request.',
+          `Workspace intent payload:\n${context}`,
+          `User query: "${input}"`,
+        ].join('\n\n'),
       },
     ];
 
     const result = await callAI(
       messages,
       'intent',
-      documentIds
+      documentIds,
+      memories
     );
 
     if (!result) throw new Error('No AI response');
@@ -210,187 +231,20 @@ export async function parseIntentAI(
 
     return { actions: actions.length > 0 ? actions : [{ type: 'respond', message: parsed.response || 'I processed your request.' }] };
   } catch {
-    // Fallback to keyword matching
+    // Fallback to a safe no-op response when AI is unavailable or returns invalid JSON.
     return parseIntent(input, existingObjects);
   }
 }
 
-// ─── Keyword fallback (kept for offline/error scenarios) ───────────────────
-
-interface IntentPattern {
-  keywords: string[];
-  generate: (input: string, existingObjects: Record<string, WorkspaceObject>) => WorkspaceAction[] | Promise<WorkspaceAction[]>;
-}
-
-// Helper: find objects by fuzzy title match
-function findObjectByName(name: string, objects: Record<string, WorkspaceObject>): WorkspaceObject | undefined {
-  const lower = name.toLowerCase().trim();
-  const active = Object.values(objects).filter(o => o.status !== 'dissolved');
-  const exact = active.find(o => o.title.toLowerCase() === lower);
-  if (exact) return exact;
-  return active.find(o => o.title.toLowerCase().includes(lower) || lower.includes(o.title.toLowerCase()));
-}
-
-const patterns: IntentPattern[] = [
-  {
-    keywords: ['fuse', 'combine', 'merge', 'synthesize', 'blend'],
-    generate: (input, existing) => {
-      const active = Object.values(existing).filter(o => o.status !== 'dissolved');
-      if (active.length < 2) {
-        return [{ type: 'respond', message: 'You need at least two objects in your workspace to fuse. Create some objects first.' }];
-      }
-
-      const connectors = /(?:\band\b|\bwith\b|\b\+\b|\b&\b)/i;
-      const fuseKeywords = /^(?:fuse|combine|merge|synthesize|blend)\s+/i;
-      const stripped = input.replace(fuseKeywords, '').trim();
-      const parts = stripped.split(connectors).map(s => s.trim()).filter(Boolean);
-
-      if (parts.length >= 2) {
-        const objA = findObjectByName(parts[0], existing);
-        const objB = findObjectByName(parts[1], existing);
-        if (objA && objB && objA.id !== objB.id) {
-          return [
-            { type: 'respond', message: `Fusing "${objA.title}" with "${objB.title}"...` },
-            { type: 'fuse', objectIdA: objA.id, objectIdB: objB.id },
-          ];
-        }
-      }
-
-      const sorted = [...active].sort((a, b) => b.lastInteractedAt - a.lastInteractedAt);
-      if (sorted.length >= 2) {
-        return [
-          { type: 'respond', message: `Fusing "${sorted[0].title}" with "${sorted[1].title}"...` },
-          { type: 'fuse', objectIdA: sorted[0].id, objectIdB: sorted[1].id },
-        ];
-      }
-
-      return [{ type: 'respond', message: 'Could not identify two objects to fuse.' }];
-    },
-  },
-  {
-    keywords: ['exposure', 'ap', 'payable', 'owed', 'total', 'leverage'],
-    generate: async (input, existing) => {
-      const hasMetric = Object.values(existing).some(
-        (o) => o.type === 'metric' && o.context?.label === 'ap-exposure' && o.status !== 'dissolved'
-      );
-      if (hasMetric) {
-        const obj = Object.values(existing).find(
-          (o) => o.type === 'metric' && o.context?.label === 'ap-exposure'
-        );
-        return [
-          { type: 'respond', message: 'AP exposure is already in your workspace.' },
-          ...(obj ? [{ type: 'focus' as const, objectId: obj.id }] : []),
-        ];
-      }
-      const data = await getDynamicData('metric');
-      return [
-        { type: 'respond', message: `Total AP is $${(data.currentValue / 1000000).toFixed(2)}M across ${getActiveDataset().rows.length} vendors.` },
-        { type: 'create', objectType: 'metric', title: 'AP Exposure', data: { ...data, label: 'ap-exposure' } },
-      ];
-    },
-  },
-  {
-    keywords: ['compare', 'versus', 'vs'],
-    generate: async (_input) => {
-      const data = await getDynamicData('comparison');
-      const title = data.entities?.length >= 2
-        ? `${data.entities[0].name} vs ${data.entities[1].name}`
-        : 'Vendor Comparison';
-      return [
-        { type: 'respond', message: 'Comparison ready. Showing contrasting profiles side by side.' },
-        { type: 'create', objectType: 'comparison', title, data },
-      ];
-    },
-  },
-  {
-    keywords: ['urgent', 'attention', 'priority', 'risk', 'alert', 'concern', 'action', 'tier 1', 'act now'],
-    generate: async () => {
-      const data = await getDynamicData('alert');
-      const count = data.alerts?.length || 0;
-      return [
-        { type: 'respond', message: `${count} vendors need attention based on urgency analysis.` },
-        { type: 'create', objectType: 'alert', title: 'Urgent Vendors', data },
-      ];
-    },
-  },
-  {
-    keywords: ['table', 'top', 'inspect', 'overview', 'biggest', 'largest'],
-    generate: async () => {
-      const data = await getDynamicData('inspector');
-      return [
-        { type: 'respond', message: `Top vendors by priority. Showing ${data.rows?.length || 0} of ${getActiveDataset().rows.length}.` },
-        { type: 'create', objectType: 'inspector', title: 'Top Vendors', data },
-      ];
-    },
-  },
-  {
-    keywords: ['summary', 'brief', 'analysis', 'assessment'],
-    generate: () => [
-      { type: 'respond', message: 'AP risk assessment ready — covering all tiers, escalation patterns, and recommended actions.' },
-      { type: 'create', objectType: 'brief', title: 'AP Risk Assessment', data: SEED_BRIEF_DATA },
-    ],
-  },
-  {
-    keywords: ['timeline', 'activity', 'history', 'recent', 'log', 'deadline'],
-    generate: () => [
-      { type: 'respond', message: 'Key vendor events and upcoming deadlines.' },
-      { type: 'create', objectType: 'timeline', title: 'Vendor Activity', data: SEED_TIMELINE_DATA },
-    ],
-  },
-  {
-    keywords: ['document', 'report', 'pdf', 'read', 'tracker'],
-    generate: () => [
-      { type: 'respond', message: 'Opening the AP Vendor Tracker v14 document view.' },
-      { type: 'create', objectType: 'document', title: 'AP Vendor Tracker v14', data: SEED_DOCUMENT_DATA },
-    ],
-  },
-  {
-    keywords: ['dataset', 'spreadsheet', 'full data', 'all vendor', 'full dataset', 'vendor list', 'portfolio'],
-    generate: async () => {
-      const data = await getDynamicData('dataset');
-      return [
-        { type: 'respond', message: `Full dataset ready — ${data.rows?.length || getActiveDataset().rows.length} items sorted by priority rules.` },
-        { type: 'create', objectType: 'dataset', title: 'Full Portfolio Dataset', data },
-      ];
-    },
-  },
-  {
-    keywords: ['prioritize', 'sort by', 'group by', 'change priority', 'change sorting', 'reorder by', 'rank by', 'filter by', 'show first', 'show last', 'ascending', 'descending'],
-    generate: (input) => [
-      { type: 'respond', message: 'Updating data prioritization rules based on your feedback...' },
-      { type: 'refine-rules' as any, feedback: input },
-    ],
-  },
-];
-
 export async function parseIntent(
-  input: string,
-  existingObjects: Record<string, WorkspaceObject> = {}
+  _input: string,
+  _existingObjects: Record<string, WorkspaceObject> = {}
 ): Promise<IntentResult> {
-  const lower = input.toLowerCase().trim();
-
-  // Score each pattern by number of keyword matches — pick highest to avoid shadowing
-  let bestPattern: IntentPattern | null = null;
-  let bestScore = 0;
-  for (const pattern of patterns) {
-    const score = pattern.keywords.filter((kw) => lower.includes(kw)).length;
-    if (score > bestScore) {
-      bestScore = score;
-      bestPattern = pattern;
-    }
-  }
-
-  if (bestPattern) {
-    const result = bestPattern.generate(input, existingObjects);
-    const actions = result instanceof Promise ? await result : result;
-    return { actions };
-  }
-
   return {
     actions: [
       {
         type: 'respond',
-        message: 'I can help with AP exposure, vendor comparisons, urgent vendor alerts, the full vendor dataset, risk assessments, or activity timelines. What would you like to explore?',
+        message: 'I could not safely infer a workspace action without the AI planner. Please try again in a moment, or rephrase with the exact object you want me to update or focus.',
       },
     ],
   };

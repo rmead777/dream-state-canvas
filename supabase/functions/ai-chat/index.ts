@@ -11,12 +11,12 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { messages, mode, adminModel, adminMaxTokens } = await req.json();
+    const { messages, mode, adminModel, adminMaxTokens, memories } = await req.json();
 
     // System prompts by mode
     const systemPrompts: Record<string, string> = {
-      intent: `You are the Sherpa — an AI intelligence layer for a cognitive workspace managing financial portfolio data.
-You receive a user query and the current workspace state.
+      intent: `You are Sherpa — the intelligence layer for a cognitive workspace.
+    You receive a user query, a structured workspace snapshot, a dataset profile, and recent intent outcomes.
 You MUST respond with valid JSON matching this schema:
 {
   "response": "your natural language response to the user",
@@ -24,6 +24,7 @@ You MUST respond with valid JSON matching this schema:
     { "type": "create", "objectType": "metric|comparison|alert|inspector|brief|timeline|document|dataset", "title": "...", "relatedTo": [] },
     { "type": "focus", "objectId": "..." },
     { "type": "dissolve", "objectId": "..." },
+        { "type": "update", "objectId": "...", "instruction": "..." },
     { "type": "fuse", "objectIdA": "id-of-first-object", "objectIdB": "id-of-second-object" },
     { "type": "refine-rules", "feedback": "user's prioritization change request" }
   ]
@@ -31,14 +32,33 @@ You MUST respond with valid JSON matching this schema:
 Rules:
 - "response" is always required — a thoughtful 1-2 sentence response.
 - "actions" can be empty if the user is just asking a question.
-- Use "create" to materialize new workspace objects. Pick the most appropriate objectType.
-- Use "focus" if the user asks about something already in the workspace.
+    - The dataset profile defines the domain. It can be finance, sports, operations, science, or anything else. Do not assume a financial domain unless the payload says so.
+    - Use "focus" when the user wants to inspect or return to an existing object.
+    - Use "update" when the user wants to modify an existing object's filters, sort order, visible columns, chart/view mode, framing, narrative, or title.
+    - Use "create" only when no existing object can satisfy the request.
 - Use "dissolve" to remove objects the user no longer needs.
 - Use "fuse" when the user wants to combine, merge, synthesize, or fuse two objects. Match object names to their IDs from the workspace state. If the user doesn't specify which objects, pick the two most relevant active objects.
 - IMPORTANT: When the user says "fuse", "combine", "merge", or "synthesize" — ALWAYS use the "fuse" action type, NEVER create a brief instead.
 - Use "refine-rules" when the user wants to change how data is prioritized, sorted, filtered, or grouped. Extract their instruction as "feedback". Examples: "sort by name", "prioritize low balances", "group by status instead of tier", "show oldest first", "change the priority column".
-- Be concise, insightful, and proactive. You are a financial intelligence assistant.
-- If the user asks something vague, respond helpfully and suggest workspace actions.`,
+    - Pronouns like "this", "that", "it", and "current view" refer to the focused object first. If there is no focused object, prefer the most recently interacted relevant object.
+    - NEVER create a duplicate object when an existing one of the same semantic purpose can be focused or updated instead.
+    - If the user asks to rename, reframe, filter, sort, tighten, expand, change columns, or change chart type, prefer "update" over "create".
+    - If multiple existing objects are plausible targets and the request is ambiguous, ask a clarifying question instead of guessing.
+    - Be concise, insightful, and proactive.`,
+
+      "update-plan": `You are a structured object-update planner for a cognitive workspace.
+    Your job is to translate a user instruction into a precise JSON update plan for ONE existing object.
+    You will receive the object summary, current view state, dataset profile, and user instruction.
+
+    Rules:
+    - Return ONLY valid JSON.
+    - Only include fields the user explicitly wants to change.
+    - Use null to clear an existing setting.
+    - Use view.preferredColumns when the user changes which columns are visible.
+    - Use view.displayMode + chartType + chartXAxis + chartYAxis when the user requests a chart or chart-type change.
+    - Use content.regenerateNarrative when the user wants rewritten analysis, reframing, tightening, expansion, or a new angle.
+    - Use renameTo only when the user explicitly wants a new title.
+    - Do not invent filters, titles, or chart settings that were not asked for.`,
 
       document: `You are an expert document analyst. The user is reading a document and has a question about it.
 Answer based on the document content provided. Be concise and precise. Reference specific parts of the document when possible.`,
@@ -47,10 +67,11 @@ Answer based on the document content provided. Be concise and precise. Reference
 Analyze the data provided and give specific, actionable insights. Reference specific values and trends.
 Be concise — 2-3 sentences max.`,
 
-      brief: `You are a senior portfolio analyst. Synthesize the provided workspace context into a concise risk brief.
-Cover: key risks, portfolio positioning, and recommended actions. Use data points when available.`,
+      brief: `You are a senior analytical writer.
+    Synthesize the provided workspace context into a concise, decision-useful brief.
+    Cover: the main takeaway, why it matters, and recommended actions. Use concrete data points when available.`,
 
-      fusion: `You are a senior analyst performing deep synthesis of two financial data objects.
+      fusion: `You are a senior analyst performing deep synthesis of two workspace data objects.
 Your job: find NON-OBVIOUS connections, tensions, and implications between them.
 
 RULES:
@@ -109,7 +130,12 @@ CRITICAL RULES:
 Return ONLY the updated JSON object, no markdown fences.`,
     };
 
-    const systemPrompt = systemPrompts[mode] || systemPrompts.intent;
+    let systemPrompt = systemPrompts[mode] || systemPrompts.intent;
+
+    // Inject Sherpa memories into the system prompt (Tier 1: soft influence)
+    if (memories && typeof memories === 'string' && memories.length > 0) {
+      systemPrompt = systemPrompt + '\n\n' + memories;
+    }
 
     // Use admin model override if provided, otherwise default
     const modelId = adminModel || DEFAULT_MODEL;

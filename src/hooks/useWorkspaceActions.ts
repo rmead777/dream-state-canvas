@@ -1,18 +1,46 @@
 import { useCallback } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { parseIntentAI } from '@/lib/intent-engine';
-import { generateSuggestions } from '@/lib/sherpa-engine';
-import { WorkspaceObject, IntentOrigin } from '@/lib/workspace-types';
+import { WorkspaceObject, IntentOrigin, WorkspaceAction } from '@/lib/workspace-types';
 import { computeFreeformPosition } from '@/lib/freeform-placement';
-import { handleUpdate, handleFuse, handleRefineRules } from '@/lib/action-handlers';
+import { handleUpdate, handleFuse, handleRefineRules, HandlerResult, DispatchInstruction } from '@/lib/action-handlers';
 import { toast } from '@/hooks/use-toast';
 import { buildDocumentObjectContext, resolveDocumentRecord } from '@/lib/document-store';
 import { addQuery, updateLastResponse } from '@/lib/conversation-memory';
+import { retrieveRelevantMemories, formatMemoriesForPrompt, determineWorkspaceState } from '@/lib/memory-retriever';
+import { supabase } from '@/integrations/supabase/client';
 
 // Store document IDs ref for context injection
 let _documentIdsRef: string[] = [];
 
 let objectCounter = 0;
+
+interface ApplyOutcome {
+  response: string | null;
+  summary: string;
+  affectedObjectIds: string[];
+  createdObjectIds: string[];
+  focusedObjectId: string | null;
+}
+
+interface ExecutionOutcome {
+  response: string | null;
+  affectedObjectIds: string[];
+  createdObjectIds: string[];
+  focusedObjectId: string | null;
+  summaryParts: string[];
+}
+
+function createIntentId() {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+  return `intent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function mergeUnique(base: string[], incoming: string[]): string[] {
+  return [...new Set([...base, ...incoming])];
+}
 
 export function useWorkspaceActions() {
   const { state, dispatch } = useWorkspace();
@@ -25,58 +53,129 @@ export function useWorkspaceActions() {
     async (query: string) => {
       dispatch({ type: 'SET_SHERPA_PROCESSING', payload: true });
 
-      const origin: IntentOrigin = { type: 'user-query', query };
+      const origin: IntentOrigin = {
+        type: 'user-query',
+        intentId: createIntentId(),
+        query,
+        timestamp: Date.now(),
+      };
       dispatch({ type: 'ADD_RECENT_INTENT', payload: origin });
 
       // Record query in conversation memory
       addQuery(query);
 
+      // Retrieve relevant Sherpa memories for prompt injection (non-blocking)
+      let memoryBlock = '';
       try {
-        const result = await parseIntentAI(query, state.objects, _documentIdsRef);
-        // Record the AI's response for conversation continuity
-        const responseAction = result.actions.find(a => a.type === 'respond');
-        if (responseAction && 'message' in responseAction) {
-          updateLastResponse(responseAction.message as string);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const objectTypes = Object.values(state.objects)
+            .filter(o => o.status !== 'dissolved')
+            .map(o => o.type);
+          const memories = await retrieveRelevantMemories(user.id, {
+            query,
+            objectTypes,
+            workspaceState: determineWorkspaceState(state),
+          });
+          memoryBlock = formatMemoriesForPrompt(memories);
         }
-        await applyResult(result, origin);
+      } catch (e) {
+        console.warn('[processIntent] Memory retrieval failed, continuing without:', e);
+      }
+
+      try {
+        const result = await parseIntentAI(query, state.objects, _documentIdsRef, state.activeContext, memoryBlock);
+        const outcome = await applyResult(result, origin);
+
+        if (outcome.response) {
+          updateLastResponse(outcome.response);
+        }
+
+        dispatch({
+          type: 'UPDATE_RECENT_INTENT_OUTCOME',
+          payload: {
+            intentId: origin.intentId!,
+            patch: {
+              response: outcome.response || undefined,
+              outcomeSummary: outcome.summary || undefined,
+              resultingFocusObjectId: outcome.focusedObjectId,
+              affectedObjectIds: outcome.affectedObjectIds,
+              createdObjectIds: outcome.createdObjectIds,
+            },
+          },
+        });
       } catch (aiError) {
         console.error('[processIntent] AI intent parsing failed:', aiError);
         const errorMsg = 'Sherpa is having trouble reaching the AI service right now. Please check your connection and try again in a moment.';
         updateLastResponse(errorMsg);
         dispatch({ type: 'SET_SHERPA_RESPONSE', payload: errorMsg });
+        dispatch({
+          type: 'UPDATE_RECENT_INTENT_OUTCOME',
+          payload: {
+            intentId: origin.intentId!,
+            patch: {
+              response: errorMsg,
+              outcomeSummary: 'Intent execution failed before any workspace action was applied.',
+              resultingFocusObjectId: state.activeContext.focusedObjectId,
+              affectedObjectIds: [],
+              createdObjectIds: [],
+            },
+          },
+        });
       }
 
       dispatch({ type: 'SET_SHERPA_PROCESSING', payload: false });
     },
-    [state.objects, state.layoutMode, dispatch]
+    [state.objects, state.activeContext, dispatch, applyResult]
   );
 
   // ─── Pipeline: parse → resolve → materialize → observe ─────────────────
 
-  async function applyResult(result: { actions: any[] }, origin: IntentOrigin) {
+  async function applyResult(result: { actions: WorkspaceAction[] }, origin: IntentOrigin): Promise<ApplyOutcome> {
+    const outcome: ApplyOutcome = {
+      response: null,
+      summary: '',
+      affectedObjectIds: [],
+      createdObjectIds: [],
+      focusedObjectId: state.activeContext.focusedObjectId,
+    };
+    const summaryParts: string[] = [];
+
     for (const action of result.actions) {
       switch (action.type) {
         case 'respond':
           dispatch({ type: 'SET_SHERPA_RESPONSE', payload: action.message });
+          outcome.response = action.message;
           break;
 
-        case 'create':
-          await handleCreate(action, origin);
+        case 'create': {
+          const created = await handleCreate(action, origin);
+          outcome.createdObjectIds.push(created.id);
+          outcome.affectedObjectIds.push(created.id);
+          outcome.focusedObjectId = created.id;
+          summaryParts.push(`Created ${created.type} "${created.title}".`);
           break;
+        }
 
         case 'focus':
           dispatch({ type: 'FOCUS_OBJECT', payload: { id: action.objectId } });
           dispatch({ type: 'TOUCH_OBJECT', payload: { id: action.objectId } });
+          outcome.affectedObjectIds = mergeUnique(outcome.affectedObjectIds, [action.objectId]);
+          outcome.focusedObjectId = action.objectId;
+          summaryParts.push(`Focused ${state.objects[action.objectId]?.title || action.objectId}.`);
           break;
 
         case 'dissolve':
           dispatch({ type: 'DISSOLVE_OBJECT', payload: { id: action.objectId } });
+          outcome.affectedObjectIds = mergeUnique(outcome.affectedObjectIds, [action.objectId]);
+          summaryParts.push(`Dissolved ${state.objects[action.objectId]?.title || action.objectId}.`);
           break;
 
         case 'update': {
           const target = state.objects[action.objectId];
           if (!target) {
             dispatch({ type: 'SET_SHERPA_RESPONSE', payload: 'Could not find the specified object to update.' });
+            outcome.response = 'Could not find the specified object to update.';
             break;
           }
           try {
@@ -85,10 +184,16 @@ export function useWorkspaceActions() {
               instruction: action.instruction,
               documentIds: _documentIdsRef,
             });
-            executeResult(handlerResult);
+            const execution = executeResult(handlerResult);
+            outcome.response = execution.response || outcome.response;
+            outcome.affectedObjectIds = mergeUnique(outcome.affectedObjectIds, execution.affectedObjectIds);
+            outcome.createdObjectIds = mergeUnique(outcome.createdObjectIds, execution.createdObjectIds);
+            outcome.focusedObjectId = execution.focusedObjectId ?? outcome.focusedObjectId;
+            summaryParts.push(...execution.summaryParts);
           } catch (e) {
             console.error('[applyResult] Update handler failed:', e);
             dispatch({ type: 'SET_SHERPA_RESPONSE', payload: `Could not update "${target.title}". Try a different instruction.` });
+            outcome.response = `Could not update "${target.title}". Try a different instruction.`;
           }
           break;
         }
@@ -106,9 +211,14 @@ export function useWorkspaceActions() {
               objB,
               layoutMode: state.layoutMode,
             });
-            executeResult(handlerResult);
+            const execution = executeResult(handlerResult);
+            outcome.response = execution.response || outcome.response;
+            outcome.affectedObjectIds = mergeUnique(outcome.affectedObjectIds, execution.affectedObjectIds);
+            outcome.createdObjectIds = mergeUnique(outcome.createdObjectIds, execution.createdObjectIds);
+            outcome.focusedObjectId = execution.focusedObjectId ?? outcome.focusedObjectId;
+            summaryParts.push(...execution.summaryParts);
             // Open fused object after materialization animation
-            const materialize = handlerResult.dispatches.find(d => d.type === 'MATERIALIZE_OBJECT');
+            const materialize = handlerResult.dispatches.find((dispatchInstruction: DispatchInstruction) => dispatchInstruction.type === 'MATERIALIZE_OBJECT');
             if (materialize?.payload?.id) {
               setTimeout(() => dispatch({ type: 'OPEN_OBJECT', payload: { id: materialize.payload.id } }), 400);
             }
@@ -125,37 +235,73 @@ export function useWorkspaceActions() {
               feedback: action.feedback,
               objects: state.objects,
             });
-            executeResult(handlerResult);
+            const execution = executeResult(handlerResult);
+            outcome.response = execution.response || outcome.response;
+            outcome.affectedObjectIds = mergeUnique(outcome.affectedObjectIds, execution.affectedObjectIds);
+            outcome.createdObjectIds = mergeUnique(outcome.createdObjectIds, execution.createdObjectIds);
+            outcome.focusedObjectId = execution.focusedObjectId ?? outcome.focusedObjectId;
+            summaryParts.push(...execution.summaryParts);
           } catch (e) {
             console.error('[applyResult] Refine rules handler failed:', e);
             dispatch({ type: 'SET_SHERPA_RESPONSE', payload: 'Could not update rules. Try being more specific about what to change.' });
+            outcome.response = 'Could not update rules. Try being more specific about what to change.';
           }
           break;
         }
       }
     }
 
-    // Observe — update suggestions after all actions
-    setTimeout(() => {
-      const suggestions = generateSuggestions(state.objects);
-      dispatch({ type: 'SET_SHERPA_SUGGESTIONS', payload: suggestions });
-    }, 100);
+    outcome.summary = summaryParts.join(' ');
+    return outcome;
   }
 
   /** Execute dispatch instructions + toasts from a handler result */
-  function executeResult(handlerResult: { dispatches: any[]; toasts?: { title: string; description?: string }[] }) {
+  function executeResult(handlerResult: HandlerResult): ExecutionOutcome {
+    const execution: ExecutionOutcome = {
+      response: null,
+      affectedObjectIds: [],
+      createdObjectIds: [],
+      focusedObjectId: null,
+      summaryParts: [],
+    };
+
     for (const d of handlerResult.dispatches) {
       dispatch(d);
+
+      switch (d.type) {
+        case 'SET_SHERPA_RESPONSE':
+          execution.response = d.payload;
+          break;
+        case 'FOCUS_OBJECT':
+          execution.focusedObjectId = d.payload.id;
+          execution.affectedObjectIds = mergeUnique(execution.affectedObjectIds, [d.payload.id]);
+          break;
+        case 'UPDATE_OBJECT_CONTEXT':
+          execution.affectedObjectIds = mergeUnique(execution.affectedObjectIds, [d.payload.id]);
+          execution.summaryParts.push(`Updated ${state.objects[d.payload.id]?.title || d.payload.id}.`);
+          break;
+        case 'UPDATE_OBJECT':
+          execution.affectedObjectIds = mergeUnique(execution.affectedObjectIds, [d.payload.id]);
+          execution.summaryParts.push(`Updated ${d.payload.title || state.objects[d.payload.id]?.title || d.payload.id}.`);
+          break;
+        case 'MATERIALIZE_OBJECT':
+          execution.createdObjectIds = mergeUnique(execution.createdObjectIds, [d.payload.id]);
+          execution.affectedObjectIds = mergeUnique(execution.affectedObjectIds, [d.payload.id]);
+          execution.focusedObjectId = d.payload.id;
+          execution.summaryParts.push(`Created ${d.payload.type} "${d.payload.title}".`);
+          break;
+      }
     }
     if (handlerResult.toasts) {
       for (const t of handlerResult.toasts) {
         toast(t);
       }
     }
+    return execution;
   }
 
   /** Resolve data and materialize a new workspace object */
-  async function handleCreate(action: any, origin: IntentOrigin) {
+  async function handleCreate(action: Extract<WorkspaceAction, { type: 'create' }>, origin: IntentOrigin) {
     objectCounter++;
     const id = `wo-${Date.now()}-${objectCounter}`;
     const relationships = action.relatedTo ?? [];
@@ -185,6 +331,7 @@ export function useWorkspaceActions() {
     };
     dispatch({ type: 'MATERIALIZE_OBJECT', payload: obj });
     setTimeout(() => dispatch({ type: 'OPEN_OBJECT', payload: { id } }), 400);
+    return { id, title: obj.title, type: obj.type };
   }
 
   const collapseObject = useCallback(

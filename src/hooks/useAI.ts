@@ -157,7 +157,8 @@ export function useAI() {
 export async function callAI(
   messages: Message[],
   mode: string = 'intent',
-  documentIds?: string[]
+  documentIds?: string[],
+  memories?: string
 ): Promise<string | null> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30000);
@@ -167,6 +168,9 @@ export async function callAI(
     const body: Record<string, unknown> = { messages, mode };
     if (documentIds && documentIds.length > 0) {
       body.documentIds = documentIds;
+    }
+    if (memories) {
+      body.memories = memories;
     }
     if (admin.isUnlocked) {
       body.adminModel = admin.model;
