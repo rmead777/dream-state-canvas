@@ -1,10 +1,11 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { WorkspaceObject } from '@/lib/workspace-types';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useDocuments } from '@/contexts/DocumentContext';
 import { useAI } from '@/hooks/useAI';
 import MarkdownRenderer from '@/components/objects/MarkdownRenderer';
 import { buildDocumentObjectContext, resolveDocumentRecord } from '@/lib/document-store';
+import { supabase } from '@/integrations/supabase/client';
 
 interface DocumentReaderProps {
   object: WorkspaceObject;
@@ -144,12 +145,28 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
   const [askInput, setAskInput] = useState('');
   const [aiResponse, setAiResponse] = useState<string | null>(null);
   const [highlights, setHighlights] = useState<number[]>([]);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
   const normalizedContent = normalizeLegacyDocumentContent(d.summary || '', d.paragraphs || []);
   const paragraphs: string[] = normalizedContent.paragraphs;
   const summary: string = normalizedContent.summary;
   const fileName: string = d.fileName || object.title || 'Untitled Document';
   const fileType: string = d.fileType || '';
+
+  const isPdf = fileType === 'pdf' || fileName.toLowerCase().endsWith('.pdf');
+
+  // Load PDF URL from storage
+  useEffect(() => {
+    if (!isPdf || !isImmersive) return;
+
+    const storagePath = d.storagePath;
+    if (!storagePath) return;
+
+    const { data } = supabase.storage.from('documents').getPublicUrl(storagePath);
+    if (data?.publicUrl) {
+      setPdfUrl(data.publicUrl);
+    }
+  }, [isPdf, isImmersive, d.storagePath]);
 
   useEffect(() => {
     let cancelled = false;
@@ -251,64 +268,85 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-8 py-10">
-      {summary && (
-        <div className="mb-8 rounded-xl bg-workspace-accent-subtle/15 border border-workspace-accent/10 px-6 py-5">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-workspace-accent text-sm">✦</span>
-            <span className="text-[10px] font-medium uppercase tracking-widest text-workspace-accent">
-              AI Summary
-            </span>
+    <div className="flex h-full">
+      {/* PDF Viewer — main area */}
+      {isPdf && pdfUrl ? (
+        <div className="flex-1 min-w-0 bg-neutral-100">
+          <iframe
+            src={pdfUrl}
+            className="w-full h-full border-0"
+            title={fileName}
+          />
+        </div>
+      ) : (
+        <div className="flex-1 min-w-0 overflow-y-auto px-8 py-10">
+          <div className="mx-auto max-w-3xl">
+            <div className="space-y-6">
+              {paragraphs.map((para, idx) => (
+                <p
+                  key={idx}
+                  onClick={() => toggleHighlight(idx)}
+                  className={`text-[15px] leading-[1.8] cursor-pointer transition-colors duration-200 rounded-md -mx-2 px-2 py-1 ${
+                    highlights.includes(idx)
+                      ? 'bg-workspace-accent/8 text-workspace-text'
+                      : 'text-workspace-text-secondary hover:text-workspace-text'
+                  }`}
+                >
+                  {para}
+                </p>
+              ))}
+            </div>
           </div>
-          <p className="text-sm leading-relaxed text-workspace-text">{summary}</p>
         </div>
       )}
 
-      <div className="space-y-6">
-        {paragraphs.map((para, idx) => (
-          <p
-            key={idx}
-            onClick={() => toggleHighlight(idx)}
-            className={`text-[15px] leading-[1.8] cursor-pointer transition-colors duration-200 rounded-md -mx-2 px-2 py-1 ${
-              highlights.includes(idx)
-                ? 'bg-workspace-accent/8 text-workspace-text'
-                : 'text-workspace-text-secondary hover:text-workspace-text'
-            }`}
-          >
-            {para}
-          </p>
-        ))}
-      </div>
+      {/* Right sidebar — AI Summary + Ask */}
+      <div className="w-[380px] shrink-0 border-l border-workspace-border/30 overflow-y-auto bg-white">
+        <div className="px-6 py-6 space-y-6">
+          {summary && (
+            <div className="rounded-xl bg-workspace-accent-subtle/15 border border-workspace-accent/10 px-5 py-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-workspace-accent text-sm">✦</span>
+                <span className="text-[10px] font-medium uppercase tracking-widest text-workspace-accent">
+                  AI Summary
+                </span>
+              </div>
+              <p className="text-sm leading-relaxed text-workspace-text">{summary}</p>
+            </div>
+          )}
 
-      <div className="mt-12 border-t border-workspace-border/30 pt-8">
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-workspace-accent text-sm">✦</span>
-          <span className="text-xs font-medium text-workspace-text">Ask about this document</span>
-        </div>
+          {/* Ask panel */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-workspace-accent text-sm">✦</span>
+              <span className="text-xs font-medium text-workspace-text">Ask about this document</span>
+            </div>
 
-        <div className="flex items-center gap-2 rounded-xl border border-workspace-border bg-white px-4 py-3 transition-all focus-within:border-workspace-accent/30 focus-within:shadow-sm">
-          <input
-            type="text"
-            value={askInput}
-            onChange={(e) => setAskInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAsk()}
-            placeholder="What are the key risks mentioned?"
-            className="flex-1 bg-transparent text-sm text-workspace-text placeholder:text-workspace-text-secondary/40 outline-none"
-          />
-          <button
-            onClick={handleAsk}
-            disabled={isStreaming}
-            className="rounded-lg bg-workspace-accent/10 px-3 py-1.5 text-xs text-workspace-accent transition-colors hover:bg-workspace-accent/20 disabled:opacity-50"
-          >
-            {isStreaming ? '...' : 'Ask'}
-          </button>
-        </div>
+            <div className="flex items-center gap-2 rounded-xl border border-workspace-border bg-white px-4 py-3 transition-all focus-within:border-workspace-accent/30 focus-within:shadow-sm">
+              <input
+                type="text"
+                value={askInput}
+                onChange={(e) => setAskInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAsk()}
+                placeholder="What are the key risks mentioned?"
+                className="flex-1 bg-transparent text-sm text-workspace-text placeholder:text-workspace-text-secondary/40 outline-none"
+              />
+              <button
+                onClick={handleAsk}
+                disabled={isStreaming}
+                className="rounded-lg bg-workspace-accent/10 px-3 py-1.5 text-xs text-workspace-accent transition-colors hover:bg-workspace-accent/20 disabled:opacity-50"
+              >
+                {isStreaming ? '...' : 'Ask'}
+              </button>
+            </div>
 
-        {aiResponse && (
-          <div className="mt-4 animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards] rounded-xl bg-workspace-surface/60 px-5 py-4">
-            <MarkdownRenderer content={aiResponse} isStreaming={isStreaming} />
+            {aiResponse && (
+              <div className="mt-4 animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards] rounded-xl bg-workspace-surface/60 px-5 py-4">
+                <MarkdownRenderer content={aiResponse} isStreaming={isStreaming} />
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
