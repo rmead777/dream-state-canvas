@@ -57,7 +57,7 @@ export async function createMemory(params: {
   source?: MemorySource;
   tags?: string[];
 }): Promise<SherpaMemory | null> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await db.auth.getUser();
   if (!user) return null;
 
   const confidence = params.confidence ?? 0.5;
