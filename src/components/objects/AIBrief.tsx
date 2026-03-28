@@ -6,6 +6,30 @@ import { SYNTHESIS_LABELS, SynthesisType } from '@/lib/fusion-rules';
 import { ChevronDown, ChevronRight, Undo2, Eye } from 'lucide-react';
 import MarkdownRenderer from './MarkdownRenderer';
 
+function formatPreviewMetric(value: unknown, unit = ''): string {
+  const numeric = typeof value === 'number'
+    ? value
+    : typeof value === 'string'
+      ? Number(value.replace(/[^\d.-]/g, ''))
+      : NaN;
+
+  if (!Number.isFinite(numeric)) return `${value ?? ''}${unit}`.trim();
+
+  if (unit === '$') {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      notation: 'compact',
+      maximumFractionDigits: 2,
+    }).format(numeric);
+  }
+
+  return new Intl.NumberFormat('en-US', {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(numeric) + unit;
+}
+
 function CollapsibleSection({ collapsed, children }: { collapsed: boolean; children: React.ReactNode }) {
   return (
     <div
@@ -29,15 +53,20 @@ function SourceDrillback({ object }: { object: WorkspaceObject }) {
 
       {/* Metric preview */}
       {ctx?.currentValue !== undefined && (
-        <div className="flex items-center gap-3">
-          <span className="text-lg font-light text-workspace-text">
-            {ctx.currentValue}{ctx.unit || ''}
-          </span>
-          {ctx.change !== undefined && (
-            <span className={`text-xs ${ctx.change > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-              {ctx.change > 0 ? '+' : ''}{ctx.change}{ctx.unit || ''}
+        <div className="rounded-2xl border border-workspace-border/25 bg-white/75 px-3 py-3">
+          <div className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.2em] text-workspace-accent/70">
+            Metric snapshot
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-lg font-light tracking-[-0.02em] text-workspace-text tabular-nums">
+              {formatPreviewMetric(ctx.currentValue, ctx.unit || '')}
             </span>
-          )}
+            {ctx.change !== undefined && (
+              <span className={`text-xs ${ctx.change > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                {ctx.change > 0 ? '+' : ''}{formatPreviewMetric(Math.abs(ctx.change), ctx.unit || '')}
+              </span>
+            )}
+          </div>
         </div>
       )}
 
