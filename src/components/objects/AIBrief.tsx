@@ -4,6 +4,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { FusionDataVisuals } from './FusionTable';
 import { SYNTHESIS_LABELS, SynthesisType } from '@/lib/fusion-rules';
 import { ChevronDown, ChevronRight, Undo2, Eye } from 'lucide-react';
+import { MarkdownRenderer } from './MarkdownRenderer';
 
 /** Compact preview of a source object's data for drillback */
 function SourceDrillback({ object }: { object: WorkspaceObject }) {
