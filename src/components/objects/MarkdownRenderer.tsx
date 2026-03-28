@@ -53,7 +53,7 @@ function parseHeadingLevel(line: string): { level: number; text: string } | null
 }
 
 interface ParsedBlock {
-  type: "heading" | "paragraph" | "table" | "bullet-list" | "number-list" | "code-block" | "callout" | "empty";
+  type: "heading" | "paragraph" | "table" | "bullet-list" | "number-list" | "code-block" | "callout" | "collapsible" | "empty";
   content: string;
   level?: number;
   language?: string;
@@ -61,6 +61,7 @@ interface ParsedBlock {
   rows?: string[][];
   items?: string[];
   badges?: { label: string; value: string }[];
+  summary?: string;
 }
 
 function parseMarkdown(text: string): ParsedBlock[] {
