@@ -48,8 +48,16 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
   const ambientHints = useAmbientSherpa();
   const [size, setSize] = useState<{ width: number | null; height: number | null }>({ width: null, height: null });
   const [dismissedHints, setDismissedHints] = useState<Set<string>>(new Set());
+  const cardRef = useRef<HTMLDivElement>(null);
 
   const isFocused = state.activeContext.focusedObjectId === object.id;
+
+  // Scroll into view when focused
+  useEffect(() => {
+    if (isFocused && cardRef.current) {
+      cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [isFocused]);
   const isDimmed = shouldDim(object.id);
   const isHighlighted = shouldHighlight(object.id);
   const isMaterializing = object.status === 'materializing';
