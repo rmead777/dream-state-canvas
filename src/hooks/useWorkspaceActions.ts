@@ -107,6 +107,11 @@ export function useWorkspaceActions() {
               const { columns, rows } = getActiveDataset();
               const profile = await import('@/lib/data-analyzer').then(m => m.getCurrentProfile(columns, rows));
 
+              if (!profile) {
+                dispatch({ type: 'SET_SHERPA_RESPONSE', payload: `Cannot update "${target.title}" — data profile not ready yet. Try again in a moment.` });
+                return;
+              }
+
               // Let AI parse the instruction into structured filter params — no regex
               const parseResult = await callAI(
                 [{ role: 'user', content: `You are a data filter parser. Given a user instruction about modifying a data view, extract structured filter parameters.
@@ -168,7 +173,7 @@ Return ONLY valid JSON (no markdown, no explanation):
                   const lower = textSearch.toLowerCase();
                   filtered = filtered.filter(r => r.some(cell => String(cell).toLowerCase().includes(lower)));
                 }
-                const sorted = previewRows(columns, filtered, profile!, filtered.length);
+                const sorted = previewRows(columns, filtered, profile, filtered.length);
                 return limit ? sorted.rows.slice(0, limit) : sorted.rows;
               }
 
@@ -190,12 +195,12 @@ Return ONLY valid JSON (no markdown, no explanation):
                       filteredRows = filteredRows.filter(r => String(r[colIdx]).includes(tierFilter!));
                     }
                   }
-                  const alerts = alertRows(columns, filteredRows, profile!);
+                  const alerts = alertRows(columns, filteredRows, profile);
                   newContext = { alerts: limit ? alerts.slice(0, limit) : alerts };
                   break;
                 }
                 case 'comparison': {
-                  const comp = comparisonPairs(columns, rows, profile!);
+                  const comp = comparisonPairs(columns, rows, profile);
                   newContext = comp;
                   break;
                 }
@@ -216,7 +221,7 @@ Return ONLY valid JSON (no markdown, no explanation):
                   break;
                 }
                 case 'metric': {
-                  const agg = metricAggregate(columns, rows, profile!);
+                  const agg = metricAggregate(columns, rows, profile);
                   newContext = { ...target.context, ...agg };
                   break;
                 }

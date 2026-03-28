@@ -65,6 +65,8 @@ function buildWorkspaceContext(objects: Record<string, WorkspaceObject>): string
 }
 
 // Seed data lookup for creating objects (used as fallback / for narrative types)
+// Note: dataset uses a getter so it always reflects the current active dataset,
+// not the one captured at module load time (HI-011 fix).
 const SEED_DATA_BY_TYPE: Record<string, { data: Record<string, any>; defaultTitle: string }> = {
   metric: { data: SEED_LEVERAGE_DATA, defaultTitle: 'AP Exposure' },
   comparison: { data: SEED_COMPARISON_DATA, defaultTitle: 'Vendor Comparison' },
@@ -73,7 +75,7 @@ const SEED_DATA_BY_TYPE: Record<string, { data: Record<string, any>; defaultTitl
   brief: { data: SEED_BRIEF_DATA, defaultTitle: 'AP Risk Assessment' },
   timeline: { data: SEED_TIMELINE_DATA, defaultTitle: 'Vendor Activity' },
   document: { data: SEED_DOCUMENT_DATA, defaultTitle: 'AP Vendor Tracker v14' },
-  dataset: { data: getActiveDataset(), defaultTitle: 'Full Portfolio Dataset' },
+  get dataset() { return { data: getActiveDataset(), defaultTitle: 'Full Portfolio Dataset' }; },
 };
 
 /**

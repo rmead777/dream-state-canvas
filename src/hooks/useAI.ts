@@ -151,6 +151,9 @@ export async function callAI(
   mode: string = 'intent',
   documentIds?: string[]
 ): Promise<string | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+
   try {
     const admin = getAdminSettings();
     const body: Record<string, unknown> = { messages, mode };
@@ -169,6 +172,7 @@ export async function callAI(
         Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
       },
       body: JSON.stringify(body),
+      signal: controller.signal,
     });
 
     if (!resp.ok) return null;
@@ -201,7 +205,14 @@ export async function callAI(
     }
 
     return result;
-  } catch {
+  } catch (e: any) {
+    if (e.name === 'AbortError') {
+      console.error('[callAI] Request timed out after 30 seconds');
+    } else {
+      console.error('[callAI] Error:', e.message || e);
+    }
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
