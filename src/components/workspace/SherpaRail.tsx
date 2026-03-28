@@ -5,6 +5,7 @@ import { useSherpa } from '@/contexts/SherpaContext';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
 import { useAmbientAudio } from '@/hooks/useAmbientAudio';
 import { useCognitiveMode } from '@/hooks/useCognitiveMode';
+import { useAuth } from '@/hooks/useAuth';
 import { MODE_LABELS } from '@/lib/cognitive-modes';
 import { VoiceIndicator } from './VoiceIndicator';
 import { RulesEditor } from './RulesEditor';
@@ -23,6 +24,7 @@ export function SherpaRail() {
   const { suggestions, observations, lastResponse, isProcessing } = useSherpa();
   const cognitiveMode = useCognitiveMode();
   const { play } = useAmbientAudio();
+  const { user, signOut } = useAuth();
   const [input, setInput] = useState('');
   const [isExpanded, setIsExpanded] = useState(true);
   const [showCanvasMenu, setShowCanvasMenu] = useState(false);
@@ -370,9 +372,20 @@ export function SherpaRail() {
           )}
         </div>
 
-        {/* Canvas controls + keyboard hint */}
+        {/* Canvas controls + user */}
         <div className="flex items-center justify-between text-[9px] text-workspace-text-secondary/30">
-          <span>⌘K for command palette</span>
+          <div className="flex items-center gap-2">
+            <span>⌘K</span>
+            {user && (
+              <button
+                onClick={signOut}
+                className="rounded px-1.5 py-0.5 text-workspace-text-secondary/40 transition-colors hover:text-destructive hover:bg-destructive/5"
+                title={`Sign out (${user.email})`}
+              >
+                Sign out
+              </button>
+            )}
+          </div>
           {activeObjectCount > 0 && (
             <div className="relative">
               <button
