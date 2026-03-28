@@ -14,10 +14,10 @@ import {
   CANONICAL_DATASET,
 } from './seed-data';
 import { callAI } from '@/hooks/useAI';
-import { analyzeDataset, DataProfile } from './data-analyzer';
+import { analyzeDataset, refineProfile, getCurrentProfile, DataProfile } from './data-analyzer';
 import { previewRows, alertRows, metricAggregate, comparisonPairs } from './data-slicer';
 
-// Cached profile promise (runs once)
+// Cached profile promise (runs once, invalidated on refinement)
 let profilePromise: Promise<DataProfile> | null = null;
 
 function getProfile(): Promise<DataProfile> {
@@ -25,6 +25,28 @@ function getProfile(): Promise<DataProfile> {
     profilePromise = analyzeDataset(CANONICAL_DATASET.columns, CANONICAL_DATASET.rows);
   }
   return profilePromise;
+}
+
+/** Invalidate cached profile so next getProfile() re-fetches from cache/AI. */
+export function invalidateProfileCache(): void {
+  profilePromise = null;
+}
+
+/**
+ * Refine data prioritization rules based on user feedback.
+ * Returns the updated profile and invalidates the cached promise.
+ */
+export async function refineDataRules(userFeedback: string): Promise<DataProfile> {
+  const current = await getProfile();
+  const updated = await refineProfile(
+    CANONICAL_DATASET.columns,
+    CANONICAL_DATASET.rows,
+    current,
+    userFeedback
+  );
+  // Replace the cached promise with the updated profile
+  profilePromise = Promise.resolve(updated);
+  return updated;
 }
 
 // Context builder — feeds workspace state to the LLM
@@ -146,6 +168,8 @@ export async function parseIntentAI(
           actions.push({ type: 'dissolve', objectId: action.objectId });
         } else if (action.type === 'fuse' && action.objectIdA && action.objectIdB) {
           actions.push({ type: 'fuse', objectIdA: action.objectIdA, objectIdB: action.objectIdB });
+        } else if (action.type === 'refine-rules' && action.feedback) {
+          actions.push({ type: 'refine-rules', feedback: action.feedback });
         }
       }
     }
@@ -291,6 +315,13 @@ const patterns: IntentPattern[] = [
     generate: () => [
       { type: 'respond', message: `Full vendor dataset ready — ${CANONICAL_DATASET.rows.length} vendors with balances, tier, and contact info.` },
       { type: 'create', objectType: 'dataset', title: 'Vendor Dataset', data: CANONICAL_DATASET },
+    ],
+  },
+  {
+    keywords: ['prioritize', 'sort by', 'group by', 'change priority', 'change sorting', 'reorder by', 'rank by', 'filter by', 'show first', 'show last', 'ascending', 'descending'],
+    generate: (input) => [
+      { type: 'respond', message: 'Updating data prioritization rules based on your feedback...' },
+      { type: 'refine-rules' as any, feedback: input },
     ],
   },
 ];

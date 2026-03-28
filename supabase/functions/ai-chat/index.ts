@@ -27,7 +27,8 @@ You MUST respond with valid JSON matching this schema:
     { "type": "create", "objectType": "metric|comparison|alert|inspector|brief|timeline|document|dataset", "title": "...", "relatedTo": [] },
     { "type": "focus", "objectId": "..." },
     { "type": "dissolve", "objectId": "..." },
-    { "type": "fuse", "objectIdA": "id-of-first-object", "objectIdB": "id-of-second-object" }
+    { "type": "fuse", "objectIdA": "id-of-first-object", "objectIdB": "id-of-second-object" },
+    { "type": "refine-rules", "feedback": "user's prioritization change request" }
   ]
 }
 Rules:
@@ -38,6 +39,7 @@ Rules:
 - Use "dissolve" to remove objects the user no longer needs.
 - Use "fuse" when the user wants to combine, merge, synthesize, or fuse two objects. Match object names to their IDs from the workspace state. If the user doesn't specify which objects, pick the two most relevant active objects.
 - IMPORTANT: When the user says "fuse", "combine", "merge", or "synthesize" — ALWAYS use the "fuse" action type, NEVER create a brief instead.
+- Use "refine-rules" when the user wants to change how data is prioritized, sorted, filtered, or grouped. Extract their instruction as "feedback". Examples: "sort by name", "prioritize low balances", "group by status instead of tier", "show oldest first", "change the priority column".
 - Be concise, insightful, and proactive. You are a financial intelligence assistant.
 - If the user asks something vague, respond helpfully and suggest workspace actions.`,
 
@@ -89,6 +91,12 @@ Return ONLY a JSON object with these fields:
 
 For urgencySignal.hotValues, order them from most urgent to least urgent.
 Return ONLY the JSON, no markdown fences.`,
+
+      'refine-profile': `You are a data analyst. The user has an existing DataProfile for a dataset and wants to change how data is prioritized.
+You will receive the current profile, the user's instruction, and sample data.
+Your job: update the profile based on the user's feedback while keeping the same JSON schema.
+Only change what the user asked for. Keep all other fields as they were.
+Return ONLY the updated JSON object, no markdown fences.`,
     };
 
     const systemPrompt = systemPrompts[mode] || systemPrompts.intent;

@@ -175,6 +175,53 @@ export async function analyzeDataset(
 }
 
 /**
+ * Refine an existing profile based on user feedback.
+ * Sends the current profile + user instruction to AI, returns updated profile.
+ */
+export async function refineProfile(
+  columns: string[],
+  rows: string[][],
+  currentProfile: DataProfile,
+  userFeedback: string
+): Promise<DataProfile> {
+  const fingerprint = computeFingerprint(columns, rows);
+
+  try {
+    const sampleRows = rows.slice(0, 15);
+    const tablePreview = [columns.join(' | '), ...sampleRows.map(r => r.join(' | '))].join('\n');
+
+    const result = await callAI(
+      [{
+        role: 'user',
+        content: `Here is a dataset with ${rows.length} rows and ${columns.length} columns.\n\nColumns and sample rows:\n${tablePreview}\n\nThe CURRENT prioritization profile is:\n${JSON.stringify(currentProfile, null, 2)}\n\nThe user wants to change how data is prioritized. Their instruction:\n"${userFeedback}"\n\nUpdate the profile based on their feedback. Return the FULL updated JSON profile with the same schema — all fields must be present. Change only what the user requested. Return ONLY the JSON object, no markdown.`,
+      }],
+      'refine-profile'
+    );
+
+    if (result) {
+      const jsonMatch = result.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const updated = JSON.parse(jsonMatch[0]) as DataProfile;
+        setCachedProfile(fingerprint, updated);
+        return updated;
+      }
+    }
+  } catch {
+    // Return current profile unchanged on error
+  }
+
+  return currentProfile;
+}
+
+/**
+ * Get the current cached profile for a dataset (if available).
+ */
+export function getCurrentProfile(columns: string[], rows: string[][]): DataProfile | null {
+  const fingerprint = computeFingerprint(columns, rows);
+  return getCachedProfile(fingerprint);
+}
+
+/**
  * Clear all cached profiles (e.g. when user uploads new data).
  */
 export function clearProfileCache(): void {
