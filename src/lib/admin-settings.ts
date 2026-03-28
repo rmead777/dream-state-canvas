@@ -15,7 +15,7 @@ const STORAGE_KEY = 'admin-settings';
 const AVAILABLE_MODELS = [
   { id: 'google/gemini-3-flash-preview', label: 'Gemini 3 Flash', description: 'Fast & balanced (default)' },
   { id: 'google/gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro', description: 'Maximum reasoning depth' },
-  { id: 'google/gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite', description: 'Fastest, lowest cost' },
+  { id: 'google/gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite', description: 'Fastest, lowest cost' },
 ] as const;
 
 export { AVAILABLE_MODELS };
