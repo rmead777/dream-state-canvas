@@ -100,9 +100,31 @@ export function SherpaRail() {
   const handleSubmit = useCallback(() => {
     const trimmed = input.trim();
     if (!trimmed) return;
+
+    // Check for admin passphrase
+    if (checkPassphrase(trimmed)) {
+      if (!adminUnlocked) {
+        unlockAdmin();
+        setAdminUnlocked(true);
+        setAdminState(getAdminSettings());
+        setShowAdmin(true);
+        dispatch({ type: 'SET_SHERPA_RESPONSE', payload: '🔓 Admin mode activated. You now have access to model and token controls.' });
+        toast.success('Admin mode unlocked');
+      } else {
+        lockAdmin();
+        setAdminUnlocked(false);
+        setAdminState(getAdminSettings());
+        setShowAdmin(false);
+        dispatch({ type: 'SET_SHERPA_RESPONSE', payload: '🔒 Admin mode deactivated. Settings reset to defaults.' });
+        toast.success('Admin mode locked');
+      }
+      setInput('');
+      return;
+    }
+
     trackAndProcess(trimmed);
     setInput('');
-  }, [input, trackAndProcess]);
+  }, [input, trackAndProcess, adminUnlocked, dispatch]);
 
   const handleVoiceResult = useCallback(
     (transcript: string) => {
