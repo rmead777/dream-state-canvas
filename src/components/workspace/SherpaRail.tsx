@@ -175,128 +175,130 @@ export function SherpaRail() {
       <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[linear-gradient(to_bottom,rgba(99,102,241,0.08),transparent)]" />
 
       {/* Header */}
-      <div className="relative z-10 border-b border-workspace-border/40 px-5 pt-5 pb-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 space-y-2">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-workspace-accent/10 text-sm text-workspace-accent shadow-[0_10px_24px_rgba(99,102,241,0.12)]">
-                ✦
-              </div>
-              <div>
+      <div className="relative z-10 border-b border-workspace-border/40 px-5 pt-4 pb-3">
+        {/* Row 1: identity + collapse */}
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-workspace-accent/10 text-sm text-workspace-accent shadow-[0_8px_18px_rgba(99,102,241,0.12)]">
+              ✦
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold uppercase tracking-[0.22em] text-workspace-text">
                   Sherpa
                 </span>
-                <p className="mt-0.5 text-[11px] leading-5 text-workspace-text-secondary/70">
-                  Ambient guide for your current analytical state
-                </p>
+                {cognitiveMode !== 'neutral' && (
+                  <span className="workspace-pill rounded-full px-2 py-0.5 text-[8px] uppercase tracking-[0.18em] text-workspace-accent/70 animate-[materialize_0.4s_cubic-bezier(0.16,1,0.3,1)_forwards]">
+                    {MODE_LABELS[cognitiveMode]}
+                  </span>
+                )}
               </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="workspace-pill rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-workspace-accent/75 tabular-nums">
-                {activeObjectCount} live objects
-              </span>
-              <span className="workspace-pill rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-workspace-text-secondary/70">
-                {contextMode}
-              </span>
-              <span className="workspace-pill rounded-full px-2.5 py-1 text-[10px] text-workspace-text-secondary/72 tabular-nums">
-                {contextScopeLabel}
-              </span>
+              <p className="text-[11px] leading-4 text-workspace-text-secondary/60 truncate">
+                Ambient guide for your analytical state
+              </p>
             </div>
           </div>
-
-          <div className="flex items-center gap-1">
-          {cognitiveMode !== 'neutral' && (
-            <span className="workspace-pill rounded-full px-2 py-1 text-[8px] uppercase tracking-[0.22em] text-workspace-accent/70 animate-[materialize_0.4s_cubic-bezier(0.16,1,0.3,1)_forwards]">
-              {MODE_LABELS[cognitiveMode]}
-            </span>
-          )}
-          {/* Admin toggle (only visible when unlocked) */}
-          {adminUnlocked && (
-            <button
-              onClick={() => setShowAdmin(!showAdmin)}
-              className={`${railControlsBase} ${
-                showAdmin
-                  ? 'border-workspace-accent/15 bg-workspace-accent/10 text-workspace-accent shadow-[0_10px_20px_rgba(99,102,241,0.12)]'
-                  : 'text-workspace-accent/45 hover:border-workspace-border/70 hover:bg-white/90 hover:text-workspace-accent'
-              }`}
-              title={showAdmin ? 'Hide admin' : 'Admin controls'}
-            >
-              ⚡
-            </button>
-          )}
-          {/* Upload toggle */}
-          <button
-            onClick={() => setShowUpload(!showUpload)}
-            className={`${railControlsBase} ${
-              showUpload
-                ? 'border-workspace-accent/15 bg-workspace-accent/10 text-workspace-accent shadow-[0_10px_20px_rgba(99,102,241,0.12)]'
-                : 'text-workspace-text-secondary/45 hover:border-workspace-border/70 hover:bg-white/90 hover:text-workspace-text-secondary'
-            }`}
-            title={showUpload ? 'Hide upload' : 'Upload documents'}
-          >
-            ↑
-          </button>
-          {/* Rules toggle */}
-          <button
-            onClick={() => setShowRules(!showRules)}
-            className={`${railControlsBase} ${
-              showRules
-                ? 'border-workspace-accent/15 bg-workspace-accent/10 text-workspace-accent shadow-[0_10px_20px_rgba(99,102,241,0.12)]'
-                : 'text-workspace-text-secondary/45 hover:border-workspace-border/70 hover:bg-white/90 hover:text-workspace-text-secondary'
-            }`}
-            title={showRules ? 'Hide rules' : 'Data rules'}
-          >
-            ⚙
-          </button>
-          {promptHistory.length > 0 && (
-            <button
-              onClick={() => setShowHistory(!showHistory)}
-              className={`${railControlsBase} ${
-                showHistory
-                  ? 'border-workspace-accent/15 bg-workspace-accent/10 text-workspace-accent shadow-[0_10px_20px_rgba(99,102,241,0.12)]'
-                  : 'text-workspace-text-secondary/45 hover:border-workspace-border/70 hover:bg-white/90 hover:text-workspace-text-secondary'
-              }`}
-              title={showHistory ? 'Hide conversation' : 'Show conversation'}
-            >
-              ≡
-            </button>
-          )}
-          {(lastResponse || observations.length > 0) && (
-            <button
-              onClick={handleClearSherpaFull}
-              className={`${railControlsBase} text-workspace-text-secondary/45 hover:border-workspace-border/70 hover:bg-white/90 hover:text-workspace-text-secondary`}
-              title="Clear conversation"
-            >
-              ⌫
-            </button>
-          )}
           <button
             onClick={() => setIsExpanded(false)}
-            className={`${railControlsBase} text-workspace-text-secondary hover:border-workspace-border/70 hover:bg-white/90 text-xs`}
+            className={`${railControlsBase} shrink-0 text-workspace-text-secondary hover:border-workspace-border/70 hover:bg-white/90 text-xs`}
           >
             ▸
           </button>
         </div>
-      </div>
+
+        {/* Row 2: pills + controls */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+            <span className="workspace-pill rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-workspace-accent/75 tabular-nums">
+              {activeObjectCount} live
+            </span>
+            <span className="workspace-pill rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-workspace-text-secondary/70">
+              {contextMode}
+            </span>
+            <span className="workspace-pill rounded-full px-2 py-0.5 text-[10px] text-workspace-text-secondary/60 truncate max-w-[9rem] tabular-nums">
+              {contextScopeLabel}
+            </span>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-1">
+            {/* Admin toggle (only visible when unlocked) */}
+            {adminUnlocked && (
+              <button
+                onClick={() => setShowAdmin(!showAdmin)}
+                className={`${railControlsBase} ${
+                  showAdmin
+                    ? 'border-workspace-accent/15 bg-workspace-accent/10 text-workspace-accent shadow-[0_10px_20px_rgba(99,102,241,0.12)]'
+                    : 'text-workspace-accent/45 hover:border-workspace-border/70 hover:bg-white/90 hover:text-workspace-accent'
+                }`}
+                title={showAdmin ? 'Hide admin' : 'Admin controls'}
+              >
+                ⚡
+              </button>
+            )}
+            {/* Upload toggle */}
+            <button
+              onClick={() => setShowUpload(!showUpload)}
+              className={`${railControlsBase} ${
+                showUpload
+                  ? 'border-workspace-accent/15 bg-workspace-accent/10 text-workspace-accent shadow-[0_10px_20px_rgba(99,102,241,0.12)]'
+                  : 'text-workspace-text-secondary/45 hover:border-workspace-border/70 hover:bg-white/90 hover:text-workspace-text-secondary'
+              }`}
+              title={showUpload ? 'Hide upload' : 'Upload documents'}
+            >
+              ↑
+            </button>
+            {/* Rules toggle */}
+            <button
+              onClick={() => setShowRules(!showRules)}
+              className={`${railControlsBase} ${
+                showRules
+                  ? 'border-workspace-accent/15 bg-workspace-accent/10 text-workspace-accent shadow-[0_10px_20px_rgba(99,102,241,0.12)]'
+                  : 'text-workspace-text-secondary/45 hover:border-workspace-border/70 hover:bg-white/90 hover:text-workspace-text-secondary'
+              }`}
+              title={showRules ? 'Hide rules' : 'Data rules'}
+            >
+              ⚙
+            </button>
+            {promptHistory.length > 0 && (
+              <button
+                onClick={() => setShowHistory(!showHistory)}
+                className={`${railControlsBase} ${
+                  showHistory
+                    ? 'border-workspace-accent/15 bg-workspace-accent/10 text-workspace-accent shadow-[0_10px_20px_rgba(99,102,241,0.12)]'
+                    : 'text-workspace-text-secondary/45 hover:border-workspace-border/70 hover:bg-white/90 hover:text-workspace-text-secondary'
+                }`}
+                title={showHistory ? 'Hide conversation' : 'Show conversation'}
+              >
+                ≡
+              </button>
+            )}
+            {(lastResponse || observations.length > 0) && (
+              <button
+                onClick={handleClearSherpaFull}
+                className={`${railControlsBase} text-workspace-text-secondary/45 hover:border-workspace-border/70 hover:bg-white/90 hover:text-workspace-text-secondary`}
+                title="Clear conversation"
+              >
+                ⌫
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="relative z-10 flex-1 overflow-y-auto px-5 py-4">
         <div className="workspace-card-surface mb-4 rounded-2xl border border-workspace-border/45 px-4 py-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-workspace-accent/70">Session pulse</div>
-              <p className="mt-1 text-[12px] leading-5 text-workspace-text-secondary/78">
-                {lastResponse
-                  ? 'Sherpa has context from the current workspace and can push the next best move.'
-                  : 'Give Sherpa a target and it will materialize the right analytical objects around it.'}
-              </p>
-            </div>
-            <div className="workspace-pill rounded-full px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-workspace-text-secondary/72">
-              <span className={`mr-2 inline-block h-1.5 w-1.5 rounded-full ${composerStateTone} ${voice.isListening || isProcessing ? 'animate-pulse' : ''}`} />
-              {composerState}
+          <div className="mb-2 flex items-center gap-2">
+            <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-workspace-accent/70">Session pulse</div>
+            <div className="ml-auto flex items-center gap-1.5">
+              <span className={`inline-block h-1.5 w-1.5 rounded-full ${composerStateTone} ${voice.isListening || isProcessing ? 'animate-pulse' : ''}`} />
+              <span className="text-[10px] uppercase tracking-[0.16em] text-workspace-text-secondary/60">{composerState}</span>
             </div>
           </div>
+          <p className="text-[12px] leading-5 text-workspace-text-secondary/78">
+            {lastResponse
+              ? 'Sherpa has context from the current workspace and can push the next best move.'
+              : 'Give Sherpa a target and it will materialize the right analytical objects around it.'}
+          </p>
         </div>
 
         {/* Rules editor panel */}
