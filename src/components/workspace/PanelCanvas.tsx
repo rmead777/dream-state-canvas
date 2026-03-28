@@ -169,11 +169,19 @@ export function PanelCanvas() {
       <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 lg:p-10">
         {!hasObjects ? (
           <div className="flex h-full items-center justify-center">
-            <div className="max-w-md text-center">
-              <div className="mx-auto mb-6 h-px w-16 bg-workspace-border" />
-              <p className="text-sm text-workspace-text-secondary/50 leading-relaxed">
+            <div className="max-w-xl text-center">
+              <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-workspace-accent/12 bg-white/75 text-xl text-workspace-accent shadow-[0_16px_38px_rgba(99,102,241,0.12)] backdrop-blur-sm">✦</div>
+              <div className="mx-auto mb-5 h-px w-16 bg-workspace-border" />
+              <p className="text-sm text-workspace-text-secondary/55 leading-relaxed">
                 Your workspace is clear. Ask the Sherpa to surface what matters, or explore a suggestion.
               </p>
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                {['Compare entities', 'Surface risks', 'Generate a brief'].map((hint) => (
+                  <span key={hint} className="workspace-pill rounded-full px-3 py-1.5 text-[11px] text-workspace-text-secondary">
+                    {hint}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
         ) : (
@@ -188,6 +196,12 @@ export function PanelCanvas() {
               {primaryObjects.length > 0 && (
                 <SortableContext items={primaryObjects.map((o) => o.id)} strategy={verticalListSortingStrategy}>
                   <div className="space-y-5">
+                    <div className="flex items-center justify-between px-1">
+                      <span className="workspace-section-label">Primary focus</span>
+                      <span className="text-[11px] text-workspace-text-secondary/45 tabular-nums">
+                        {primaryObjects.length} live views
+                      </span>
+                    </div>
                     {primaryObjects.map((obj) => (
                       <SortableObject
                         key={obj.id}
@@ -204,6 +218,12 @@ export function PanelCanvas() {
               {secondaryObjects.length > 0 && (
                 <SortableContext items={secondaryObjects.map((o) => o.id)} strategy={verticalListSortingStrategy}>
                   <div className="space-y-5">
+                    <div className="flex items-center justify-between px-1 pt-2">
+                      <span className="workspace-section-label">Supporting views</span>
+                      <span className="text-[11px] text-workspace-text-secondary/45 tabular-nums">
+                        {secondaryObjects.length} contextual panels
+                      </span>
+                    </div>
                     <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                       {secondaryObjects.map((obj) => (
                         <SortableObject

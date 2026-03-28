@@ -39,14 +39,16 @@ export function WorkspaceShell() {
   }, [isImmersive]);
 
   return (
-    <div className={`flex h-screen flex-col bg-workspace-bg transition-colors duration-1500`}>
+    <div className={`relative flex h-screen flex-col overflow-hidden bg-workspace-bg transition-colors duration-1500`}>
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-0 h-28 bg-[linear-gradient(to_bottom,rgba(99,102,241,0.07),transparent)]" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-24 bg-[linear-gradient(to_top,rgba(255,255,255,0.45),transparent)]" />
       {/* Cognitive mode passed to SherpaRail via context */}
 
       {/* Audio mute toggle */}
       <button
         onClick={toggleMute}
         aria-label={muted ? 'Unmute ambient sounds' : 'Mute ambient sounds'}
-        className="fixed top-3 right-3 z-50 flex h-11 w-11 items-center justify-center rounded-full text-workspace-text-secondary/30 hover:bg-white/65 hover:text-workspace-text-secondary/70 transition-colors"
+        className="workspace-pill fixed top-3 right-3 z-50 flex h-11 w-11 items-center justify-center rounded-full text-workspace-text-secondary/35 transition-all duration-200 workspace-spring hover:-translate-y-0.5 hover:text-workspace-text-secondary/75 hover:shadow-[0_14px_30px_rgba(15,23,42,0.08)]"
         title={muted ? 'Unmute sounds' : 'Mute sounds'}
       >
         {muted ? (
@@ -67,7 +69,7 @@ export function WorkspaceShell() {
       <ImmersiveOverlay />
 
       {/* Main workspace */}
-      <div className={`flex flex-1 overflow-hidden transition-opacity duration-500 ${isImmersive ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      <div className={`relative z-10 flex flex-1 overflow-hidden transition-opacity duration-500 ${isImmersive ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <PanelCanvas />
         <SherpaRail />
       </div>
