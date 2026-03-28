@@ -32,9 +32,14 @@ export function useAI() {
       let fullText = '';
 
       try {
+        const admin = getAdminSettings();
         const body: Record<string, unknown> = { messages, mode };
         if ((options as any).documentIds) {
           body.documentIds = (options as any).documentIds;
+        }
+        if (admin.isUnlocked) {
+          body.adminModel = admin.model;
+          body.adminMaxTokens = admin.maxTokens;
         }
 
         const resp = await fetch(CHAT_URL, {
