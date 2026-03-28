@@ -282,7 +282,7 @@ export function useWorkspaceActions() {
     };
 
     for (const d of handlerResult.dispatches) {
-      dispatch(d);
+      dispatch(d as WorkspaceReducerAction);
 
       switch (d.type) {
         case 'SET_SHERPA_RESPONSE':
