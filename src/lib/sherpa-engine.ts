@@ -165,7 +165,8 @@ function buildContextualSuggestions(
 export function generateSuggestions(
   objects: Record<string, WorkspaceObject>
 ): Suggestion[] {
-  const profile = getCurrentProfile(CANONICAL_DATASET.columns, CANONICAL_DATASET.rows);
+  const ds = getActiveDataset();
+  const profile = getCurrentProfile(ds.columns, ds.rows);
 
   const openObjects = Object.values(objects).filter(
     (o) => o.status === 'open' || o.status === 'materializing'
