@@ -1,5 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 
+import { getAdminSettings } from '@/lib/admin-settings';
+
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`;
 
 interface Message {
