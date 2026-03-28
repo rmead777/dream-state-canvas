@@ -24,6 +24,7 @@ export function SherpaRail() {
   const { suggestions, observations, lastResponse, isProcessing } = useSherpa();
   const cognitiveMode = useCognitiveMode();
   const { play } = useAmbientAudio();
+  const { user, signOut } = useAuth();
   const [input, setInput] = useState('');
   const [isExpanded, setIsExpanded] = useState(true);
   const [showCanvasMenu, setShowCanvasMenu] = useState(false);
