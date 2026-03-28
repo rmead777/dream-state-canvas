@@ -336,7 +336,7 @@ export function useWorkspaceActions() {
 
     // Build context — merge AI-generated sections + dataQuery results
     let context: Record<string, unknown> = resolvedDocument
-      ? buildDocumentObjectContext(resolvedDocument) as Record<string, unknown>
+      ? buildDocumentObjectContext(resolvedDocument) as unknown as Record<string, unknown>
       : (action.data || {});
 
     // If AI provided sections (analysis or enhanced standard card)
