@@ -156,7 +156,7 @@ export async function parseIntentAI(
         if (action.type === 'create' && action.objectType) {
           const seedInfo = SEED_DATA_BY_TYPE[action.objectType];
           // Use dynamic data for data-derived types, seed for narrative types
-          const dynamicTypes = ['metric', 'inspector', 'alert', 'comparison'];
+          const dynamicTypes = ['metric', 'inspector', 'alert', 'comparison', 'dataset'];
           const data = dynamicTypes.includes(action.objectType)
             ? await getDynamicData(action.objectType)
             : seedInfo?.data || {};
