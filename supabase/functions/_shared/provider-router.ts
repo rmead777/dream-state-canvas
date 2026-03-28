@@ -49,7 +49,7 @@ const PROVIDERS: Record<Provider, ProviderConfig> = {
   },
 };
 
-const DEFAULT_MODEL = 'google/gemini-2.5-flash';
+const DEFAULT_MODEL = 'google/gemini-3-flash-preview';
 
 interface Message {
   role: string;
@@ -80,8 +80,27 @@ function parseModelId(modelId: string): { provider: Provider; model: string } {
 }
 
 /**
+ * Fallback to the default Google/Lovable gateway model.
+ */
+async function fallbackToDefault(
+  systemPrompt: string,
+  messages: Message[],
+  maxTokens: number,
+  stream: boolean,
+): Promise<Response> {
+  const cfg = PROVIDERS['google'];
+  const key = Deno.env.get(cfg.envKey);
+  if (!key) {
+    throw new Error(`No API keys configured — need at least ${cfg.envKey}`);
+  }
+  // Lovable gateway requires full "provider/model" ID
+  return makeOpenAIRequest(cfg.endpoint, key, DEFAULT_MODEL, systemPrompt, messages, maxTokens, stream);
+}
+
+/**
  * Route an AI request to the correct provider.
  * Returns a streaming Response that can be piped directly to the client.
+ * If the selected provider returns an auth error, automatically falls back to the default.
  */
 export async function routeToProvider(
   modelId: string,
@@ -95,25 +114,28 @@ export async function routeToProvider(
   const apiKey = Deno.env.get(config.envKey);
 
   if (!apiKey) {
-    // Fall back to default model if the provider key isn't configured
     console.warn(`[provider-router] ${config.envKey} not set, falling back to default model`);
-    const fallback = parseModelId(DEFAULT_MODEL);
-    const fallbackConfig = PROVIDERS[fallback.provider];
-    const fallbackKey = Deno.env.get(fallbackConfig.envKey);
-    if (!fallbackKey) {
-      throw new Error(`No API keys configured — need at least ${fallbackConfig.envKey}`);
-    }
-    // Lovable gateway requires full "provider/model" format
-    return makeOpenAIRequest(fallbackConfig.endpoint, fallbackKey, DEFAULT_MODEL, systemPrompt, messages, maxTokens, stream);
+    return fallbackToDefault(systemPrompt, messages, maxTokens, stream);
   }
 
-  if (config.format === 'anthropic') {
-    return makeAnthropicRequest(config.endpoint, apiKey, model, systemPrompt, messages, maxTokens, stream);
-  }
-
-  // Lovable gateway requires full "provider/model" format; other providers use bare model name
+  // Lovable gateway requires full "provider/model" format; others use bare model name
   const modelForRequest = provider === 'google' ? modelId : model;
-  return makeOpenAIRequest(config.endpoint, apiKey, modelForRequest, systemPrompt, messages, maxTokens, stream);
+
+  let response: Response;
+  if (config.format === 'anthropic') {
+    response = await makeAnthropicRequest(config.endpoint, apiKey, modelForRequest, systemPrompt, messages, maxTokens, stream);
+  } else {
+    response = await makeOpenAIRequest(config.endpoint, apiKey, modelForRequest, systemPrompt, messages, maxTokens, stream);
+  }
+
+  // If the provider returned an auth/client error, fall back to default gateway
+  if (!response.ok && [400, 401, 403].includes(response.status) && provider !== 'google') {
+    const errBody = await response.text();
+    console.warn(`[provider-router] ${provider} returned ${response.status}: ${errBody}. Falling back to default.`);
+    return fallbackToDefault(systemPrompt, messages, maxTokens, stream);
+  }
+
+  return response;
 }
 
 /**
