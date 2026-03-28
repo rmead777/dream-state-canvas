@@ -16,6 +16,12 @@ import { Timeline } from '@/components/objects/Timeline';
 import { DocumentReader } from '@/components/objects/DocumentReader';
 import { DatasetView } from '@/components/objects/DatasetView';
 import { AnalysisCard } from '@/components/objects/AnalysisCard';
+import { ActionQueue } from '@/components/objects/ActionQueue';
+import { VendorDossier } from '@/components/objects/VendorDossier';
+import { CashPlanner } from '@/components/objects/CashPlanner';
+import { EscalationTracker } from '@/components/objects/EscalationTracker';
+import { OutreachTracker } from '@/components/objects/OutreachTracker';
+import { ProductionRiskMap } from '@/components/objects/ProductionRiskMap';
 
 const typeLabels: Record<string, string> = {
   metric: 'Metric',
@@ -28,6 +34,12 @@ const typeLabels: Record<string, string> = {
   document: 'Document',
   dataset: 'Dataset',
   analysis: 'Analysis',
+  'action-queue': 'Action Queue',
+  'vendor-dossier': 'Dossier',
+  'cash-planner': 'Cash Planner',
+  'escalation-tracker': 'Escalation',
+  'outreach-tracker': 'Outreach',
+  'production-risk': 'Production Risk',
 };
 
 function ObjectContent({ object }: { object: WO }) {
@@ -46,6 +58,12 @@ function ObjectContent({ object }: { object: WO }) {
     case 'document': return <DocumentReader object={object} />;
     case 'dataset': return <DatasetView object={object} />;
     case 'analysis': return <AnalysisCard object={object} />;
+    case 'action-queue': return <ActionQueue object={object} />;
+    case 'vendor-dossier': return <VendorDossier object={object} />;
+    case 'cash-planner': return <CashPlanner object={object} />;
+    case 'escalation-tracker': return <EscalationTracker object={object} />;
+    case 'outreach-tracker': return <OutreachTracker object={object} />;
+    case 'production-risk': return <ProductionRiskMap object={object} />;
     default: return <div className="text-sm text-workspace-text-secondary">Unknown object type</div>;
   }
 }

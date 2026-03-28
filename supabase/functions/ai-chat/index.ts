@@ -79,7 +79,17 @@ WORKSPACE AWARENESS:
 ENTITY AWARENESS:
 - If Sherpa Memory includes entity knowledge (people, companies, relationships), use it to personalize cards.
 - "Who should I call about Acme?" → analysis card with contact info, not a generic vendor card.
-- Entity relationships can drive callout sections.`,
+- Entity relationships can drive callout sections.
+
+CFO OBJECT TYPES (actionable — "what do I DO?" not just "what is the data?"):
+- "action-queue": Sequenced prioritized to-do list. Use when: user asks what to do, what's urgent, what calls to make, how to prioritize their day. NOT for data/analysis questions.
+- "vendor-dossier": Call-prep briefing for ONE vendor. Use when: user asks about a specific vendor by name, wants to prepare for a call. Requires vendor name — ask if not provided.
+- "cash-planner": Interactive cash allocation optimizer. Use when: user mentions available cash, asks how to allocate payments, wants to optimize spending.
+- "escalation-tracker": Vendor trajectory monitoring. Use when: user asks what's getting worse, wants trends, asks about escalation patterns.
+- "outreach-tracker": Communication and promise tracking. Use when: user asks about follow-ups, commitments, communication gaps.
+- "production-risk": Operational dependency mapping. Use when: user asks about production impact, supply chain risk, what breaks if vendors cut off supply.
+
+When creating these CFO types, the AI generates the FULL data content in the sections array or as structured context matching the type's data schema. Use actual data from the workspace context — do not invent numbers.`,
 
       "update-plan": `You are a structured object-update planner for a cognitive workspace.
     Your job is to translate a user instruction into a precise JSON update plan for ONE existing object.
@@ -163,6 +173,45 @@ CRITICAL RULES:
 5. Return the FULL updated JSON profile with the same schema — all fields must be present.
 
 Return ONLY the updated JSON object, no markdown fences.`,
+
+      "action-queue": `You are generating a prioritized action queue for a CFO managing vendor payables.
+Given vendor data with priority tiers, balances, days silent, and risk categories, generate a sequenced action list grouped by urgency.
+RULES:
+1. TODAY: vendors where a deadline has passed or passes within 48 hours. Also quick wins (balance < $5K, single payment clears hold).
+2. THIS WEEK: remaining Tier 1 + Tier 2 vendors where credit hold blocks production-critical supply.
+3. NEXT WEEK: remaining Tier 2 + early-escalation Tier 3 vendors.
+4. For each: specify the EXACT action (call/pay/follow-up/negotiate/verify), contact person, dollar amount, and the goal.
+5. Sequence by operational impact, not dollar amount. A $3,837 payment unblocking tires is more urgent than a $52K negotiation.
+6. Mark "quick win" if balance < $10K and single payment resolves the hold.
+Return JSON matching the ActionQueueData schema.`,
+
+      "vendor-dossier": `You are preparing a call briefing for a CFO about to contact a specific vendor.
+Generate a dossier answering: SITUATION (1-2 sentences), THREAT TYPE and TIMELINE, RELATIONSHIP HISTORY (3-5 events), WHAT THEY WANT, LEVERAGE, RISK IF IGNORED, PAYMENT HISTORY.
+Be specific — use exact dollar amounts, dates, and names. No generic language.
+Return JSON matching the VendorDossierData schema.`,
+
+      "cash-planner": `You are a cash allocation optimizer for a CFO with limited funds.
+Generate an optimal allocation plan: quick wins FIRST (< $10K fully clearing holds), production-critical SECOND, legal mitigation THIRD.
+For large balances (>$25K), determine the MINIMUM payment that de-escalates.
+Always recommend the minimum effective payment, not the full balance.
+For each allocation, state the specific operational outcome.
+Return JSON matching the CashPlannerData schema.`,
+
+      "escalation-tracker": `You are analyzing vendor escalation trajectories for a CFO.
+Classify each vendor: ACCELERATING (active escalation), STABILIZING (plan forming), STATIC (dormant), DE-ESCALATING (improving).
+For ACCELERATING, provide the escalation chain and estimate days to next step.
+Return JSON matching the EscalationTrackerData schema.`,
+
+      "outreach-tracker": `You are tracking a new CFO's vendor communication for credibility management.
+Categorize: PROMISES MADE (flag overdue), NO RESPONSE (vendors with zero reply), CONTACTS MADE (positive touches).
+For each item, suggest a specific next step. Provide a credibility assessment.
+Return JSON matching the OutreachTrackerData schema.`,
+
+      "production-risk": `You are mapping operational dependencies for a manufacturing plant's vendor payables.
+Group into: CRITICAL PATH (red, stops production), OPERATIONAL (amber, degrades operations), FACILITY (green, workplace services), UTILITIES (gray, catastrophic if lost).
+State specific operational consequences and minimum payment to restore.
+Generate a worst-case scenario.
+Return JSON matching the ProductionRiskData schema.`,
     };
 
     let systemPrompt = systemPrompts[mode] || systemPrompts.intent;

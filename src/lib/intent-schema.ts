@@ -9,8 +9,9 @@ import { CardSection, DataQuerySchema } from './card-schema';
 
 export const ObjectTypeSchema = z.enum([
   'metric', 'comparison', 'alert', 'inspector', 'brief',
-  'timeline', 'monitor', 'document', 'dataset',
-  'analysis',
+  'timeline', 'monitor', 'document', 'dataset', 'analysis',
+  'action-queue', 'vendor-dossier', 'cash-planner',
+  'escalation-tracker', 'outreach-tracker', 'production-risk',
 ]);
 
 export const CreateActionSchema = z.object({

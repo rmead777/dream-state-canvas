@@ -1,7 +1,8 @@
-import { WorkspaceObject, Suggestion } from './workspace-types';
+import { WorkspaceObject, Suggestion, ActiveContext } from './workspace-types';
 import { getActiveDataset } from './active-dataset';
 import { getCurrentProfile, DataProfile } from './data-analyzer';
 import { detectCrossTierAnomalies, describeRankingLogic } from './data-slicer';
+import { getObjectViewState } from './workspace-intelligence';
 
 /**
  * System-level Sherpa intelligence — observes workspace state
@@ -65,13 +66,22 @@ function buildDefaultSuggestions(profile: DataProfile | null): Suggestion[] {
     });
   }
 
-  // 3. Full dataset
-  suggestions.push({
-    id: 's3',
-    label: `Explore full ${id.toLowerCase()} data`,
-    query: `show the full ${id.toLowerCase()} dataset`,
-    priority: 3,
-  });
+  // 3. Action queue (if urgency signals exist)
+  if (profile.ordinalPriorityColumn || profile.urgencySignal) {
+    suggestions.push({
+      id: 's3',
+      label: 'What should I do today?',
+      query: 'show me my action queue for today',
+      priority: 3,
+    });
+  } else {
+    suggestions.push({
+      id: 's3',
+      label: `Explore full ${id.toLowerCase()} data`,
+      query: `show the full ${id.toLowerCase()} dataset`,
+      priority: 3,
+    });
+  }
 
   return suggestions;
 }
@@ -159,11 +169,193 @@ function buildContextualSuggestions(
     });
   }
 
+  // CFO-specific suggestions
+  const hasActionQueue = openObjects.some((o) => o.type === 'action-queue');
+  const hasCashPlanner = openObjects.some((o) => o.type === 'cash-planner');
+  const hasEscalation = openObjects.some((o) => o.type === 'escalation-tracker');
+  const hasProductionRisk = openObjects.some((o) => o.type === 'production-risk');
+
+  if (hasActionQueue && !hasCashPlanner) {
+    suggestions.push({
+      id: 'sg-cash',
+      label: 'Plan cash allocation',
+      query: 'help me allocate available cash optimally',
+      priority: 2,
+    });
+  }
+
+  if (hasActionQueue && !hasEscalation) {
+    suggestions.push({
+      id: 'sg-escalation',
+      label: 'Check escalation trends',
+      query: 'show me escalation trajectories — what\'s getting worse?',
+      priority: 3,
+    });
+  }
+
+  if ((hasAlert || hasActionQueue) && !hasProductionRisk) {
+    suggestions.push({
+      id: 'sg-production',
+      label: 'Map production risks',
+      query: 'what breaks if vendors cut us off?',
+      priority: 4,
+    });
+  }
+
   return suggestions;
 }
 
+function pickPrimaryObject(
+  objects: Record<string, WorkspaceObject>,
+  activeContext?: ActiveContext
+): WorkspaceObject | null {
+  if (activeContext?.focusedObjectId) {
+    const focused = objects[activeContext.focusedObjectId];
+    if (focused && focused.status !== 'dissolved') {
+      return focused;
+    }
+  }
+
+  return Object.values(objects)
+    .filter((object) => object.status === 'open' || object.status === 'materializing')
+    .sort((a, b) => b.lastInteractedAt - a.lastInteractedAt)[0] || null;
+}
+
+function buildRefinementSuggestions(
+  target: WorkspaceObject,
+  profile: DataProfile | null
+): Suggestion[] {
+  const suggestions: Suggestion[] = [];
+  const idLabel = profile?.primaryIdColumn?.toLowerCase() || 'items';
+  const measure = profile?.primaryMeasureColumn || 'value';
+  const groupBy = profile?.groupByColumn;
+  const topTier = profile?.ordinalPriorityColumn?.rankOrder?.[0];
+  const view = getObjectViewState(target.context);
+  const safeTitle = `"${target.title}"`;
+
+  switch (target.type) {
+    case 'inspector':
+    case 'dataset': {
+      if (topTier && view.tierFilter !== topTier) {
+        suggestions.push({
+          id: `refine-${target.id}-tier`,
+          label: `Filter ${target.title} to ${topTier}`,
+          query: `filter ${safeTitle} to only ${topTier}`,
+          priority: 1,
+        });
+      }
+
+      if (view.limit !== 5) {
+        suggestions.push({
+          id: `refine-${target.id}-top5`,
+          label: `Show top 5 rows`,
+          query: `show only the top 5 rows in ${safeTitle}`,
+          priority: 3,
+        });
+      }
+
+      if (groupBy && measure && view.displayMode !== 'chart') {
+        suggestions.push({
+          id: `refine-${target.id}-chart`,
+          label: `Chart ${measure} by ${groupBy}`,
+          query: `show ${safeTitle} as a bar chart using ${groupBy} and ${measure}`,
+          priority: 2,
+        });
+      }
+
+      const preferredColumns = view.preferredColumns || [];
+      const columnSuggestion = [profile?.primaryIdColumn, groupBy, measure]
+        .filter((value): value is string => Boolean(value))
+        .filter((value, index, arr) => arr.indexOf(value) === index);
+      if (columnSuggestion.length >= 2 && columnSuggestion.some((column) => !preferredColumns.includes(column))) {
+        suggestions.push({
+          id: `refine-${target.id}-columns`,
+          label: `Focus visible columns`,
+          query: `show only ${columnSuggestion.join(', ')} columns in ${safeTitle}`,
+          priority: 4,
+        });
+      }
+      break;
+    }
+
+    case 'alert': {
+      suggestions.push({
+        id: `refine-${target.id}-actionable`,
+        label: 'Show the most actionable alerts',
+        query: `show the 3 most actionable alerts in ${safeTitle}`,
+        priority: 1,
+      });
+
+      if (topTier && view.tierFilter !== topTier) {
+        suggestions.push({
+          id: `refine-${target.id}-priority`,
+          label: `Focus only ${topTier}`,
+          query: `filter ${safeTitle} to only ${topTier}`,
+          priority: 2,
+        });
+      }
+      break;
+    }
+
+    case 'brief': {
+      suggestions.push({
+        id: `refine-${target.id}-reframe`,
+        label: 'Reframe around immediate actions',
+        query: `reframe ${safeTitle} around immediate actions and operational impact`,
+        priority: 1,
+      });
+      suggestions.push({
+        id: `refine-${target.id}-rootcause`,
+        label: 'Add root causes',
+        query: `expand ${safeTitle} with root causes and evidence`,
+        priority: 2,
+      });
+      break;
+    }
+
+    case 'comparison': {
+      suggestions.push({
+        id: `refine-${target.id}-angle`,
+        label: 'Reframe the comparison',
+        query: `reframe ${safeTitle} around operational risk and decision impact`,
+        priority: 1,
+      });
+      if (topTier) {
+        suggestions.push({
+          id: `refine-${target.id}-tier`,
+          label: `Compare only ${topTier}`,
+          query: `update ${safeTitle} to compare only ${topTier} ${idLabel}`,
+          priority: 2,
+        });
+      }
+      break;
+    }
+
+    case 'metric': {
+      if (groupBy) {
+        suggestions.push({
+          id: `refine-${target.id}-group`,
+          label: `Explain by ${groupBy}`,
+          query: `update ${safeTitle} to explain the story by ${groupBy}`,
+          priority: 1,
+        });
+      }
+      suggestions.push({
+        id: `refine-${target.id}-title`,
+        label: 'Sharpen the metric framing',
+        query: `rename ${safeTitle} to make the main takeaway clearer`,
+        priority: 2,
+      });
+      break;
+    }
+  }
+
+  return suggestions.slice(0, 4);
+}
+
 export function generateSuggestions(
-  objects: Record<string, WorkspaceObject>
+  objects: Record<string, WorkspaceObject>,
+  activeContext?: ActiveContext
 ): Suggestion[] {
   const ds = getActiveDataset();
   const profile = getCurrentProfile(ds.columns, ds.rows);
@@ -176,8 +368,15 @@ export function generateSuggestions(
     return buildDefaultSuggestions(profile);
   }
 
+  const refinementTarget = pickPrimaryObject(objects, activeContext);
+  const refinement = refinementTarget ? buildRefinementSuggestions(refinementTarget, profile) : [];
   const contextual = buildContextualSuggestions(objects, profile);
-  return contextual.length > 0 ? contextual.slice(0, 3) : buildDefaultSuggestions(profile);
+
+  const merged = [...refinement, ...contextual].filter(
+    (suggestion, index, list) => list.findIndex((candidate) => candidate.query === suggestion.query) === index
+  );
+
+  return merged.length > 0 ? merged.slice(0, 3) : buildDefaultSuggestions(profile);
 }
 
 export function generateObservations(
