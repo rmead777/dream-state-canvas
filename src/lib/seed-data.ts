@@ -397,8 +397,3 @@ export const CANONICAL_DATASET = {
   ],
 };
 
-export const DEFAULT_SUGGESTIONS = [
-  { id: 's1', label: 'Show AP exposure', query: 'show me total AP exposure', priority: 1 },
-  { id: 's2', label: 'What needs action?', query: 'what vendors need immediate action?', priority: 2 },
-  { id: 's3', label: 'Open vendor dataset', query: 'show the full vendor dataset', priority: 3 },
-];
