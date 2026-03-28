@@ -144,7 +144,7 @@ export async function deleteMemory(id: string): Promise<void> {
 }
 
 export async function recordHit(id: string): Promise<void> {
-  await supabase.rpc('increment_memory_hit', { memory_id: id });
+  await db.rpc('increment_memory_hit', { memory_id: id });
 }
 
 export async function recordMiss(id: string): Promise<void> {
