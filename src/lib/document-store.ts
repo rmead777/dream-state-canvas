@@ -6,6 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export interface DocumentRecord {
   id: string;
+  user_id: string | null;
   filename: string;
   mime_type: string;
   file_type: string;

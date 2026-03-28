@@ -277,6 +277,19 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Extract user_id from the authorization header for RLS-compliant inserts
+    let userId: string | null = null;
+    const authHeader = req.headers.get("authorization");
+    if (authHeader?.startsWith("Bearer ")) {
+      const token = authHeader.slice(7);
+      const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || supabaseKey;
+      const userClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+      });
+      const { data: { user } } = await userClient.auth.getUser();
+      userId = user?.id || null;
+    }
+
     let extractedText = "";
     let structuredData: Record<string, unknown> = {};
     let metadata: Record<string, unknown> = {};
@@ -499,6 +512,7 @@ Return ONLY JSON.`,
         structured_data: structuredData,
         metadata,
         fingerprint,
+        user_id: userId,
       })
       .select()
       .single();
