@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { decayStaleMemories } from '@/lib/memory-store';
 import type { Session, User } from '@supabase/supabase-js';
 
 export function useAuth() {
@@ -18,6 +19,16 @@ export function useAuth() {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+
+      // Run daily memory decay on first load (Phase 5)
+      if (session?.user) {
+        const lastDecay = localStorage.getItem('sherpa-last-decay');
+        const today = new Date().toDateString();
+        if (lastDecay !== today) {
+          decayStaleMemories(session.user.id).catch(() => {});
+          localStorage.setItem('sherpa-last-decay', today);
+        }
+      }
     });
 
     return () => subscription.unsubscribe();

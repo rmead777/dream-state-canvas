@@ -1,4 +1,7 @@
 import { callAI } from '@/hooks/useAI';
+import { SherpaMemory } from './memory-types';
+import { getOverrideMemories } from './memory-store';
+import { supabase } from '@/integrations/supabase/client';
 
 /**
  * DataProfile — a domain-agnostic schema analysis result.
@@ -271,7 +274,7 @@ export async function analyzeDataset(
 
   // Check cache first
   const cached = getCachedProfile(fingerprint);
-  if (cached) return cached;
+  if (cached) return await applyTier2Overrides(cached);
 
   // Try AI analysis
   try {
@@ -291,7 +294,7 @@ export async function analyzeDataset(
       if (jsonMatch) {
         const profile = JSON.parse(jsonMatch[0]) as DataProfile;
         setCachedProfile(fingerprint, profile);
-        return profile;
+        return await applyTier2Overrides(profile);
       }
     }
   } catch {
@@ -301,7 +304,58 @@ export async function analyzeDataset(
   // Fallback
   const fallback = buildFallbackProfile(columns, rows);
   setCachedProfile(fingerprint, fallback);
-  return fallback;
+  return await applyTier2Overrides(fallback);
+}
+
+/**
+ * Apply Tier 2 memory overrides to a DataProfile.
+ * High-confidence memories directly modify the profile BEFORE the slicer runs.
+ * This is deterministic — the AI never sees the un-overridden data.
+ */
+async function applyTier2Overrides(profile: DataProfile): Promise<DataProfile> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return profile;
+
+    const overrides = await getOverrideMemories(user.id);
+    if (overrides.length === 0) return profile;
+
+    const result = { ...profile };
+
+    for (const m of overrides) {
+      // Sorting overrides — reinforce ordinal priority
+      if (m.tags.includes('sorting') && result.ordinalPriorityColumn) {
+        if (/tier|priority|rank/i.test(m.content)) {
+          result.previewStrategy = `LOCKED by user preference: ${result.previewStrategy}`;
+        }
+      }
+
+      // Display column preferences
+      if (m.tags.includes('columns') && m.type === 'preference' && m.confidence >= 0.8) {
+        // Extract column names from content if mentioned
+        const mentioned = (result.displayColumns || []).filter(col =>
+          m.content.toLowerCase().includes(col.toLowerCase())
+        );
+        if (mentioned.length > 0) {
+          result.displayColumns = mentioned;
+        }
+      }
+
+      // Sort direction override
+      if (m.tags.includes('sort-direction') && m.type === 'preference') {
+        if (/ascending|smallest first|lowest first/i.test(m.content)) {
+          result.sortDirection = 'asc';
+        } else if (/descending|largest first|highest first/i.test(m.content)) {
+          result.sortDirection = 'desc';
+        }
+      }
+    }
+
+    return result;
+  } catch (e) {
+    console.warn('[data-analyzer] Failed to apply Tier 2 overrides, continuing without:', e);
+    return profile;
+  }
 }
 
 /**
