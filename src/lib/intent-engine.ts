@@ -316,11 +316,14 @@ const patterns: IntentPattern[] = [
     ],
   },
   {
-    keywords: ['dataset', 'spreadsheet', 'full data', 'all vendor', 'full dataset', 'vendor list'],
-    generate: () => [
-      { type: 'respond', message: `Full vendor dataset ready — ${CANONICAL_DATASET.rows.length} vendors with balances, tier, and contact info.` },
-      { type: 'create', objectType: 'dataset', title: 'Vendor Dataset', data: CANONICAL_DATASET },
-    ],
+    keywords: ['dataset', 'spreadsheet', 'full data', 'all vendor', 'full dataset', 'vendor list', 'portfolio'],
+    generate: async () => {
+      const data = await getDynamicData('dataset');
+      return [
+        { type: 'respond', message: `Full dataset ready — ${data.rows?.length || CANONICAL_DATASET.rows.length} items sorted by priority rules.` },
+        { type: 'create', objectType: 'dataset', title: 'Full Portfolio Dataset', data },
+      ];
+    },
   },
   {
     keywords: ['prioritize', 'sort by', 'group by', 'change priority', 'change sorting', 'reorder by', 'rank by', 'filter by', 'show first', 'show last', 'ascending', 'descending'],
