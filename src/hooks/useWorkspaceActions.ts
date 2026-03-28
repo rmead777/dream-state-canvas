@@ -9,6 +9,7 @@ import { executeFusion } from '@/lib/fusion-executor';
 import { toast } from '@/hooks/use-toast';
 import { getActiveDataset } from '@/lib/active-dataset';
 import { previewRows, alertRows, metricAggregate, comparisonPairs } from '@/lib/data-slicer';
+import { buildDocumentObjectContext, resolveDocumentRecord } from '@/lib/document-store';
 
 // Store document IDs ref for context injection
 let _documentIdsRef: string[] = [];
