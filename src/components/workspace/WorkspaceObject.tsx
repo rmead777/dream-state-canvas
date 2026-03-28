@@ -75,6 +75,7 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
 
   return (
     <div
+      ref={cardRef}
       className={`
         group relative rounded-xl border bg-white
         transition-all duration-500
