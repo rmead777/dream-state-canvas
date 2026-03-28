@@ -103,14 +103,17 @@ export async function routeToProvider(
     if (!fallbackKey) {
       throw new Error(`No API keys configured — need at least ${fallbackConfig.envKey}`);
     }
-    return makeOpenAIRequest(fallbackConfig.endpoint, fallbackKey, fallback.model, systemPrompt, messages, maxTokens, stream);
+    // Lovable gateway requires full "provider/model" format
+    return makeOpenAIRequest(fallbackConfig.endpoint, fallbackKey, DEFAULT_MODEL, systemPrompt, messages, maxTokens, stream);
   }
 
   if (config.format === 'anthropic') {
     return makeAnthropicRequest(config.endpoint, apiKey, model, systemPrompt, messages, maxTokens, stream);
   }
 
-  return makeOpenAIRequest(config.endpoint, apiKey, model, systemPrompt, messages, maxTokens, stream);
+  // Lovable gateway requires full "provider/model" format; other providers use bare model name
+  const modelForRequest = provider === 'google' ? modelId : model;
+  return makeOpenAIRequest(config.endpoint, apiKey, modelForRequest, systemPrompt, messages, maxTokens, stream);
 }
 
 /**
