@@ -44,8 +44,6 @@ export function SherpaRail() {
   const inputRef = useRef<HTMLInputElement>(null);
   const { addDocument, documents } = useDocuments();
   const railControlsBase = 'flex h-7 w-7 items-center justify-center rounded-full border border-transparent text-[10px] transition-all duration-200 workspace-spring';
-  const composerState = voice.isListening ? 'Listening' : isProcessing ? 'Reasoning' : input.trim() ? 'Ready to send' : 'Standing by';
-  const composerStateTone = voice.isListening ? 'bg-rose-500' : isProcessing ? 'bg-amber-500' : input.trim() ? 'bg-emerald-500' : 'bg-workspace-accent';
   const contextScopeLabel = contextMode === 'auto'
     ? `${documents.length} docs in ambient scope`
     : `${selectedDocIds.length} selected docs`;
@@ -148,6 +146,8 @@ export function SherpaRail() {
     onResult: handleVoiceResult,
     onInterim: handleVoiceInterim,
   });
+  const composerState = voice.isListening ? 'Listening' : isProcessing ? 'Reasoning' : input.trim() ? 'Ready to send' : 'Standing by';
+  const composerStateTone = voice.isListening ? 'bg-rose-500' : isProcessing ? 'bg-amber-500' : input.trim() ? 'bg-emerald-500' : 'bg-workspace-accent';
 
   const handleSuggestionClick = (query: string) => {
     trackAndProcess(query);
@@ -388,6 +388,8 @@ export function SherpaRail() {
           </div>
         )}
 
+  const composerState = voice.isListening ? 'Listening' : isProcessing ? 'Reasoning' : input.trim() ? 'Ready to send' : 'Standing by';
+  const composerStateTone = voice.isListening ? 'bg-rose-500' : isProcessing ? 'bg-amber-500' : input.trim() ? 'bg-emerald-500' : 'bg-workspace-accent';
 
         {showUpload && (
           <div className="workspace-card-surface mb-4 rounded-2xl border border-workspace-border/45 px-4 py-4">

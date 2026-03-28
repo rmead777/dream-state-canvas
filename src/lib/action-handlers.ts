@@ -296,7 +296,7 @@ export async function handleRefineRules({ feedback, objects }: RefineRulesParams
     dispatches.push({ type: 'UPDATE_OBJECT_CONTEXT', payload: { id: obj.id, context: newContext } });
   }
 
-  const changes = [];
+  const changes: string[] = [];
   if (updatedProfile.primaryMeasureColumn) changes.push(`sorting by ${updatedProfile.primaryMeasureColumn}`);
   if (updatedProfile.groupByColumn) changes.push(`grouping by ${updatedProfile.groupByColumn}`);
   if (updatedProfile.sortDirection) changes.push(`${updatedProfile.sortDirection}ending order`);
