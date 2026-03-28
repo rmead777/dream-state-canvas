@@ -1,5 +1,7 @@
 import { WorkspaceObject, Suggestion } from './workspace-types';
-import { DEFAULT_SUGGESTIONS } from './seed-data';
+import { DEFAULT_SUGGESTIONS, CANONICAL_DATASET } from './seed-data';
+import { getCurrentProfile } from './data-analyzer';
+import { detectCrossTierAnomalies, describeRankingLogic } from './data-slicer';
 
 /**
  * System-level Sherpa intelligence — observes workspace state
@@ -98,6 +100,23 @@ export function generateObservations(
     observations.push(
       `${stale.length} workspace ${stale.length === 1 ? 'object hasn\'t' : 'objects haven\'t'} been touched recently. Shall I collapse ${stale.length === 1 ? 'it' : 'them'}?`
     );
+  }
+
+  // Cross-tier anomaly detection — surface in observations, NEVER re-rank
+  const profile = getCurrentProfile(CANONICAL_DATASET.columns, CANONICAL_DATASET.rows);
+  if (profile) {
+    const anomalies = detectCrossTierAnomalies(
+      CANONICAL_DATASET.columns,
+      CANONICAL_DATASET.rows,
+      profile
+    );
+    observations.push(...anomalies);
+
+    // If no priority structure, inform the user about the provisional ranking
+    if (!profile.ordinalPriorityColumn) {
+      const desc = describeRankingLogic(profile);
+      observations.push(desc);
+    }
   }
 
   return observations;
