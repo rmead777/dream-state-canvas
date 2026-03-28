@@ -3,7 +3,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { WorkspaceObjectWrapper } from './WorkspaceObject';
 import { FusionZone } from './FusionZone';
 import { executeFusion } from '@/lib/fusion-executor';
-import { canFuse } from '@/lib/fusion-rules';
+import { canFuse, getFusionOutputType } from '@/lib/fusion-rules';
 import { toast } from '@/hooks/use-toast';
 
 const FUSION_THRESHOLD = 120;
@@ -123,7 +123,7 @@ export function FreeformCanvas() {
       type: 'MATERIALIZE_OBJECT',
       payload: {
         id: result.id!,
-        type: 'brief',
+        type: getFusionOutputType(source.type, target.type),
         title: result.title!,
         pinned: false,
         origin: { type: 'cross-object', sourceObjectId: source.id, query: `Fusion of ${source.title} and ${target.title}` },

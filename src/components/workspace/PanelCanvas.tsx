@@ -20,7 +20,7 @@ import { RelationshipConnector } from './RelationshipConnector';
 import { FreeformCanvas } from './FreeformCanvas';
 import { LayoutToggle } from './LayoutToggle';
 import { FusionZone } from './FusionZone';
-import { canFuse } from '@/lib/fusion-rules';
+import { canFuse, getFusionOutputType } from '@/lib/fusion-rules';
 import { executeFusion } from '@/lib/fusion-executor';
 import { toast } from '@/hooks/use-toast';
 
@@ -131,7 +131,7 @@ export function PanelCanvas() {
       type: 'MATERIALIZE_OBJECT',
       payload: {
         id: result.id!,
-        type: 'brief',
+        type: getFusionOutputType(source.type, target.type),
         title: result.title!,
         pinned: false,
         origin: { type: 'cross-object', sourceObjectId: fusionTarget.sourceId },

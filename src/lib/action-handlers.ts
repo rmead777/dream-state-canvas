@@ -12,6 +12,7 @@ import { callAI } from '@/hooks/useAI';
 import { getActiveDataset } from './active-dataset';
 import { previewRows, alertRows, metricAggregate, comparisonPairs } from './data-slicer';
 import { executeFusion } from './fusion-executor';
+import { getFusionOutputType } from './fusion-rules';
 import { refineDataRules } from './intent-engine';
 import { DataProfile } from './data-analyzer';
 
@@ -238,7 +239,7 @@ export async function handleFuse({ objA, objB, layoutMode }: FuseParams): Promis
         type: 'MATERIALIZE_OBJECT',
         payload: {
           id: result.id!,
-          type: 'brief',
+          type: getFusionOutputType(objA.type, objB.type),
           title: result.title!,
           pinned: false,
           origin: { type: 'cross-object', sourceObjectId: objA.id, query: `Fusion of ${objA.title} and ${objB.title}` },
