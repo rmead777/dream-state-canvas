@@ -6,6 +6,7 @@ import { useAI } from '@/hooks/useAI';
 import MarkdownRenderer from '@/components/objects/MarkdownRenderer';
 import { buildDocumentObjectContext, resolveDocumentRecord } from '@/lib/document-store';
 import { supabase } from '@/integrations/supabase/client';
+import { PdfCanvasViewer } from '@/components/objects/PdfCanvasViewer';
 
 interface DocumentReaderProps {
   object: WorkspaceObject;
@@ -145,7 +146,7 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
   const [askInput, setAskInput] = useState('');
   const [aiResponse, setAiResponse] = useState<string | null>(null);
   const [highlights, setHighlights] = useState<number[]>([]);
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
 
   const normalizedContent = normalizeLegacyDocumentContent(d.summary || '', d.paragraphs || []);
@@ -163,11 +164,10 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
     const storagePath = d.storagePath;
     if (!storagePath) return;
 
-    let activeObjectUrl: string | null = null;
     let cancelled = false;
 
     setPdfError(null);
-    setPdfUrl(null);
+    setPdfBlob(null);
 
     supabase.storage
       .from('documents')
@@ -180,15 +180,11 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
           return;
         }
 
-        activeObjectUrl = URL.createObjectURL(data);
-        setPdfUrl(activeObjectUrl);
+        setPdfBlob(data);
       });
 
     return () => {
       cancelled = true;
-      if (activeObjectUrl) {
-        URL.revokeObjectURL(activeObjectUrl);
-      }
     };
   }, [isPdf, isImmersive, d.storagePath]);
 
@@ -296,10 +292,8 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
       {/* PDF Viewer — main area */}
       {isPdf ? (
         <div className="flex-1 min-w-0 bg-workspace-surface">
-          {pdfUrl ? (
-            <object data={pdfUrl} type="application/pdf" className="h-full w-full">
-              <iframe src={pdfUrl} className="h-full w-full border-0" title={fileName} />
-            </object>
+          {pdfBlob ? (
+            <PdfCanvasViewer fileBlob={pdfBlob} fileName={fileName} />
           ) : (
             <div className="flex h-full items-center justify-center px-6">
               <div className="max-w-sm rounded-2xl border border-workspace-border bg-workspace-bg px-6 py-5 text-center shadow-sm">
