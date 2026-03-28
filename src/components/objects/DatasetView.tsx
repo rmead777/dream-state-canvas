@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { WorkspaceObject } from '@/lib/workspace-types';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useAI } from '@/hooks/useAI';
+import MarkdownRenderer from '@/components/objects/MarkdownRenderer';
 
 interface DatasetViewProps {
   object: WorkspaceObject;
@@ -151,7 +152,7 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
             <span className="text-workspace-accent text-sm">✦</span>
             <span className="text-[10px] font-medium uppercase tracking-widest text-workspace-accent">AI Insight</span>
           </div>
-          <p className="text-sm leading-relaxed text-workspace-text whitespace-pre-wrap">{aiInsight}</p>
+          <MarkdownRenderer content={aiInsight} isStreaming={isStreaming} />
         </div>
       )}
 
