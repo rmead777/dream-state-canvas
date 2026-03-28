@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { parseIntentAI, parseIntent } from '@/lib/intent-engine';
+import { parseIntentAI } from '@/lib/intent-engine';
 import { generateSuggestions } from '@/lib/sherpa-engine';
 import { WorkspaceObject, IntentOrigin } from '@/lib/workspace-types';
 import { computeFreeformPosition } from '@/lib/freeform-placement';
@@ -31,14 +31,11 @@ export function useWorkspaceActions() {
         const result = await parseIntentAI(query, state.objects, _documentIdsRef);
         await applyResult(result, origin);
       } catch (aiError) {
-        console.warn('[processIntent] AI intent parsing failed, trying keyword fallback:', aiError);
-        try {
-          const result = await parseIntent(query, state.objects);
-          await applyResult(result, origin);
-        } catch (fallbackError) {
-          console.error('[processIntent] Both AI and keyword fallback failed:', fallbackError);
-          dispatch({ type: 'SET_SHERPA_RESPONSE', payload: 'Something went wrong processing your request. Please try rephrasing.' });
-        }
+        console.error('[processIntent] AI intent parsing failed:', aiError);
+        dispatch({
+          type: 'SET_SHERPA_RESPONSE',
+          payload: 'Sherpa is having trouble reaching the AI service right now. Please check your connection and try again in a moment.',
+        });
       }
 
       dispatch({ type: 'SET_SHERPA_PROCESSING', payload: false });
