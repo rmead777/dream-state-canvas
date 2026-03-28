@@ -344,7 +344,8 @@ function DraggableFreeformObject({
           }}
         />
       )}
-      <div data-freeform-handle className="absolute inset-x-0 top-0 h-12 cursor-grab active:cursor-grabbing z-20" />
+      {/* Drag handle covers the entire header area — use data attribute for detection */}
+      <div data-freeform-handle className="absolute inset-x-0 top-0 h-14 cursor-grab active:cursor-grabbing z-20 rounded-t-xl" />
       <WorkspaceObjectWrapper object={object} />
     </div>
   );
