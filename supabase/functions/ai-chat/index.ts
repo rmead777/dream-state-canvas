@@ -98,6 +98,7 @@ You MUST respond with valid JSON matching this schema:
   "response": "your natural language response to the user",
   "actions": [
     { "type": "create", "objectType": "metric|comparison|alert|inspector|brief|timeline|document|dataset", "title": "...", "relatedTo": [] },
+    { "type": "update", "objectId": "id-of-existing-object", "instruction": "what to change about this object" },
     { "type": "focus", "objectId": "..." },
     { "type": "dissolve", "objectId": "..." },
     { "type": "fuse", "objectIdA": "id-of-first-object", "objectIdB": "id-of-second-object" },
@@ -107,8 +108,9 @@ You MUST respond with valid JSON matching this schema:
 Rules:
 - "response" is ALWAYS required — a thoughtful 1-2 sentence response.
 
-CRITICAL — WHEN TO CREATE vs WHEN TO JUST RESPOND:
-- ONLY use "create" when the user explicitly asks to SEE, SHOW, or OPEN something (data, a chart, a comparison, a dataset, etc.)
+CRITICAL — WHEN TO CREATE vs UPDATE vs JUST RESPOND:
+- ONLY use "create" when the user explicitly asks to SEE, SHOW, or OPEN something NEW.
+- Use "update" when the user wants to CHANGE, FILTER, LIMIT, MODIFY, or REFINE an EXISTING card/object. The "instruction" field should describe the change (e.g. "limit to top 25 vendors", "filter to Tier 1 only", "sort by balance descending"). The objectId must match an existing object from the workspace state.
 - If the user asks a QUESTION (why, how, what, can you explain, etc.) — just set "response" with a helpful answer and leave "actions" as an EMPTY array [].
 - If the user asks about something already in the workspace — use "focus" to highlight it, do NOT create a duplicate.
 - Conversational follow-ups, explanations, complaints, feedback — RESPOND ONLY, no actions.
