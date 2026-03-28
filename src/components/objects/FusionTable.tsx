@@ -56,10 +56,11 @@ function MiniBar({ value, max, warn }: { value: number; max: number; warn?: numb
   return (
     <div className="h-1.5 w-16 rounded-full bg-workspace-border/40 overflow-hidden">
       <div
-        className="h-full rounded-full transition-all duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
+        className="h-full rounded-full transition-all duration-700"
         style={{
           width: `${Math.min(width, 100)}%`,
           backgroundColor: isWarn ? 'hsl(var(--workspace-accent))' : 'hsl(160 50% 45%)',
+          transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
         }}
       />
     </div>

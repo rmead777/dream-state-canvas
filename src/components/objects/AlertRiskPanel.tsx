@@ -38,7 +38,7 @@ export function AlertRiskPanel({ object }: { object: WorkspaceObject }) {
             </div>
           </div>
           <div className="mt-2 flex items-center gap-3 text-[10px] text-workspace-text-secondary">
-            <span>{formatTimeAgo(alert.timestamp)}</span>
+            <span className="tabular-nums">{formatTimeAgo(alert.timestamp)}</span>
             {alert.actionable && (
               <span className="rounded-full bg-workspace-accent-subtle px-2 py-0.5 text-workspace-accent">
                 Actionable
@@ -50,8 +50,8 @@ export function AlertRiskPanel({ object }: { object: WorkspaceObject }) {
     </div>
   );
 }
-          <div className="mt-2 flex items-center gap-3 text-[10px] text-workspace-text-secondary">
-            <span className="tabular-nums">{formatTimeAgo(alert.timestamp)}</span>
+
+function formatTimeAgo(ts: number): string {
   const diff = Date.now() - ts;
   const mins = Math.floor(diff / 60000);
   if (mins < 60) return `${mins}m ago`;

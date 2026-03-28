@@ -45,11 +45,12 @@ function TierDistribution({ breakdown }: { breakdown: { name: string; value: num
           return (
             <div
               key={item.name}
-              className="h-full transition-all duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)] first:rounded-l-full last:rounded-r-full"
+              className="h-full transition-all duration-700 first:rounded-l-full last:rounded-r-full"
               style={{
                 width: `${pct}%`,
                 backgroundColor: colors[i] || colors[3],
                 minWidth: pct > 0 ? '2px' : '0',
+                transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
               }}
             />
           );
@@ -179,10 +180,11 @@ function BreakdownRow({ item, unit, maxValue, tierIndex }: { item: any; unit: st
       <div className="flex items-center gap-2 flex-1 justify-end">
         <div className="h-2 w-32 rounded-full bg-workspace-border/30 overflow-hidden">
           <div
-            className="h-full rounded-full transition-all duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
+            className="h-full rounded-full transition-all duration-700"
             style={{
               width: `${Math.min(width, 100)}%`,
               backgroundColor: TIER_COLORS[tierIndex] || TIER_COLORS[3],
+              transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
             }}
           />
         </div>
