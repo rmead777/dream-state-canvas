@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { DataProfile, getCurrentProfile, clearProfileCache } from '@/lib/data-analyzer';
 import { CANONICAL_DATASET } from '@/lib/seed-data';
 import { refineDataRules, invalidateProfileCache } from '@/lib/intent-engine';
+import { describeRankingLogic } from '@/lib/data-slicer';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { previewRows, alertRows, metricAggregate, comparisonPairs } from '@/lib/data-slicer';
 
@@ -144,6 +145,23 @@ export function RulesEditor({ onClose }: { onClose: () => void }) {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Ranking logic description */}
+      <div className="rounded-md bg-workspace-surface/30 px-2.5 py-2">
+        <div className="text-[9px] uppercase tracking-wider text-workspace-text-secondary/50 mb-1">Sorting Logic</div>
+        <p className="text-[10px] text-workspace-text-secondary leading-relaxed">
+          {describeRankingLogic(profile)}
+        </p>
+      </div>
+
+      {!profile.ordinalPriorityColumn && (
+      <div className="rounded-md border border-destructive/20 bg-destructive/5 px-2.5 py-2">
+          <p className="text-[10px] text-destructive/80 leading-relaxed">
+            ⚠ No explicit priority column detected. The current ranking is provisional. 
+            You can define one by saying e.g. "use Status column as priority" or "Tier 1 is highest priority".
+          </p>
         </div>
       )}
 
