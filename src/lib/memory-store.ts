@@ -137,7 +137,7 @@ export async function confirmMemory(id: string): Promise<void> {
 }
 
 export async function deleteMemory(id: string): Promise<void> {
-  await supabase
+  await db
     .from('sherpa_memories')
     .delete()
     .eq('id', id);
