@@ -88,6 +88,7 @@ export function AIBrief({ object }: { object: WorkspaceObject }) {
   const d = object.context;
   const text = d.content || d.summary || '';
   const [expandedSource, setExpandedSource] = useState<string | null>(null);
+  const [tableCollapsed, setTableCollapsed] = useState(false);
 
   // Resolve source objects for fusion visuals
   const sourceObjects = (d.sourceObjects || [])
