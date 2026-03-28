@@ -35,6 +35,9 @@ export function SherpaRail() {
   const [showRules, setShowRules] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [adminUnlocked, setAdminUnlocked] = useState(isAdminUnlocked());
+  const [adminState, setAdminState] = useState(getAdminSettings());
   const [promptHistory, setPromptHistory] = useState<Array<{ query: string; response: string | null; timestamp: number }>>([]);
   const [contextMode, setContextMode] = useState<ContextMode>('auto');
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
