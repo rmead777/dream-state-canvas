@@ -89,23 +89,37 @@ create or replace function public.decay_stale_memories(
 )
 returns void as $$
 begin
+  -- Decay non-correction memories normally
   update public.sherpa_memories
   set confidence = confidence * decay_factor
   where user_id = target_user_id
     and source != 'confirmed'
+    and type != 'correction'
     and last_activated_at < now() - (stale_threshold_days || ' days')::interval
     and confidence > 0.2;
 
-  -- Delete memories that have decayed below usefulness
+  -- Corrections decay but never below 0.3 (Critical Rule 1)
+  update public.sherpa_memories
+  set confidence = greatest(0.3, confidence * decay_factor)
+  where user_id = target_user_id
+    and source != 'confirmed'
+    and type = 'correction'
+    and last_activated_at < now() - (stale_threshold_days || ' days')::interval
+    and confidence > 0.3;
+
+  -- Delete non-correction memories that have decayed below usefulness
   delete from public.sherpa_memories
   where user_id = target_user_id
     and confidence < 0.2
-    and source != 'confirmed';
+    and source != 'confirmed'
+    and type != 'correction';
 
   -- Delete memories where misses exceed hits (self-correcting)
+  -- Corrections exempt — user must delete manually
   delete from public.sherpa_memories
   where user_id = target_user_id
     and miss_count > hit_count
-    and hit_count > 2;
+    and hit_count > 2
+    and type != 'correction';
 end;
 $$ language plpgsql security definer;
