@@ -1,8 +1,10 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { WorkspaceObject } from '@/lib/workspace-types';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { useDocuments } from '@/contexts/DocumentContext';
 import { useAI } from '@/hooks/useAI';
 import MarkdownRenderer from '@/components/objects/MarkdownRenderer';
+import { buildDocumentObjectContext, resolveDocumentRecord } from '@/lib/document-store';
 
 interface DocumentReaderProps {
   object: WorkspaceObject;
@@ -11,6 +13,7 @@ interface DocumentReaderProps {
 
 export function DocumentReader({ object, isImmersive = false }: DocumentReaderProps) {
   const { dispatch } = useWorkspace();
+  const { documents } = useDocuments();
   const { streamChat, isStreaming } = useAI();
   const d = object.context;
   const [askInput, setAskInput] = useState('');
@@ -19,7 +22,44 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
 
   const paragraphs: string[] = d.paragraphs || [];
   const summary: string = d.summary || '';
-  const fileName: string = d.fileName || 'Untitled Document';
+  const fileName: string = d.fileName || object.title || 'Untitled Document';
+  const fileType: string = d.fileType || '';
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const hydrateDocumentContext = async () => {
+      const resolved = await resolveDocumentRecord({
+        title: object.title,
+        query: object.origin.query,
+        preferredIds: documents.map((doc) => doc.id),
+      });
+
+      if (!resolved || cancelled) return;
+
+      const nextContext = buildDocumentObjectContext(resolved);
+      const sourceChanged = d.sourceDocId !== nextContext.sourceDocId;
+      const fileChanged = d.fileName !== nextContext.fileName;
+      const typeChanged = d.fileType !== nextContext.fileType;
+      const missingContent = !Array.isArray(d.paragraphs) || d.paragraphs.length === 0;
+
+      if (sourceChanged || fileChanged || typeChanged || missingContent) {
+        dispatch({
+          type: 'UPDATE_OBJECT_CONTEXT',
+          payload: {
+            id: object.id,
+            context: { ...d, ...nextContext },
+          },
+        });
+      }
+    };
+
+    hydrateDocumentContext();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatch, documents, d, object.id, object.origin.query, object.title]);
 
   const handleAsk = useCallback(async () => {
     if (!askInput.trim() || isStreaming) return;
@@ -31,7 +71,7 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
       [
         {
           role: 'user',
-          content: `Document: "${fileName}"\n\nContent:\n${paragraphs.join('\n\n')}\n\nQuestion: ${question}`,
+          content: `Document: "${fileName}"\nType: ${fileType || 'unknown'}\n\nContent:\n${paragraphs.join('\n\n')}\n\nQuestion: ${question}`,
         },
       ],
       {
@@ -39,7 +79,7 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
         onDelta: (text) => setAiResponse((prev) => (prev || '') + text),
       }
     );
-  }, [askInput, isStreaming, streamChat, fileName, paragraphs]);
+  }, [askInput, isStreaming, streamChat, fileName, fileType, paragraphs]);
 
   const toggleHighlight = (idx: number) => {
     setHighlights((prev) =>
@@ -55,9 +95,9 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
     return (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-workspace-text-secondary text-xs">📄</span>
-            <span className="text-sm text-workspace-text">{fileName}</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-workspace-text-secondary text-xs">{fileType === 'pdf' ? '📄' : '📁'}</span>
+            <span className="text-sm text-workspace-text truncate">{fileName}</span>
           </div>
           <button
             onClick={handleEnterImmersive}
@@ -113,7 +153,6 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
         ))}
       </div>
 
-      {/* Ask about this document — now AI-powered */}
       <div className="mt-12 border-t border-workspace-border/30 pt-8">
         <div className="flex items-center gap-2 mb-4">
           <span className="text-workspace-accent text-sm">✦</span>
