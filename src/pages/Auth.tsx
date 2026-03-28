@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { lovable } from '@/integrations/lovable/index';
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -48,11 +47,14 @@ export default function Auth() {
     try {
       setLoading(true);
       setError(null);
-      const result = await lovable.auth.signInWithOAuth('google', {
-        redirect_uri: window.location.origin,
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin,
+        },
       });
-      if (result.error) {
-        setError(result.error.message || 'Sign-in failed');
+      if (error) {
+        setError(error.message || 'Sign-in failed');
         setLoading(false);
       }
     } catch (err) {
