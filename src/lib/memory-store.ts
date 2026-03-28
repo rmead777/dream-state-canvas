@@ -102,7 +102,7 @@ export async function getMemories(userId: string): Promise<SherpaMemory[]> {
 }
 
 export async function getOverrideMemories(userId: string): Promise<SherpaMemory[]> {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('sherpa_memories')
     .select('*')
     .eq('user_id', userId)
