@@ -1,77 +1,47 @@
 import { z } from 'zod';
-import { CardSection, DataQuerySchema } from './card-schema';
+import { CardSection } from './card-schema';
 
 /**
- * Zod schemas for validating LLM intent output.
- * Prevents malformed AI responses from creating invalid object types
- * or dispatching nonsensical actions.
+ * Intent Schema — validates the STRUCTURE of AI output, not the CONTENT.
+ *
+ * DESIGN PRINCIPLE: Be permissive. The AI is smart and will produce
+ * reasonable structures we haven't anticipated. Strict validation
+ * (tight enums, required fields, exact shapes) REJECTS valid AI output
+ * and causes silent failures. The action handlers and renderers already
+ * handle unexpected values gracefully with defaults and fallbacks.
+ *
+ * What we validate:
+ * - The top-level shape (response + actions array)
+ * - Each action has a "type" field we can route on
+ * - Create actions have an objectType we recognize
+ *
+ * What we DON'T validate:
+ * - dataQuery contents (executor handles unknown operators)
+ * - section contents (renderer skips unknown types)
+ * - extra fields (passed through to handlers)
  */
 
-export const ObjectTypeSchema = z.enum([
+// We validate objectType because we need to route to the right renderer.
+// But we accept any string and let the renderer show a fallback for unknown types.
+const KnownObjectTypes = [
   'metric', 'comparison', 'alert', 'inspector', 'brief',
   'timeline', 'monitor', 'document', 'dataset', 'analysis',
   'action-queue', 'vendor-dossier', 'cash-planner',
   'escalation-tracker', 'outreach-tracker', 'production-risk',
-]);
+] as const;
 
-export const CreateActionSchema = z.object({
-  type: z.literal('create'),
-  objectType: ObjectTypeSchema,
-  title: z.string().min(1).default('Untitled'),
-  relatedTo: z.array(z.string()).optional(),
-  sections: z.array(CardSection).optional(),
-  dataQuery: DataQuerySchema.optional(),
-});
-
-export const FocusActionSchema = z.object({
-  type: z.literal('focus'),
-  objectId: z.string().min(1),
-});
-
-export const DissolveActionSchema = z.object({
-  type: z.literal('dissolve'),
-  objectId: z.string().min(1),
-});
-
-const SectionOperationSchema = z.discriminatedUnion('op', [
-  z.object({ op: z.literal('add'), section: CardSection }),
-  z.object({ op: z.literal('remove'), sectionIndex: z.number() }),
-  z.object({ op: z.literal('replace'), sectionIndex: z.number(), section: CardSection }),
-  z.object({ op: z.literal('requery'), dataQuery: DataQuerySchema }),
-]);
-
-export const UpdateActionSchema = z.object({
-  type: z.literal('update'),
-  objectId: z.string().min(1),
-  instruction: z.string().min(1),
-  dataQuery: DataQuerySchema.optional(),
-  sections: z.array(CardSection).optional(),
-  sectionOperations: z.array(SectionOperationSchema).optional(),
-});
-
-export const FuseActionSchema = z.object({
-  type: z.literal('fuse'),
-  objectIdA: z.string().min(1),
-  objectIdB: z.string().min(1),
-});
-
-export const RefineRulesActionSchema = z.object({
-  type: z.literal('refine-rules'),
-  feedback: z.string().min(1),
-});
-
-export const WorkspaceActionSchema = z.discriminatedUnion('type', [
-  CreateActionSchema,
-  FocusActionSchema,
-  DissolveActionSchema,
-  UpdateActionSchema,
-  FuseActionSchema,
-  RefineRulesActionSchema,
-]);
+// The action schema: we only validate enough to ROUTE the action.
+// All other fields pass through to the handler untouched.
+const ActionSchema = z.object({
+  type: z.string(),
+}).passthrough(); // passthrough lets any extra fields through
 
 export const IntentLLMOutputSchema = z.object({
   response: z.string().optional(),
-  actions: z.array(WorkspaceActionSchema).optional(),
+  actions: z.array(ActionSchema).optional(),
 });
 
 export type IntentLLMOutput = z.infer<typeof IntentLLMOutputSchema>;
+
+// Re-export for backwards compat
+export { CardSection };

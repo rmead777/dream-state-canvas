@@ -79,26 +79,15 @@ export const CardSection = z.discriminatedUnion('type', [
 export type CardSectionType = z.infer<typeof CardSection>;
 
 // ─── DataQuery Schema ────────────────────────────────────────────────────────
+//
+// INTENTIONALLY PERMISSIVE. The AI is smart and will invent reasonable
+// operators/structures we haven't anticipated. The data-query executor
+// handles unknown operators gracefully (falls back to "contains").
+// Do NOT add strict enums here — they reject valid AI output.
 
-const FilterSchema = z.object({
-  column: z.string(),
-  operator: z.enum(['equals', 'contains', 'gt', 'lt', 'gte', 'lte', 'in', 'not']).default('contains'),
-  value: z.union([z.string(), z.number(), z.array(z.union([z.string(), z.number()]))]),
-});
+export const DataQuerySchema = z.record(z.any()).optional();
 
-export const DataQuerySchema = z.object({
-  filter: FilterSchema.optional(),
-  filters: z.array(FilterSchema).optional(),
-  columns: z.array(z.string()).optional(),
-  sort: z.object({
-    column: z.string(),
-    direction: z.enum(['asc', 'desc']),
-  }).optional(),
-  limit: z.number().optional(),
-  groupBy: z.string().optional(),
-}).optional();
-
-export type DataQuery = z.infer<typeof DataQuerySchema>;
+export type DataQuery = Record<string, any> | undefined;
 
 // ─── Analysis Card Content ───────────────────────────────────────────────────
 
