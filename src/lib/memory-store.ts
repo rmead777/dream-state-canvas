@@ -152,5 +152,5 @@ export async function recordMiss(id: string): Promise<void> {
 }
 
 export async function decayStaleMemories(userId: string): Promise<void> {
-  await supabase.rpc('decay_stale_memories', { target_user_id: userId });
+  await db.rpc('decay_stale_memories', { target_user_id: userId });
 }
