@@ -13,13 +13,6 @@ serve(async (req) => {
   try {
     const { messages, mode, adminModel, adminMaxTokens, memories, promptOverride } = await req.json();
 
-    // Admin: list all prompt modes and their content
-    if (mode === '__list-prompts') {
-      return new Response(JSON.stringify({ prompts: systemPrompts }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     // System prompts by mode
     const systemPrompts: Record<string, string> = {
       intent: `You are Sherpa, the AI intelligence layer for an intent-manifestation workspace. You control the workspace by returning JSON actions. The user talks to you in natural language; you decide what happens on their canvas.
