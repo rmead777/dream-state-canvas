@@ -68,7 +68,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh]" onClick={onClose}>
-      <div className="absolute inset-0 bg-workspace-text/10 backdrop-blur-sm animate-[materialize_0.15s_ease-out_forwards]" />
+      <div className="absolute inset-0 bg-workspace-text/10 backdrop-blur-sm animate-[materialize_0.15s_cubic-bezier(0.34,1.56,0.64,1)_forwards]" />
       <div
         className="relative w-full max-w-xl animate-[materialize_0.2s_cubic-bezier(0.16,1,0.3,1)_forwards] rounded-2xl border border-workspace-border bg-white shadow-[0_24px_80px_rgba(0,0,0,0.12)]"
         onClick={(e) => e.stopPropagation()}

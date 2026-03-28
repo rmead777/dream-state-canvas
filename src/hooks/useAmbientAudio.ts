@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 type SoundType = 'materialize' | 'immersive-enter' | 'immersive-exit' | 'alert' | 'dissolve' | 'focus';
 

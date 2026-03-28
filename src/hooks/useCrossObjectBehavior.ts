@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { WorkspaceObject } from '@/lib/workspace-types';
 

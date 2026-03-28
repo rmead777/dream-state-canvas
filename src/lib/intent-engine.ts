@@ -15,7 +15,7 @@ import {
 } from './seed-data';
 import { getActiveDataset } from './active-dataset';
 import { callAI } from '@/hooks/useAI';
-import { analyzeDataset, refineProfile, getCurrentProfile, DataProfile } from './data-analyzer';
+import { analyzeDataset, refineProfile, DataProfile } from './data-analyzer';
 import { previewRows, alertRows, metricAggregate, comparisonPairs } from './data-slicer';
 
 // Cached profile promise (runs once, invalidated on refinement)
@@ -282,7 +282,7 @@ const patterns: IntentPattern[] = [
   },
   {
     keywords: ['compare', 'versus', 'vs'],
-    generate: async (input) => {
+    generate: async (_input) => {
       const data = await getDynamicData('comparison');
       const title = data.entities?.length >= 2
         ? `${data.entities[0].name} vs ${data.entities[1].name}`

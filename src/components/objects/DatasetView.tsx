@@ -86,7 +86,7 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
     return (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <span className="text-xs text-workspace-text-secondary">
+          <span className="text-xs text-workspace-text-secondary tabular-nums">
             {rawRows.length} rows · {allColumns.length} columns
           </span>
           <button
@@ -116,7 +116,7 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
                 return (
                   <tr key={i} className={i < 2 ? 'border-b border-workspace-border/30' : ''}>
                     {cells.map((cell, j) => (
-                      <td key={j} className={`px-3 py-2 ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary'}`}>
+                      <td key={j} className={`px-3 py-2 ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary tabular-nums'}`}>
                         {cell}
                       </td>
                     ))}
@@ -145,7 +145,7 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
               className="bg-transparent text-sm text-workspace-text placeholder:text-workspace-text-secondary/40 outline-none w-48"
             />
           </div>
-          <span className="text-xs text-workspace-text-secondary">
+          <span className="text-xs text-workspace-text-secondary tabular-nums">
             {filteredAndSorted.length} of {rawRows.length} rows · {visibleCols.length} of {allColumns.length} cols
           </span>
         </div>
@@ -274,7 +274,7 @@ function VirtualizedTable({
                     {cells.map((cell, j) => (
                       <td
                         key={j}
-                        className={`px-5 py-3 whitespace-nowrap ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary'}`}
+                        className={`px-5 py-3 whitespace-nowrap ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary tabular-nums'}`}
                       >
                         <FormattedCell value={cell} />
                       </td>

@@ -50,8 +50,8 @@ export function AlertRiskPanel({ object }: { object: WorkspaceObject }) {
     </div>
   );
 }
-
-function formatTimeAgo(ts: number): string {
+          <div className="mt-2 flex items-center gap-3 text-[10px] text-workspace-text-secondary">
+            <span className="tabular-nums">{formatTimeAgo(alert.timestamp)}</span>
   const diff = Date.now() - ts;
   const mins = Math.floor(diff / 60000);
   if (mins < 60) return `${mins}m ago`;

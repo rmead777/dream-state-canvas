@@ -9,8 +9,6 @@ import { previewRows, alertRows, metricAggregate, comparisonPairs } from '@/lib/
 export function RulesEditor({ onClose }: { onClose: () => void }) {
   const { state, dispatch } = useWorkspace();
   const [profile, setProfile] = useState<DataProfile | null>(null);
-  const [editingField, setEditingField] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState('');
   const [isRefining, setIsRefining] = useState(false);
   const [customInstruction, setCustomInstruction] = useState('');
 

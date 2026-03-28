@@ -1,10 +1,9 @@
 import { useRef, useCallback, useState, useEffect } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { useWorkspaceActions } from '@/hooks/useWorkspaceActions';
 import { WorkspaceObjectWrapper } from './WorkspaceObject';
 import { FusionZone } from './FusionZone';
 import { executeFusion } from '@/lib/fusion-executor';
-import { canFuse, SynthesisType } from '@/lib/fusion-rules';
+import { canFuse } from '@/lib/fusion-rules';
 import { toast } from '@/hooks/use-toast';
 
 const FUSION_THRESHOLD = 120;
@@ -12,13 +11,12 @@ const FUSION_GLOW_THRESHOLD = 200;
 
 export function FreeformCanvas() {
   const { state, dispatch } = useWorkspace();
-  const { processIntent } = useWorkspaceActions();
   const { objects } = state;
   const canvasRef = useRef<HTMLDivElement>(null);
   const [fusionTarget, setFusionTarget] = useState<{ sourceId: string; targetId: string } | null>(null);
   const [fusionProcessing, setFusionProcessing] = useState(false);
   const [fusionProximity, setFusionProximity] = useState<{ sourceId: string; targetId: string; intensity: number } | null>(null);
-  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [_activeDragId, setActiveDragId] = useState<string | null>(null);
 
   const visibleObjects = Object.values(objects).filter(
     (o) => o.status !== 'dissolved' && o.status !== 'collapsed'
@@ -333,7 +331,9 @@ function DraggableFreeformObject({
         minWidth: 320,
         maxWidth: 560,
         boxShadow: glowShadow,
-        transition: dragging ? 'box-shadow 0.15s ease' : 'box-shadow 0.3s ease, transform 0.2s ease',
+        transition: dragging
+          ? 'box-shadow 0.15s cubic-bezier(0.34,1.56,0.64,1)'
+          : 'box-shadow 0.3s cubic-bezier(0.34,1.56,0.64,1), transform 0.2s cubic-bezier(0.34,1.56,0.64,1)',
       }}
       onMouseDown={handleMouseDown}
     >
@@ -342,7 +342,7 @@ function DraggableFreeformObject({
           className="absolute -inset-1 rounded-2xl pointer-events-none"
           style={{
             border: `1.5px solid hsl(var(--workspace-accent) / ${fusionGlow * 0.4})`,
-            animation: 'pulse 1.5s ease-in-out infinite',
+            animation: 'pulse 1.5s cubic-bezier(0.34,1.56,0.64,1) infinite',
           }}
         />
       )}

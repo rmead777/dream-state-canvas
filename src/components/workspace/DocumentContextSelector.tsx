@@ -1,6 +1,5 @@
 import { useState, useCallback } from 'react';
 import { useDocuments } from '@/contexts/DocumentContext';
-import { DocumentRecord } from '@/lib/document-store';
 
 export type ContextMode = 'auto' | 'manual';
 

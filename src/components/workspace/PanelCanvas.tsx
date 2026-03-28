@@ -30,7 +30,7 @@ export function PanelCanvas() {
   const [fusionTarget, setFusionTarget] = useState<{ sourceId: string; targetId: string } | null>(null);
   const [fusionProcessing, setFusionProcessing] = useState(false);
   const [fusionHoverId, setFusionHoverId] = useState<string | null>(null);
-  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [_activeDragId, setActiveDragId] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })

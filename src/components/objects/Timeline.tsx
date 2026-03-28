@@ -20,7 +20,7 @@ export function Timeline({ object }: { object: WorkspaceObject }) {
       {/* Vertical line */}
       <div className="absolute left-[7px] top-2 bottom-2 w-px bg-workspace-border" />
 
-      {events.map((event: any, i: number) => (
+      {events.map((event: any, _i: number) => (
         <div key={event.id} className="relative flex gap-3 py-2.5">
           {/* Dot */}
           <div

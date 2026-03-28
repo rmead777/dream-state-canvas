@@ -13,7 +13,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 export function WorkspaceShell() {
   const { state } = useWorkspace();
   const { isOverCapacity } = useWorkspaceBreathing();
-  const cognitiveMode = useCognitiveMode();
+  useCognitiveMode();
   const { play, muted, toggleMute } = useAmbientAudio();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const isImmersive = !!state.activeContext.immersiveObjectId;
@@ -45,15 +45,16 @@ export function WorkspaceShell() {
       {/* Audio mute toggle */}
       <button
         onClick={toggleMute}
-        className="fixed top-3 right-3 z-50 rounded-full p-2 text-workspace-text-secondary/30 hover:text-workspace-text-secondary/60 transition-colors"
+        aria-label={muted ? 'Unmute ambient sounds' : 'Mute ambient sounds'}
+        className="fixed top-3 right-3 z-50 flex h-11 w-11 items-center justify-center rounded-full text-workspace-text-secondary/30 hover:bg-white/65 hover:text-workspace-text-secondary/70 transition-colors"
         title={muted ? 'Unmute sounds' : 'Mute sounds'}
       >
         {muted ? (
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M11 5L6 9H2v6h4l5 4V5Z" /><line x1="23" y1="9" x2="17" y2="15" /><line x1="17" y1="9" x2="23" y2="15" />
           </svg>
         ) : (
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M11 5L6 9H2v6h4l5 4V5Z" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
           </svg>
         )}

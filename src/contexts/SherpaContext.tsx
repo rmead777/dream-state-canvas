@@ -22,7 +22,6 @@ const SherpaCtx = createContext<SherpaContextValue | null>(null);
 export function SherpaProvider({ children }: { children: React.ReactNode }) {
   const { state, dispatch } = useWorkspace();
   const observationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const lastObservationCountRef = useRef(0);
 
   // Proactive observation scanning — runs periodically
   const triggerObservationScan = useCallback(() => {

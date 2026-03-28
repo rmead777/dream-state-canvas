@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { WorkspaceObject } from '@/lib/workspace-types';
 
 // Format a number as currency: $1,234,567
@@ -45,7 +45,7 @@ function TierDistribution({ breakdown }: { breakdown: { name: string; value: num
           return (
             <div
               key={item.name}
-              className="h-full transition-all duration-700 ease-out first:rounded-l-full last:rounded-r-full"
+              className="h-full transition-all duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)] first:rounded-l-full last:rounded-r-full"
               style={{
                 width: `${pct}%`,
                 backgroundColor: colors[i] || colors[3],
@@ -107,11 +107,13 @@ export function MetricDetail({ object }: { object: WorkspaceObject }) {
     <div className="space-y-4">
       <div className="flex items-end justify-between">
         <div>
-          <div className="text-3xl font-light tracking-tight text-workspace-text">
+          <div className="text-3xl font-light tracking-tight text-workspace-text tabular-nums">
             <AnimatedValue value={d.currentValue} unit={d.unit} />
           </div>
           <div className="mt-1 text-xs text-workspace-text-secondary">
-            {d.unit === '$' ? (d.change > 0 ? '+' : '') + formatCurrency(d.change) : (d.change > 0 ? '+' : '') + d.change + d.unit}
+            <span className="tabular-nums">
+              {d.unit === '$' ? (d.change > 0 ? '+' : '') + formatCurrency(d.change) : (d.change > 0 ? '+' : '') + d.change + d.unit}
+            </span>
             {' '}over {d.changePeriod}
             <span className={`ml-2 ${d.trend === 'increasing' ? 'text-amber-600' : 'text-emerald-600'}`}>
               {d.trend === 'increasing' ? '↑ trending up' : '↓ trending down'}
@@ -123,10 +125,10 @@ export function MetricDetail({ object }: { object: WorkspaceObject }) {
 
       {d.threshold && (
         <div className="flex gap-3 text-xs">
-          <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">
+          <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700 tabular-nums">
             Warning: {formatValue(d.threshold.warning, d.unit)}
           </span>
-          <span className="rounded-full bg-red-50 px-2.5 py-1 text-red-700">
+          <span className="rounded-full bg-red-50 px-2.5 py-1 text-red-700 tabular-nums">
             Critical: {formatValue(d.threshold.critical, d.unit)}
           </span>
         </div>
@@ -177,7 +179,7 @@ function BreakdownRow({ item, unit, maxValue, tierIndex }: { item: any; unit: st
       <div className="flex items-center gap-2 flex-1 justify-end">
         <div className="h-2 w-32 rounded-full bg-workspace-border/30 overflow-hidden">
           <div
-            className="h-full rounded-full transition-all duration-700 ease-out"
+            className="h-full rounded-full transition-all duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
             style={{
               width: `${Math.min(width, 100)}%`,
               backgroundColor: TIER_COLORS[tierIndex] || TIER_COLORS[3],

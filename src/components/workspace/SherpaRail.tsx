@@ -347,7 +347,7 @@ export function SherpaRail() {
             <span className="text-[9px] uppercase tracking-widest text-workspace-text-secondary/40">
               History
             </span>
-            {promptHistory.map((entry, i) => (
+            {promptHistory.map((entry, _i) => (
               <div key={entry.timestamp} className="space-y-1.5">
                 <div className="flex items-start gap-2">
                   <span className="text-[9px] text-workspace-accent/50 mt-0.5 shrink-0">→</span>
@@ -363,7 +363,7 @@ export function SherpaRail() {
           <div className="relative rounded-xl border border-workspace-accent/20 bg-gradient-to-b from-workspace-accent/[0.06] to-transparent px-4 py-4 animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards] overflow-hidden">
             {/* Animated scan line */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
-              <div className="absolute inset-x-0 h-px bg-gradient-to-r from-transparent via-workspace-accent/40 to-transparent animate-[scanline_2s_ease-in-out_infinite]" />
+              <div className="absolute inset-x-0 h-px bg-gradient-to-r from-transparent via-workspace-accent/40 to-transparent animate-[scanline_2s_linear_infinite]" />
             </div>
 
             {/* Orbital spinner */}
@@ -378,7 +378,7 @@ export function SherpaRail() {
                   <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-px h-1 w-1 rounded-full bg-workspace-accent/40" />
                 </div>
                 {/* Core pulse */}
-                <div className="absolute inset-2.5 rounded-full bg-workspace-accent/10 animate-[pulse_1.5s_ease-in-out_infinite]">
+                <div className="absolute inset-2.5 rounded-full bg-workspace-accent/10 animate-[pulse_1.5s_cubic-bezier(0.34,1.56,0.64,1)_infinite]">
                   <div className="absolute inset-0.5 rounded-full bg-workspace-accent/20" />
                 </div>
               </div>
@@ -390,7 +390,7 @@ export function SherpaRail() {
                   {[0, 1, 2, 3, 4].map((i) => (
                     <div
                       key={i}
-                      className="h-1 rounded-full bg-workspace-accent/30 animate-[progressDot_1.5s_ease-in-out_infinite]"
+                      className="h-1 rounded-full bg-workspace-accent/30 animate-[progressDot_1.5s_cubic-bezier(0.34,1.56,0.64,1)_infinite]"
                       style={{
                         width: '12px',
                         animationDelay: `${i * 0.15}s`,
@@ -409,7 +409,7 @@ export function SherpaRail() {
               {Array.from({ length: 20 }).map((_, i) => (
                 <div
                   key={i}
-                  className="flex-1 rounded-full bg-workspace-accent/20 animate-[dataStream_2s_ease-in-out_infinite]"
+                  className="flex-1 rounded-full bg-workspace-accent/20 animate-[dataStream_2s_linear_infinite]"
                   style={{ animationDelay: `${i * 0.1}s` }}
                 />
               ))}

@@ -11,7 +11,7 @@ import { WorkspaceObject } from './workspace-types';
 import { callAI } from '@/hooks/useAI';
 import { getActiveDataset } from './active-dataset';
 import { previewRows, alertRows, metricAggregate, comparisonPairs } from './data-slicer';
-import { executeFusion, FusionResult } from './fusion-executor';
+import { executeFusion } from './fusion-executor';
 import { refineDataRules } from './intent-engine';
 import { DataProfile } from './data-analyzer';
 

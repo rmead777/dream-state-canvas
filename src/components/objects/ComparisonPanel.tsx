@@ -26,7 +26,7 @@ export function ComparisonPanel({ object }: { object: WorkspaceObject }) {
             <ChevronDown className="h-3.5 w-3.5 text-workspace-accent flex-shrink-0" />
           )}
           <span className="text-[10px] font-medium uppercase tracking-wider text-workspace-text-secondary group-hover:text-workspace-text transition-colors">
-            Comparison Table · {entities.length} entities
+            Comparison Table · <span className="tabular-nums">{entities.length}</span> entities
           </span>
         </button>
 
@@ -56,7 +56,7 @@ export function ComparisonPanel({ object }: { object: WorkspaceObject }) {
                   >
                     <td className="px-4 py-2.5 text-workspace-text-secondary capitalize">{key}</td>
                     {entities.map((e: any) => (
-                      <td key={e.name} className="px-4 py-2.5 text-right font-medium text-workspace-text">
+                      <td key={e.name} className="px-4 py-2.5 text-right font-medium text-workspace-text tabular-nums">
                         {e.metrics[key]}
                       </td>
                     ))}

@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { WorkspaceObject } from '@/lib/workspace-types';
 
 export interface AmbientHintData {
   objectId: string;

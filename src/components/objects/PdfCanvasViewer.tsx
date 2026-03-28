@@ -60,7 +60,7 @@ export function PdfCanvasViewer({ fileBlob, fileName }: PdfCanvasViewerProps) {
         setPdfDocument(loadedDocument);
         setPageCount(loadedDocument.numPages);
         setCurrentPage(1);
-      } catch (loadError) {
+      } catch {
         if (!cancelled) {
           setPdfDocument(null);
           setError('Could not render this PDF in the workspace.');

@@ -35,7 +35,7 @@ export function VoiceIndicator({ volume, isListening }: VoiceIndicatorProps) {
   if (!isListening) return null;
 
   return (
-    <div className="flex items-center gap-2 animate-[materialize_0.2s_ease-out_forwards]">
+    <div className="flex items-center gap-2 animate-[materialize_0.2s_cubic-bezier(0.34,1.56,0.64,1)_forwards]">
       <canvas
         ref={canvasRef}
         width={60}

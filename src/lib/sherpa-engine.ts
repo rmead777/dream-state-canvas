@@ -24,7 +24,7 @@ function buildDefaultSuggestions(profile: DataProfile | null): Suggestion[] {
   }
 
   const suggestions: Suggestion[] = [];
-  const domain = profile.domain || 'data';
+  const _domain = profile.domain || 'data';
   const measure = profile.primaryMeasureColumn || 'value';
   const id = profile.primaryIdColumn || 'items';
 
@@ -96,7 +96,7 @@ function buildContextualSuggestions(
   const hasBrief = openObjects.some((o) => o.type === 'brief');
 
   const id = profile?.primaryIdColumn?.toLowerCase() || 'items';
-  const measure = profile?.primaryMeasureColumn?.toLowerCase() || 'value';
+  const _measure = profile?.primaryMeasureColumn?.toLowerCase() || 'value';
   const group = profile?.groupByColumn;
 
   if (hasMetric && !hasComparison) {

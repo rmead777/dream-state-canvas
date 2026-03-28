@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Columns } from 'lucide-react';
 import { WorkspaceObject } from '@/lib/workspace-types';
 import { getDisplayColumns, filterRowToColumns } from '@/lib/smart-columns';
@@ -56,7 +56,7 @@ function MiniBar({ value, max, warn }: { value: number; max: number; warn?: numb
   return (
     <div className="h-1.5 w-16 rounded-full bg-workspace-border/40 overflow-hidden">
       <div
-        className="h-full rounded-full transition-all duration-700 ease-out"
+        className="h-full rounded-full transition-all duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
         style={{
           width: `${Math.min(width, 100)}%`,
           backgroundColor: isWarn ? 'hsl(var(--workspace-accent))' : 'hsl(160 50% 45%)',
@@ -87,14 +87,6 @@ function FormattedCell({ value }: { value: string }) {
   if (value.startsWith('-') && /^-[\d.]/.test(value)) return <span className="text-red-500 font-medium">{value}</span>;
 
   return <span>{value}</span>;
-}
-
-/** Parse a numeric-ish string like "$2.4B", "3.6x", "+12.4%" */
-function parseNum(val: string): number | null {
-  if (!val || typeof val !== 'string') return null;
-  const cleaned = val.replace(/[$%xBMK,+]/g, '').trim();
-  const n = parseFloat(cleaned);
-  return isNaN(n) ? null : n;
 }
 
 /** Extract table-like data from source objects */
@@ -155,10 +147,10 @@ export function FusionDataVisuals({ sources }: { sources: WorkspaceObject[] }) {
           </div>
           <div className="flex items-end justify-between">
             <div>
-              <span className="text-2xl font-light tracking-tight text-workspace-text">
+              <span className="text-2xl font-light tracking-tight text-workspace-text tabular-nums">
                 {m.value}{m.unit}
               </span>
-              <div className="mt-0.5 text-[11px] text-workspace-text-secondary">
+              <div className="mt-0.5 text-[11px] text-workspace-text-secondary tabular-nums">
                 {m.change} over 30d
                 <span className={`ml-1.5 ${m.trend === 'increasing' ? 'text-amber-600' : 'text-emerald-600'}`}>
                   {m.trend === 'increasing' ? '↑' : '↓'}
@@ -180,7 +172,7 @@ export function FusionDataVisuals({ sources }: { sources: WorkspaceObject[] }) {
                       max={m.threshold?.critical || Math.max(...m.breakdown.map((x: any) => x.value), 5)}
                       warn={m.threshold?.warning}
                     />
-                    <span className="font-medium text-workspace-text w-10 text-right">{b.value}{m.unit}</span>
+                    <span className="font-medium text-workspace-text w-10 text-right tabular-nums">{b.value}{m.unit}</span>
                   </div>
                 </div>
               ))}
@@ -190,10 +182,10 @@ export function FusionDataVisuals({ sources }: { sources: WorkspaceObject[] }) {
           {/* Threshold pills */}
           {m.threshold && (
             <div className="flex gap-2 pt-0.5">
-              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] text-amber-700">
+              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] text-amber-700 tabular-nums">
                 Warning: {m.threshold.warning}{m.unit}
               </span>
-              <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] text-red-700">
+              <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] text-red-700 tabular-nums">
                 Critical: {m.threshold.critical}{m.unit}
               </span>
             </div>
@@ -232,7 +224,7 @@ export function FusionDataVisuals({ sources }: { sources: WorkspaceObject[] }) {
                   return (
                     <tr key={i} className={i < table.rows.length - 1 ? 'border-b border-workspace-border/20' : ''}>
                       {cells.map((cell, j) => (
-                        <td key={j} className={`px-3 py-1.5 whitespace-nowrap ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary'}`}>
+                        <td key={j} className={`px-3 py-1.5 whitespace-nowrap ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary tabular-nums'}`}>
                           <FormattedCell value={cell} />
                         </td>
                       ))}

@@ -2,7 +2,7 @@
  * Smart column selection — filters columns to the AI-selected display set
  * and provides utilities for expand/collapse toggle.
  */
-import { DataProfile, getCurrentProfile } from './data-analyzer';
+import { getCurrentProfile } from './data-analyzer';
 
 /**
  * Get the display columns for a dataset. Uses the AI-selected displayColumns
