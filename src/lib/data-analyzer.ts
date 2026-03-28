@@ -14,6 +14,13 @@ export interface DataProfile {
   groupByColumn?: string;            // categorical grouping (tier, team, region)
 
   /**
+   * AI-selected display columns — the most important/digestible columns to show
+   * by default in table views. Users can expand to see all columns.
+   * Should be 4-7 columns that tell the most important story.
+   */
+  displayColumns?: string[];
+
+  /**
    * Ordinal priority column — a column whose values represent an explicit
    * ranking hierarchy defined by the data itself (e.g. "Tier 1 — Act Now" > "Tier 2 — Unblock").
    * When present, rows are sorted by rankOrder FIRST, then by measure within each rank.
