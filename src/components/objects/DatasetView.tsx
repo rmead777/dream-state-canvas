@@ -152,7 +152,7 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
             <span className="text-workspace-accent text-sm">✦</span>
             <span className="text-[10px] font-medium uppercase tracking-widest text-workspace-accent">AI Insight</span>
           </div>
-          <p className="text-sm leading-relaxed text-workspace-text whitespace-pre-wrap">{aiInsight}</p>
+          <MarkdownRenderer content={aiInsight} isStreaming={isStreaming} />
         </div>
       )}
 
