@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { DataProfile, getCurrentProfile, clearProfileCache } from '@/lib/data-analyzer';
-import { CANONICAL_DATASET } from '@/lib/seed-data';
+import { getActiveDataset } from '@/lib/active-dataset';
 import { refineDataRules, invalidateProfileCache } from '@/lib/intent-engine';
 import { describeRankingLogic } from '@/lib/data-slicer';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
