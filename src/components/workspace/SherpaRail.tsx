@@ -16,6 +16,10 @@ import { getDocument, extractDataset } from '@/lib/document-store';
 import { setActiveDataset } from '@/lib/active-dataset';
 import { invalidateProfileCache } from '@/lib/intent-engine';
 import { clearProfileCache } from '@/lib/data-analyzer';
+import {
+  checkPassphrase, unlockAdmin, lockAdmin, isAdminUnlocked,
+  getAdminSettings, setAdminModel, setAdminMaxTokens, AVAILABLE_MODELS,
+} from '@/lib/admin-settings';
 import { toast } from 'sonner';
 
 export function SherpaRail() {
@@ -31,6 +35,9 @@ export function SherpaRail() {
   const [showRules, setShowRules] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [adminUnlocked, setAdminUnlocked] = useState(isAdminUnlocked());
+  const [adminState, setAdminState] = useState(getAdminSettings());
   const [promptHistory, setPromptHistory] = useState<Array<{ query: string; response: string | null; timestamp: number }>>([]);
   const [contextMode, setContextMode] = useState<ContextMode>('auto');
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
@@ -93,9 +100,31 @@ export function SherpaRail() {
   const handleSubmit = useCallback(() => {
     const trimmed = input.trim();
     if (!trimmed) return;
+
+    // Check for admin passphrase
+    if (checkPassphrase(trimmed)) {
+      if (!adminUnlocked) {
+        unlockAdmin();
+        setAdminUnlocked(true);
+        setAdminState(getAdminSettings());
+        setShowAdmin(true);
+        dispatch({ type: 'SET_SHERPA_RESPONSE', payload: '🔓 Admin mode activated. You now have access to model and token controls.' });
+        toast.success('Admin mode unlocked');
+      } else {
+        lockAdmin();
+        setAdminUnlocked(false);
+        setAdminState(getAdminSettings());
+        setShowAdmin(false);
+        dispatch({ type: 'SET_SHERPA_RESPONSE', payload: '🔒 Admin mode deactivated. Settings reset to defaults.' });
+        toast.success('Admin mode locked');
+      }
+      setInput('');
+      return;
+    }
+
     trackAndProcess(trimmed);
     setInput('');
-  }, [input, trackAndProcess]);
+  }, [input, trackAndProcess, adminUnlocked, dispatch]);
 
   const handleVoiceResult = useCallback(
     (transcript: string) => {
@@ -152,6 +181,20 @@ export function SherpaRail() {
           )}
         </div>
         <div className="flex items-center gap-1">
+          {/* Admin toggle (only visible when unlocked) */}
+          {adminUnlocked && (
+            <button
+              onClick={() => setShowAdmin(!showAdmin)}
+              className={`rounded-md p-1 transition-colors text-[10px] ${
+                showAdmin
+                  ? 'bg-workspace-accent/10 text-workspace-accent'
+                  : 'text-workspace-accent/40 hover:bg-workspace-surface hover:text-workspace-accent'
+              }`}
+              title={showAdmin ? 'Hide admin' : 'Admin controls'}
+            >
+              ⚡
+            </button>
+          )}
           {/* Upload toggle */}
           <button
             onClick={() => setShowUpload(!showUpload)}
@@ -223,7 +266,69 @@ export function SherpaRail() {
           onModeChange={setContextMode}
         />
 
-        {/* Upload panel */}
+        {/* Admin panel */}
+        {adminUnlocked && showAdmin && (
+          <div className="pb-4 border-b border-workspace-accent/20 mb-4 animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards]">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[9px] uppercase tracking-widest text-workspace-accent/60 flex items-center gap-1.5">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-workspace-accent animate-pulse" />
+                Admin Controls
+              </span>
+              <button
+                onClick={() => setShowAdmin(false)}
+                className="text-[9px] text-workspace-text-secondary/40 hover:text-workspace-text-secondary"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Model selector */}
+            <label className="block text-[10px] text-workspace-text-secondary/60 mb-1.5">AI Model</label>
+            <div className="space-y-1 mb-4">
+              {AVAILABLE_MODELS.map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => {
+                    setAdminModel(m.id);
+                    setAdminState(getAdminSettings());
+                    toast.success(`Model → ${m.label}`);
+                  }}
+                  className={`block w-full rounded-lg border px-3 py-2 text-left transition-all text-[11px] ${
+                    adminState.model === m.id
+                      ? 'border-workspace-accent/40 bg-workspace-accent/5 text-workspace-text'
+                      : 'border-workspace-border/40 bg-workspace-surface/20 text-workspace-text-secondary hover:border-workspace-accent/20'
+                  }`}
+                >
+                  <span className="font-medium">{m.label}</span>
+                  <span className="block text-[9px] text-workspace-text-secondary/50 mt-0.5">{m.description}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Token slider */}
+            <label className="block text-[10px] text-workspace-text-secondary/60 mb-1.5">
+              Max Tokens: <span className="font-mono text-workspace-accent">{adminState.maxTokens.toLocaleString()}</span>
+            </label>
+            <input
+              type="range"
+              min={256}
+              max={32768}
+              step={256}
+              value={adminState.maxTokens}
+              onChange={(e) => {
+                setAdminMaxTokens(Number(e.target.value));
+                setAdminState(getAdminSettings());
+              }}
+              className="w-full h-1.5 rounded-full appearance-none bg-workspace-border/40 accent-workspace-accent cursor-pointer"
+            />
+            <div className="flex justify-between text-[8px] text-workspace-text-secondary/30 mt-1">
+              <span>256</span>
+              <span>32,768</span>
+            </div>
+          </div>
+        )}
+
+
         {showUpload && (
           <div className="pb-4 border-b border-workspace-border/30 mb-4">
             <span className="text-[9px] uppercase tracking-widest text-workspace-text-secondary/40 block mb-2">

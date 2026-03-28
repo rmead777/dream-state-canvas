@@ -1,5 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 
+import { getAdminSettings } from '@/lib/admin-settings';
+
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`;
 
 interface Message {
@@ -30,9 +32,14 @@ export function useAI() {
       let fullText = '';
 
       try {
+        const admin = getAdminSettings();
         const body: Record<string, unknown> = { messages, mode };
         if ((options as any).documentIds) {
           body.documentIds = (options as any).documentIds;
+        }
+        if (admin.isUnlocked) {
+          body.adminModel = admin.model;
+          body.adminMaxTokens = admin.maxTokens;
         }
 
         const resp = await fetch(CHAT_URL, {
@@ -145,9 +152,14 @@ export async function callAI(
   documentIds?: string[]
 ): Promise<string | null> {
   try {
+    const admin = getAdminSettings();
     const body: Record<string, unknown> = { messages, mode };
     if (documentIds && documentIds.length > 0) {
       body.documentIds = documentIds;
+    }
+    if (admin.isUnlocked) {
+      body.adminModel = admin.model;
+      body.adminMaxTokens = admin.maxTokens;
     }
 
     const resp = await fetch(CHAT_URL, {
