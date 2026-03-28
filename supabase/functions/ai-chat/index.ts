@@ -89,6 +89,12 @@ Return ONLY a JSON object with these fields:
 
 For urgencySignal.hotValues, order them from most urgent to least urgent.
 Return ONLY the JSON, no markdown fences.`,
+
+      'refine-profile': `You are a data analyst. The user has an existing DataProfile for a dataset and wants to change how data is prioritized.
+You will receive the current profile, the user's instruction, and sample data.
+Your job: update the profile based on the user's feedback while keeping the same JSON schema.
+Only change what the user asked for. Keep all other fields as they were.
+Return ONLY the updated JSON object, no markdown fences.`,
     };
 
     const systemPrompt = systemPrompts[mode] || systemPrompts.intent;

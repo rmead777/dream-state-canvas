@@ -17,7 +17,7 @@ import { callAI } from '@/hooks/useAI';
 import { analyzeDataset, refineProfile, getCurrentProfile, DataProfile } from './data-analyzer';
 import { previewRows, alertRows, metricAggregate, comparisonPairs } from './data-slicer';
 
-// Cached profile promise (runs once)
+// Cached profile promise (runs once, invalidated on refinement)
 let profilePromise: Promise<DataProfile> | null = null;
 
 function getProfile(): Promise<DataProfile> {
@@ -25,6 +25,28 @@ function getProfile(): Promise<DataProfile> {
     profilePromise = analyzeDataset(CANONICAL_DATASET.columns, CANONICAL_DATASET.rows);
   }
   return profilePromise;
+}
+
+/** Invalidate cached profile so next getProfile() re-fetches from cache/AI. */
+export function invalidateProfileCache(): void {
+  profilePromise = null;
+}
+
+/**
+ * Refine data prioritization rules based on user feedback.
+ * Returns the updated profile and invalidates the cached promise.
+ */
+export async function refineDataRules(userFeedback: string): Promise<DataProfile> {
+  const current = await getProfile();
+  const updated = await refineProfile(
+    CANONICAL_DATASET.columns,
+    CANONICAL_DATASET.rows,
+    current,
+    userFeedback
+  );
+  // Replace the cached promise with the updated profile
+  profilePromise = Promise.resolve(updated);
+  return updated;
 }
 
 // Context builder — feeds workspace state to the LLM
