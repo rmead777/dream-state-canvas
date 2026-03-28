@@ -113,11 +113,20 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
       return { ...state, objects: newObjects };
     }
 
-    case 'FOCUS_OBJECT':
+    case 'FOCUS_OBJECT': {
+      const focusId = action.payload.id;
+      // Also expand the object if it's collapsed
+      let focusObjects = state.objects;
+      if (focusId && state.objects[focusId] && state.objects[focusId].status === 'collapsed') {
+        focusObjects = { ...state.objects, [focusId]: { ...state.objects[focusId], status: 'open' as const, lastInteractedAt: now } };
+      }
       return {
         ...state,
-        activeContext: { ...state.activeContext, focusedObjectId: action.payload.id },
+        objects: focusObjects,
+        spatialLayout: focusObjects !== state.objects ? computeLayout(focusObjects) : state.spatialLayout,
+        activeContext: { ...state.activeContext, focusedObjectId: focusId },
       };
+    }
 
     case 'TOUCH_OBJECT': {
       const obj = state.objects[action.payload.id];

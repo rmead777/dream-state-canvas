@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities';
 import { WorkspaceObject as WO } from '@/lib/workspace-types';
 import { useWorkspaceActions } from '@/hooks/useWorkspaceActions';
@@ -48,8 +48,16 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
   const ambientHints = useAmbientSherpa();
   const [size, setSize] = useState<{ width: number | null; height: number | null }>({ width: null, height: null });
   const [dismissedHints, setDismissedHints] = useState<Set<string>>(new Set());
+  const cardRef = useRef<HTMLDivElement>(null);
 
   const isFocused = state.activeContext.focusedObjectId === object.id;
+
+  // Scroll into view when focused
+  useEffect(() => {
+    if (isFocused && cardRef.current) {
+      cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [isFocused]);
   const isDimmed = shouldDim(object.id);
   const isHighlighted = shouldHighlight(object.id);
   const isMaterializing = object.status === 'materializing';
@@ -67,6 +75,7 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
 
   return (
     <div
+      ref={cardRef}
       className={`
         group relative rounded-xl border bg-white
         transition-all duration-500
