@@ -74,7 +74,12 @@ export interface FuseAction {
   objectIdB: string;
 }
 
-export type WorkspaceAction = CreateAction | FocusAction | DissolveAction | RespondAction | FuseAction;
+export interface RefineRulesAction {
+  type: 'refine-rules';
+  feedback: string;
+}
+
+export type WorkspaceAction = CreateAction | FocusAction | DissolveAction | RespondAction | FuseAction | RefineRulesAction;
 
 export interface IntentResult {
   actions: WorkspaceAction[];
