@@ -204,7 +204,7 @@ function MetricsRowRenderer({ section }: { section: { metrics: { label: string; 
 
 function ChartRenderer({ section }: { section: { chartType: string; xAxis: string; yAxis: string; data: Record<string, string | number>[]; caption?: string } }) {
   const ChartComponent = section.chartType === 'line' ? LineChart : section.chartType === 'area' ? AreaChart : BarChart;
-  const DataComponent = section.chartType === 'line' ? Line : section.chartType === 'area' ? Area : Bar;
+  const DataComponent: React.ElementType = section.chartType === 'line' ? Line : section.chartType === 'area' ? Area : Bar;
 
   return (
     <div className="space-y-1">

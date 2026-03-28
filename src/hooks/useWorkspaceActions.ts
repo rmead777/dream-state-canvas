@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { parseIntentAI } from '@/lib/intent-engine';
-import { WorkspaceObject, IntentOrigin, WorkspaceAction } from '@/lib/workspace-types';
+import { WorkspaceObject, IntentOrigin, WorkspaceAction, WorkspaceReducerAction } from '@/lib/workspace-types';
 import { computeFreeformPosition } from '@/lib/freeform-placement';
 import { handleUpdate, handleFuse, handleRefineRules, HandlerResult, DispatchInstruction } from '@/lib/action-handlers';
 import { toast } from '@/hooks/use-toast';
@@ -282,7 +282,7 @@ export function useWorkspaceActions() {
     };
 
     for (const d of handlerResult.dispatches) {
-      dispatch(d);
+      dispatch(d as WorkspaceReducerAction);
 
       switch (d.type) {
         case 'SET_SHERPA_RESPONSE':
@@ -336,7 +336,7 @@ export function useWorkspaceActions() {
 
     // Build context — merge AI-generated sections + dataQuery results
     let context: Record<string, unknown> = resolvedDocument
-      ? buildDocumentObjectContext(resolvedDocument)
+      ? buildDocumentObjectContext(resolvedDocument) as unknown as Record<string, unknown>
       : (action.data || {});
 
     // If AI provided sections (analysis or enhanced standard card)
