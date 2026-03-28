@@ -162,10 +162,14 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
     const storagePath = d.storagePath;
     if (!storagePath) return;
 
-    const { data } = supabase.storage.from('documents').getPublicUrl(storagePath);
-    if (data?.publicUrl) {
-      setPdfUrl(data.publicUrl);
-    }
+    supabase.storage
+      .from('documents')
+      .createSignedUrl(storagePath, 3600)
+      .then(({ data, error }) => {
+        if (!error && data?.signedUrl) {
+          setPdfUrl(data.signedUrl);
+        }
+      });
   }, [isPdf, isImmersive, d.storagePath]);
 
   useEffect(() => {
