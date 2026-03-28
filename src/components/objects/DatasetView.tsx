@@ -261,73 +261,75 @@ function VirtualizedTable({
     );
   }
 
+  const colCount = columns.length;
+  const gridCols = `minmax(180px, 2fr) ${Array(colCount - 1).fill('minmax(120px, 1fr)').join(' ')}`;
+
   return (
     <div className="workspace-card-surface rounded-[28px] border border-workspace-border/45 bg-white overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full text-[13px]">
-          <thead>
-            <tr className="border-b border-workspace-border bg-workspace-surface/30">
-              {columns.map((col, idx) => (
-                <th
-                  key={col}
-                  aria-sort={sortCol === idx ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
-                  className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.18em] text-workspace-text-secondary whitespace-nowrap"
+        {/* Header */}
+        <div
+          className="grid border-b border-workspace-border bg-workspace-surface/30 text-[11px] font-medium uppercase tracking-[0.18em] text-workspace-text-secondary"
+          style={{ gridTemplateColumns: gridCols }}
+        >
+          {columns.map((col, idx) => (
+            <div
+              key={col}
+              className="px-4 py-2.5 whitespace-nowrap"
+            >
+              <button
+                onClick={() => onSort(idx)}
+                aria-sort={sortCol === idx ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                className="workspace-focus-ring inline-flex items-center gap-1 rounded-xl px-2 py-1 -mx-2 cursor-pointer select-none transition-colors hover:text-workspace-text"
+              >
+                {col}
+                {sortCol === idx && (
+                  <span className="text-workspace-accent">
+                    {sortDir === 'asc' ? '↑' : '↓'}
+                  </span>
+                )}
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* Virtualized body */}
+        <div
+          ref={parentRef}
+          className="overflow-auto"
+          style={{ maxHeight: '60vh' }}
+        >
+          <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
+            {virtualizer.getVirtualItems().map((virtualRow) => {
+              const row = rows[virtualRow.index];
+              const cells = getVisibleRow(row);
+              return (
+                <div
+                  key={virtualRow.index}
+                  className="grid border-b border-workspace-border/20 text-[13px] transition-colors hover:bg-workspace-accent/[0.04]"
+                  style={{
+                    gridTemplateColumns: gridCols,
+                    height: `${virtualRow.size}px`,
+                    transform: `translateY(${virtualRow.start}px)`,
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    backgroundColor: virtualRow.index % 2 === 0 ? 'white' : 'rgba(var(--workspace-surface-rgb, 245 245 250) / 0.16)',
+                  }}
                 >
-                  <button
-                    onClick={() => onSort(idx)}
-                    className="workspace-focus-ring inline-flex items-center gap-1 rounded-xl px-2 py-1 -mx-2 cursor-pointer select-none transition-colors hover:text-workspace-text"
-                  >
-                    {col}
-                    {sortCol === idx && (
-                      <span className="text-workspace-accent">
-                        {sortDir === 'asc' ? '↑' : '↓'}
-                      </span>
-                    )}
-                  </button>
-                </th>
-              ))}
-            </tr>
-          </thead>
-        </table>
-      </div>
-      <div
-        ref={parentRef}
-        className="overflow-auto"
-        style={{ maxHeight: '60vh' }}
-      >
-        <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
-          <table className="w-full text-[13px]" style={{ position: 'absolute', top: 0, left: 0, right: 0 }}>
-            <tbody>
-              {virtualizer.getVirtualItems().map((virtualRow) => {
-                const row = rows[virtualRow.index];
-                const cells = getVisibleRow(row);
-                return (
-                  <tr
-                    key={virtualRow.index}
-                    className="border-b border-workspace-border/20 transition-colors odd:bg-white even:bg-workspace-surface/[0.16] hover:bg-workspace-accent/[0.04]"
-                    style={{
-                      height: `${virtualRow.size}px`,
-                      transform: `translateY(${virtualRow.start}px)`,
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      display: 'table-row',
-                    }}
-                  >
-                    {cells.map((cell, j) => (
-                      <td
-                        key={j}
-                        className={`px-4 py-2.5 whitespace-nowrap ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary tabular-nums'}`}
-                      >
-                        <FormattedCell value={cell} />
-                      </td>
-                    ))}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                  {cells.map((cell, j) => (
+                    <div
+                      key={j}
+                      className={`px-4 py-2.5 whitespace-nowrap overflow-hidden text-ellipsis flex items-center ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary tabular-nums'}`}
+                    >
+                      <FormattedCell value={cell} />
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>
