@@ -141,16 +141,22 @@ export function useAI() {
  */
 export async function callAI(
   messages: Message[],
-  mode: string = 'intent'
+  mode: string = 'intent',
+  documentIds?: string[]
 ): Promise<string | null> {
   try {
+    const body: Record<string, unknown> = { messages, mode };
+    if (documentIds && documentIds.length > 0) {
+      body.documentIds = documentIds;
+    }
+
     const resp = await fetch(CHAT_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
       },
-      body: JSON.stringify({ messages, mode }),
+      body: JSON.stringify(body),
     });
 
     if (!resp.ok) return null;
