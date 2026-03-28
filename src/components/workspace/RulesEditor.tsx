@@ -157,8 +157,8 @@ export function RulesEditor({ onClose }: { onClose: () => void }) {
       </div>
 
       {!profile.ordinalPriorityColumn && (
-        <div className="rounded-md border border-amber-200/60 bg-amber-50/30 px-2.5 py-2">
-          <p className="text-[10px] text-amber-700 leading-relaxed">
+      <div className="rounded-md border border-destructive/20 bg-destructive/5 px-2.5 py-2">
+          <p className="text-[10px] text-destructive/80 leading-relaxed">
             ⚠ No explicit priority column detected. The current ranking is provisional. 
             You can define one by saying e.g. "use Status column as priority" or "Tier 1 is highest priority".
           </p>
