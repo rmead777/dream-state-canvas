@@ -37,6 +37,9 @@ export interface DataProfile {
   };
 }
 
+// Cache schema version — bump this to invalidate all old cached profiles
+const CACHE_VERSION = 2;
+
 // Simple string hash for fingerprinting
 function hashString(s: string): string {
   let hash = 0;
@@ -57,8 +60,14 @@ function computeFingerprint(columns: string[], rows: string[][]): string {
 const CACHE_PREFIX = 'dataset-profile-';
 let memoryCache: { fingerprint: string; profile: DataProfile } | null = null;
 
+interface CachedEntry {
+  version: number;
+  profile: DataProfile;
+}
+
 /**
  * Get cached profile from localStorage or memory.
+ * Invalidates entries from older schema versions.
  */
 function getCachedProfile(fingerprint: string): DataProfile | null {
   if (memoryCache?.fingerprint === fingerprint) return memoryCache.profile;
@@ -66,9 +75,15 @@ function getCachedProfile(fingerprint: string): DataProfile | null {
   try {
     const stored = localStorage.getItem(CACHE_PREFIX + fingerprint);
     if (stored) {
-      const profile = JSON.parse(stored) as DataProfile;
-      memoryCache = { fingerprint, profile };
-      return profile;
+      const parsed = JSON.parse(stored);
+      // Check version — old entries without version or with old version are discarded
+      if (parsed && typeof parsed === 'object' && parsed.version === CACHE_VERSION) {
+        const profile = parsed.profile as DataProfile;
+        memoryCache = { fingerprint, profile };
+        return profile;
+      }
+      // Stale cache — remove it
+      localStorage.removeItem(CACHE_PREFIX + fingerprint);
     }
   } catch { /* corrupt */ }
   return null;
@@ -77,7 +92,8 @@ function getCachedProfile(fingerprint: string): DataProfile | null {
 function setCachedProfile(fingerprint: string, profile: DataProfile): void {
   memoryCache = { fingerprint, profile };
   try {
-    localStorage.setItem(CACHE_PREFIX + fingerprint, JSON.stringify(profile));
+    const entry: CachedEntry = { version: CACHE_VERSION, profile };
+    localStorage.setItem(CACHE_PREFIX + fingerprint, JSON.stringify(entry));
   } catch { /* storage full */ }
 }
 
