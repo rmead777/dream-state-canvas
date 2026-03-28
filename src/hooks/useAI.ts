@@ -30,13 +30,18 @@ export function useAI() {
       let fullText = '';
 
       try {
+        const body: Record<string, unknown> = { messages, mode };
+        if ((options as any).documentIds) {
+          body.documentIds = (options as any).documentIds;
+        }
+
         const resp = await fetch(CHAT_URL, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
-          body: JSON.stringify({ messages, mode }),
+          body: JSON.stringify(body),
           signal: controller.signal,
         });
 
