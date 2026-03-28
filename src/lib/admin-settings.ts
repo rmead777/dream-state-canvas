@@ -7,6 +7,8 @@ export interface AdminSettings {
   isUnlocked: boolean;
   model: string;
   maxTokens: number;
+  /** Number of previous conversation turns to include in AI context */
+  contextWindow: number;
 }
 
 const PASSPHRASE = 'protocol alpha';
@@ -48,6 +50,7 @@ const DEFAULT_SETTINGS: AdminSettings = {
   isUnlocked: false,
   model: 'google/gemini-3-flash-preview',
   maxTokens: 8192,
+  contextWindow: 10,
 };
 
 let _settings: AdminSettings = { ...DEFAULT_SETTINGS };
@@ -96,5 +99,10 @@ export function setAdminModel(model: string): void {
 
 export function setAdminMaxTokens(maxTokens: number): void {
   _settings.maxTokens = Math.max(256, Math.min(32768, maxTokens));
+  persist();
+}
+
+export function setAdminContextWindow(n: number): void {
+  _settings.contextWindow = Math.max(1, Math.min(50, n));
   persist();
 }

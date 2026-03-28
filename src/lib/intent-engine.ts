@@ -4,6 +4,8 @@ import {
   WorkspaceObject,
 } from './workspace-types';
 import { IntentLLMOutputSchema } from './intent-schema';
+import { getConversationMessages } from './conversation-memory';
+import { getAdminSettings } from './admin-settings';
 import {
   SEED_LEVERAGE_DATA,
   SEED_COMPARISON_DATA,
@@ -137,13 +139,20 @@ export async function parseIntentAI(
 ): Promise<IntentResult> {
   try {
     const context = buildWorkspaceContext(existingObjects);
+    const { contextWindow } = getAdminSettings();
+
+    // Build conversation history for follow-up awareness
+    const history = getConversationMessages(contextWindow);
+    const messages = [
+      ...history,
+      {
+        role: 'user' as const,
+        content: `Workspace context:\n${context}\n\nUser query: "${input}"`,
+      },
+    ];
+
     const result = await callAI(
-      [
-        {
-          role: 'user',
-          content: `Workspace context:\n${context}\n\nUser query: "${input}"`,
-        },
-      ],
+      messages,
       'intent',
       documentIds
     );

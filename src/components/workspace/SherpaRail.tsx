@@ -18,7 +18,7 @@ import { invalidateProfileCache } from '@/lib/intent-engine';
 import { clearProfileCache } from '@/lib/data-analyzer';
 import {
   checkPassphrase, unlockAdmin, lockAdmin, isAdminUnlocked,
-  getAdminSettings, setAdminModel, setAdminMaxTokens, AVAILABLE_MODELS,
+  getAdminSettings, setAdminModel, setAdminMaxTokens, setAdminContextWindow, AVAILABLE_MODELS,
 } from '@/lib/admin-settings';
 import { toast } from 'sonner';
 
@@ -398,6 +398,27 @@ export function SherpaRail() {
             <div className="flex justify-between text-[8px] text-workspace-text-secondary/30 mt-1">
               <span>256</span>
               <span>32,768</span>
+            </div>
+
+            {/* Context window slider */}
+            <label className="block text-[10px] text-workspace-text-secondary/60 mb-1.5 mt-4">
+              Conversation Memory: <span className="font-mono text-workspace-accent">{adminState.contextWindow} turns</span>
+            </label>
+            <input
+              type="range"
+              min={1}
+              max={50}
+              step={1}
+              value={adminState.contextWindow}
+              onChange={(e) => {
+                setAdminContextWindow(Number(e.target.value));
+                setAdminState(getAdminSettings());
+              }}
+              className="w-full h-1.5 rounded-full appearance-none bg-workspace-border/40 accent-workspace-accent cursor-pointer"
+            />
+            <div className="flex justify-between text-[8px] text-workspace-text-secondary/30 mt-1">
+              <span>1 turn</span>
+              <span>50 turns</span>
             </div>
           </div>
         )}

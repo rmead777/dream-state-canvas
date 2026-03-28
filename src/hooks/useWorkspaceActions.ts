@@ -7,6 +7,7 @@ import { computeFreeformPosition } from '@/lib/freeform-placement';
 import { handleUpdate, handleFuse, handleRefineRules } from '@/lib/action-handlers';
 import { toast } from '@/hooks/use-toast';
 import { buildDocumentObjectContext, resolveDocumentRecord } from '@/lib/document-store';
+import { addQuery, updateLastResponse } from '@/lib/conversation-memory';
 
 // Store document IDs ref for context injection
 let _documentIdsRef: string[] = [];
@@ -27,15 +28,22 @@ export function useWorkspaceActions() {
       const origin: IntentOrigin = { type: 'user-query', query };
       dispatch({ type: 'ADD_RECENT_INTENT', payload: origin });
 
+      // Record query in conversation memory
+      addQuery(query);
+
       try {
         const result = await parseIntentAI(query, state.objects, _documentIdsRef);
+        // Record the AI's response for conversation continuity
+        const responseAction = result.actions.find(a => a.type === 'respond');
+        if (responseAction && 'message' in responseAction) {
+          updateLastResponse(responseAction.message as string);
+        }
         await applyResult(result, origin);
       } catch (aiError) {
         console.error('[processIntent] AI intent parsing failed:', aiError);
-        dispatch({
-          type: 'SET_SHERPA_RESPONSE',
-          payload: 'Sherpa is having trouble reaching the AI service right now. Please check your connection and try again in a moment.',
-        });
+        const errorMsg = 'Sherpa is having trouble reaching the AI service right now. Please check your connection and try again in a moment.';
+        updateLastResponse(errorMsg);
+        dispatch({ type: 'SET_SHERPA_RESPONSE', payload: errorMsg });
       }
 
       dispatch({ type: 'SET_SHERPA_PROCESSING', payload: false });
