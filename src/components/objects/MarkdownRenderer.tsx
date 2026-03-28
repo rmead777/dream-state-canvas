@@ -308,6 +308,19 @@ export default function MarkdownRenderer({ content, isStreaming }: MarkdownRende
               </div>
             );
 
+          case "collapsible":
+            return (
+              <details key={i} className="my-2 rounded-lg border border-workspace-border/50 overflow-hidden group">
+                <summary className="flex items-center gap-2 px-4 py-2.5 cursor-pointer select-none bg-workspace-surface/40 hover:bg-workspace-surface/60 transition-colors text-sm font-semibold text-workspace-text">
+                  <span className="text-workspace-accent text-xs transition-transform group-open:rotate-90">▶</span>
+                  <span dangerouslySetInnerHTML={{ __html: applyInlineFormatting(block.summary || "Details") }} />
+                </summary>
+                <div className="px-4 py-3 border-t border-workspace-border/30">
+                  <MarkdownRenderer content={block.content} />
+                </div>
+              </details>
+            );
+
           default:
             return null;
         }
