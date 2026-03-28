@@ -77,8 +77,10 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
       const obj = state.objects[action.payload.id];
       if (!obj) return state;
       const updated = { ...obj, status: 'open' as const, lastInteractedAt: now };
-      const newObjects = { ...state.objects, [obj.id]: updated };
-      return { ...state, objects: newObjects, spatialLayout: computeLayoutWithOverflow(newObjects).layout };
+      const withUpdate = { ...state.objects, [obj.id]: updated };
+      // Opening an object can push over capacity — use overflow collapse
+      const { objects: newObjects, layout } = layoutWithOverflowCollapse(withUpdate);
+      return { ...state, objects: newObjects, spatialLayout: layout };
     }
 
     case 'DISSOLVE_OBJECT': {
@@ -110,11 +112,13 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
       const obj = state.objects[action.payload.id];
       if (!obj) return state;
       const updated = { ...obj, status: 'materializing' as const, lastInteractedAt: now };
-      const newObjects = { ...state.objects, [obj.id]: updated };
+      const withUpdate = { ...state.objects, [obj.id]: updated };
+      // Restoring can push over capacity — use overflow collapse
+      const { objects: newObjects, layout } = layoutWithOverflowCollapse(withUpdate);
       return {
         ...state,
         objects: newObjects,
-        spatialLayout: computeLayoutWithOverflow(newObjects).layout,
+        spatialLayout: layout,
         activeContext: { ...state.activeContext, focusedObjectId: obj.id },
       };
     }
@@ -137,15 +141,19 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
 
     case 'FOCUS_OBJECT': {
       const focusId = action.payload.id;
-      // Also expand the object if it's collapsed
-      let focusObjects = state.objects;
+      // Also expand the object if it's collapsed — can push over capacity
       if (focusId && state.objects[focusId] && state.objects[focusId].status === 'collapsed') {
-        focusObjects = { ...state.objects, [focusId]: { ...state.objects[focusId], status: 'open' as const, lastInteractedAt: now } };
+        const withExpanded = { ...state.objects, [focusId]: { ...state.objects[focusId], status: 'open' as const, lastInteractedAt: now } };
+        const { objects: focusObjects, layout } = layoutWithOverflowCollapse(withExpanded);
+        return {
+          ...state,
+          objects: focusObjects,
+          spatialLayout: layout,
+          activeContext: { ...state.activeContext, focusedObjectId: focusId },
+        };
       }
       return {
         ...state,
-        objects: focusObjects,
-        spatialLayout: focusObjects !== state.objects ? computeLayoutWithOverflow(focusObjects).layout : state.spatialLayout,
         activeContext: { ...state.activeContext, focusedObjectId: focusId },
       };
     }
