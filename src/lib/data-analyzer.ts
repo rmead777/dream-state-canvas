@@ -12,6 +12,18 @@ export interface DataProfile {
   measureFormat: 'currency' | 'number' | 'percentage';
   sortDirection: 'desc' | 'asc';
   groupByColumn?: string;            // categorical grouping (tier, team, region)
+
+  /**
+   * Ordinal priority column — a column whose values represent an explicit
+   * ranking hierarchy defined by the data itself (e.g. "Tier 1 — Act Now" > "Tier 2 — Unblock").
+   * When present, rows are sorted by rankOrder FIRST, then by measure within each rank.
+   * The AI must NEVER override this with numeric-value sorting unless the user explicitly asks.
+   */
+  ordinalPriorityColumn?: {
+    column: string;
+    rankOrder: string[];             // ordered from highest priority to lowest
+  };
+
   urgencySignal?: {
     column: string;
     hotValues: string[];             // values meaning "needs attention"
@@ -70,10 +82,50 @@ function setCachedProfile(fingerprint: string, profile: DataProfile): void {
 }
 
 /**
+ * Detect ordinal priority columns heuristically.
+ * Looks for columns with values like "Tier 1 — Act Now", "Priority: High", numbered ranks, etc.
+ */
+function detectOrdinalPriority(columns: string[], rows: string[][]): DataProfile['ordinalPriorityColumn'] | undefined {
+  for (const col of columns) {
+    const lower = col.toLowerCase();
+    if (!/tier|priority|rank|level|severity|urgency|class/i.test(lower)) continue;
+
+    const colIdx = columns.indexOf(col);
+    const uniqueVals = [...new Set(rows.map(r => r[colIdx]).filter(Boolean))];
+    if (uniqueVals.length < 2 || uniqueVals.length > 10) continue;
+
+    // Check if values have embedded numbers (Tier 1, Tier 2, etc.)
+    const numbered = uniqueVals.filter(v => /\d/.test(v));
+    if (numbered.length >= 2) {
+      // Sort by embedded number ascending (Tier 1 first = highest priority)
+      const sorted = [...uniqueVals].sort((a, b) => {
+        const na = parseInt(a.match(/\d+/)?.[0] || '99');
+        const nb = parseInt(b.match(/\d+/)?.[0] || '99');
+        return na - nb;
+      });
+      return { column: col, rankOrder: sorted };
+    }
+
+    // Check for priority keywords
+    const priorityKeywords = ['critical', 'high', 'act now', 'urgent', 'immediate'];
+    const hasKeywords = uniqueVals.some(v => priorityKeywords.some(kw => v.toLowerCase().includes(kw)));
+    if (hasKeywords) {
+      // Sort by urgency keywords first
+      const sorted = [...uniqueVals].sort((a, b) => {
+        const scoreA = priorityKeywords.findIndex(kw => a.toLowerCase().includes(kw));
+        const scoreB = priorityKeywords.findIndex(kw => b.toLowerCase().includes(kw));
+        return (scoreA === -1 ? 99 : scoreA) - (scoreB === -1 ? 99 : scoreB);
+      });
+      return { column: col, rankOrder: sorted };
+    }
+  }
+  return undefined;
+}
+
+/**
  * Deterministic fallback — inspects columns heuristically when AI is unavailable.
  */
 function buildFallbackProfile(columns: string[], rows: string[][]): DataProfile {
-  // Find first string-like column (ID), first numeric-looking column (measure)
   let idCol = columns[0];
   let measureCol = columns[0];
   let groupCol: string | undefined;
@@ -81,26 +133,25 @@ function buildFallbackProfile(columns: string[], rows: string[][]): DataProfile 
 
   for (const col of columns) {
     const lower = col.toLowerCase();
-    // Detect measure columns
     if (/balance|amount|total|value|revenue|salary|score|price|cost/i.test(lower)) {
       measureCol = col;
     }
-    // Detect grouping columns
     if (/tier|category|group|team|region|type|status|class|division/i.test(lower)) {
       groupCol = col;
     }
-    // Detect urgency/priority columns
     if (/tier|priority|urgency|risk|status|alert/i.test(lower)) {
       urgencyCol = col;
     }
   }
 
-  // Detect urgency hot values from the group/urgency column
+  // Detect ordinal priority
+  const ordinalPriority = detectOrdinalPriority(columns, rows);
+
+  // Detect urgency hot values from the urgency column
   const hotValues: string[] = [];
   if (urgencyCol) {
     const colIdx = columns.indexOf(urgencyCol);
     const uniqueVals = [...new Set(rows.map(r => r[colIdx]).filter(Boolean))];
-    // Pick values containing keywords like "act now", "urgent", "critical", "high"
     for (const v of uniqueVals) {
       if (/act now|urgent|critical|high|unblock|immediate/i.test(v)) {
         hotValues.push(v);
@@ -108,7 +159,14 @@ function buildFallbackProfile(columns: string[], rows: string[][]): DataProfile 
     }
   }
 
-  // Detect currency formatting
+  // If we found an ordinal priority column, use it for urgency too
+  if (ordinalPriority && !hotValues.length) {
+    // Top-ranked values are "hot"
+    const topHot = ordinalPriority.rankOrder.slice(0, 2);
+    urgencyCol = ordinalPriority.column;
+    hotValues.push(...topHot);
+  }
+
   const measureIdx = columns.indexOf(measureCol);
   const hasCurrency = rows.some(r => r[measureIdx]?.startsWith('$'));
 
@@ -119,12 +177,15 @@ function buildFallbackProfile(columns: string[], rows: string[][]): DataProfile 
     measureFormat: hasCurrency ? 'currency' : 'number',
     sortDirection: 'desc',
     groupByColumn: groupCol,
+    ordinalPriorityColumn: ordinalPriority,
     urgencySignal: urgencyCol ? { column: urgencyCol, hotValues } : undefined,
-    previewStrategy: `Top items by ${measureCol}, prioritizing urgent items`,
+    previewStrategy: ordinalPriority
+      ? `Prioritize by ${ordinalPriority.column} rank order (${ordinalPriority.rankOrder[0]} first), then by ${measureCol} within each rank`
+      : `Top items by ${measureCol}, prioritizing urgent items`,
     cardRecommendations: {
       metric: { title: `Total ${measureCol}`, aggregateColumn: measureCol },
       alert: { filterColumn: urgencyCol || columns[0], filterValues: hotValues },
-      inspector: { sortBy: measureCol, limit: 8 },
+      inspector: { sortBy: ordinalPriority ? ordinalPriority.column : measureCol, limit: 8 },
       comparison: { contrastColumn: groupCol || columns[0] },
     },
   };
@@ -151,7 +212,7 @@ export async function analyzeDataset(
     const result = await callAI(
       [{
         role: 'user',
-        content: `Here is a dataset with ${rows.length} rows and ${columns.length} columns.\n\nColumns and sample rows:\n${tablePreview}\n\nAnalyze this dataset and return a JSON object with these fields:\n- "domain": string (what domain is this data about)\n- "primaryIdColumn": string (which column is the entity identifier)\n- "primaryMeasureColumn": string (the main numeric column to rank/sort by)\n- "measureFormat": "currency" | "number" | "percentage"\n- "sortDirection": "desc" | "asc"\n- "groupByColumn": string or null (categorical grouping column)\n- "urgencySignal": { "column": string, "hotValues": string[] } or null (which column+values indicate urgency)\n- "previewStrategy": string (describe in one sentence how to pick the most important rows for a compact preview)\n- "cardRecommendations": { "metric": { "title": string, "aggregateColumn": string }, "alert": { "filterColumn": string, "filterValues": string[] }, "inspector": { "sortBy": string, "limit": number }, "comparison": { "contrastColumn": string } }\n\nReturn ONLY the JSON object, no markdown.`,
+        content: `Here is a dataset with ${rows.length} rows and ${columns.length} columns.\n\nColumns and sample rows:\n${tablePreview}\n\nAnalyze this dataset and return a JSON object with these fields:\n- "domain": string (what domain is this data about)\n- "primaryIdColumn": string (which column is the entity identifier)\n- "primaryMeasureColumn": string (the main numeric column to rank/sort by)\n- "measureFormat": "currency" | "number" | "percentage"\n- "sortDirection": "desc" | "asc"\n- "groupByColumn": string or null (categorical grouping column)\n- "ordinalPriorityColumn": { "column": string, "rankOrder": string[] } or null — CRITICAL: If any column represents an explicit priority/tier/rank hierarchy defined by the data (e.g. "Tier 1 — Act Now", "Priority: High"), you MUST identify it here. The rankOrder array must list values from HIGHEST priority to LOWEST. This column's rank order takes precedence over numeric sorting for previews.\n- "urgencySignal": { "column": string, "hotValues": string[] } or null (which column+values indicate urgency, hotValues ordered most to least urgent)\n- "previewStrategy": string (describe in one sentence how to pick the most important rows — if ordinalPriorityColumn exists, it must say rows are sorted by that column's rank first)\n- "cardRecommendations": { "metric": { "title": string, "aggregateColumn": string }, "alert": { "filterColumn": string, "filterValues": string[] }, "inspector": { "sortBy": string, "limit": number }, "comparison": { "contrastColumn": string } }\n\nReturn ONLY the JSON object, no markdown.`,
       }],
       'analyze-schema'
     );
@@ -193,7 +254,7 @@ export async function refineProfile(
     const result = await callAI(
       [{
         role: 'user',
-        content: `Here is a dataset with ${rows.length} rows and ${columns.length} columns.\n\nColumns and sample rows:\n${tablePreview}\n\nThe CURRENT prioritization profile is:\n${JSON.stringify(currentProfile, null, 2)}\n\nThe user wants to change how data is prioritized. Their instruction:\n"${userFeedback}"\n\nUpdate the profile based on their feedback. Return the FULL updated JSON profile with the same schema — all fields must be present. Change only what the user requested. Return ONLY the JSON object, no markdown.`,
+        content: `Here is a dataset with ${rows.length} rows and ${columns.length} columns.\n\nColumns and sample rows:\n${tablePreview}\n\nThe CURRENT prioritization profile is:\n${JSON.stringify(currentProfile, null, 2)}\n\nThe user wants to change how data is prioritized. Their instruction:\n"${userFeedback}"\n\nIMPORTANT RULES:\n1. If the profile has an ordinalPriorityColumn, do NOT remove it unless the user explicitly asks to ignore priorities/tiers.\n2. The ordinalPriorityColumn.rankOrder defines the sorting hierarchy — do NOT override it with numeric sorting unless asked.\n3. Only change what the user requested. Keep all other fields as they were.\n4. Return the FULL updated JSON profile with the same schema — all fields must be present.\n\nReturn ONLY the JSON object, no markdown.`,
       }],
       'refine-profile'
     );
