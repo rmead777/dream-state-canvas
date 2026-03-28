@@ -50,12 +50,17 @@ export function DocumentProvider({ children }: { children: React.ReactNode }) {
       if (spreadsheet) {
         const dataset = extractDataset(spreadsheet);
         if (dataset && dataset.rows.length > 0) {
-          setActiveDataset({
+          const ds = {
             columns: dataset.columns,
             rows: dataset.rows,
             sourceDocId: spreadsheet.id,
             sourceLabel: spreadsheet.filename,
-          });
+          };
+          setActiveDataset(ds);
+          // Sync global store
+          setGlobalDataset(ds);
+          clearProfileCache();
+          invalidateProfileCache();
         }
       }
     });
