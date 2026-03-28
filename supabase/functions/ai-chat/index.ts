@@ -233,13 +233,13 @@ Rules:
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
+          model: adminModel || "google/gemini-3-flash-preview",
           messages: [
             { role: "system", content: fullSystemPrompt },
             ...messages,
           ],
           stream: true,
-          max_tokens: 8192,
+          max_tokens: adminMaxTokens || 8192,
         }),
       }
     );
