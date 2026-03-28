@@ -3,7 +3,10 @@
  * All operations are non-blocking and degrade gracefully on failure.
  */
 import { supabase } from '@/integrations/supabase/client';
-import { SherpaMemory, MemoryTrigger, MemoryType, MemorySource } from './memory-types';
+import type { SherpaMemory, MemoryTrigger, MemoryType, MemorySource } from './memory-types';
+
+// Use type assertion to work with the sherpa_memories table that isn't in generated types yet
+const db = supabase as any;
 
 // ─── Row ↔ Model Mapping ────────────────────────────────────────────────────
 
@@ -54,11 +57,11 @@ export async function createMemory(params: {
   source?: MemorySource;
   tags?: string[];
 }): Promise<SherpaMemory | null> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await db.auth.getUser();
   if (!user) return null;
 
   const confidence = params.confidence ?? 0.5;
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('sherpa_memories')
     .upsert({
       user_id: user.id,
@@ -80,11 +83,11 @@ export async function createMemory(params: {
     console.warn('[memory-store] Failed to create memory:', error);
     return null;
   }
-  return rowToMemory(data as MemoryRow);
+  return rowToMemory(data as unknown as MemoryRow);
 }
 
 export async function getMemories(userId: string): Promise<SherpaMemory[]> {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('sherpa_memories')
     .select('*')
     .eq('user_id', userId)
@@ -95,11 +98,11 @@ export async function getMemories(userId: string): Promise<SherpaMemory[]> {
     console.warn('[memory-store] Failed to fetch memories:', error);
     return [];
   }
-  return ((data || []) as MemoryRow[]).map(rowToMemory);
+  return ((data || []) as unknown as MemoryRow[]).map(rowToMemory);
 }
 
 export async function getOverrideMemories(userId: string): Promise<SherpaMemory[]> {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('sherpa_memories')
     .select('*')
     .eq('user_id', userId)
@@ -108,11 +111,11 @@ export async function getOverrideMemories(userId: string): Promise<SherpaMemory[
     .order('confidence', { ascending: false });
 
   if (error) return [];
-  return ((data || []) as MemoryRow[]).map(rowToMemory);
+  return ((data || []) as unknown as MemoryRow[]).map(rowToMemory);
 }
 
 export async function getPendingMemories(userId: string): Promise<SherpaMemory[]> {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('sherpa_memories')
     .select('*')
     .eq('user_id', userId)
@@ -123,31 +126,31 @@ export async function getPendingMemories(userId: string): Promise<SherpaMemory[]
     .limit(5);
 
   if (error) return [];
-  return ((data || []) as MemoryRow[]).map(rowToMemory);
+  return ((data || []) as unknown as MemoryRow[]).map(rowToMemory);
 }
 
 export async function confirmMemory(id: string): Promise<void> {
-  await supabase
+  await db
     .from('sherpa_memories')
     .update({ source: 'confirmed', confidence: 1.0, tier: 'override' })
     .eq('id', id);
 }
 
 export async function deleteMemory(id: string): Promise<void> {
-  await supabase
+  await db
     .from('sherpa_memories')
     .delete()
     .eq('id', id);
 }
 
 export async function recordHit(id: string): Promise<void> {
-  await supabase.rpc('increment_memory_hit', { memory_id: id });
+  await db.rpc('increment_memory_hit', { memory_id: id });
 }
 
 export async function recordMiss(id: string): Promise<void> {
-  await supabase.rpc('increment_memory_miss', { memory_id: id });
+  await db.rpc('increment_memory_miss', { memory_id: id });
 }
 
 export async function decayStaleMemories(userId: string): Promise<void> {
-  await supabase.rpc('decay_stale_memories', { target_user_id: userId });
+  await db.rpc('decay_stale_memories', { target_user_id: userId });
 }
