@@ -208,11 +208,12 @@ export function generateObservations(
   }
 
   // Cross-tier anomaly detection — surface in observations, NEVER re-rank
-  const profile = getCurrentProfile(CANONICAL_DATASET.columns, CANONICAL_DATASET.rows);
+  const ds2 = getActiveDataset();
+  const profile = getCurrentProfile(ds2.columns, ds2.rows);
   if (profile) {
     const anomalies = detectCrossTierAnomalies(
-      CANONICAL_DATASET.columns,
-      CANONICAL_DATASET.rows,
+      ds2.columns,
+      ds2.rows,
       profile
     );
     observations.push(...anomalies);
