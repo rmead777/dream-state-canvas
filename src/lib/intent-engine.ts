@@ -106,6 +106,11 @@ async function getDynamicData(objectType: string): Promise<Record<string, any>> 
         const comp = comparisonPairs(columns, rows, profile);
         return comp;
       }
+      case 'dataset': {
+        // Sort the full dataset by profile rules so preview shows correct order
+        const sorted = previewRows(columns, rows, profile, rows.length);
+        return { columns: sorted.columns, rows: sorted.rows };
+      }
       default:
         return SEED_DATA_BY_TYPE[objectType]?.data || {};
     }
