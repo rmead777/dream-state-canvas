@@ -4,6 +4,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { FusionDataVisuals } from './FusionTable';
 import { SYNTHESIS_LABELS, SynthesisType } from '@/lib/fusion-rules';
 import { ChevronDown, ChevronRight, Undo2, Eye } from 'lucide-react';
+import MarkdownRenderer from './MarkdownRenderer';
 
 /** Compact preview of a source object's data for drillback */
 function SourceDrillback({ object }: { object: WorkspaceObject }) {
@@ -149,18 +150,7 @@ export function AIBrief({ object }: { object: WorkspaceObject }) {
       )}
 
       {text && (
-        <div
-          className="prose prose-sm max-w-none text-workspace-text-secondary leading-relaxed
-            [&_strong]:text-workspace-text [&_strong]:font-medium
-            [&_p]:mb-3 [&_p:last-child]:mb-0"
-          dangerouslySetInnerHTML={{
-            __html: text
-              .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-              .replace(/\n\n/g, '</p><p>')
-              .replace(/^/, '<p>')
-              .replace(/$/, '</p>'),
-          }}
-        />
+        <MarkdownRenderer content={text} />
       )}
 
       {d.insights && d.insights.length > 0 && (
