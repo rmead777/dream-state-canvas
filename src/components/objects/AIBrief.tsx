@@ -150,18 +150,7 @@ export function AIBrief({ object }: { object: WorkspaceObject }) {
       )}
 
       {text && (
-        <div
-          className="prose prose-sm max-w-none text-workspace-text-secondary leading-relaxed
-            [&_strong]:text-workspace-text [&_strong]:font-medium
-            [&_p]:mb-3 [&_p:last-child]:mb-0"
-          dangerouslySetInnerHTML={{
-            __html: text
-              .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-              .replace(/\n\n/g, '</p><p>')
-              .replace(/^/, '<p>')
-              .replace(/$/, '</p>'),
-          }}
-        />
+        <MarkdownRenderer content={text} />
       )}
 
       {d.insights && d.insights.length > 0 && (
