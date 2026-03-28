@@ -213,6 +213,14 @@ export function SherpaRail() {
           </div>
         )}
 
+        {/* Document context selector */}
+        <DocumentContextSelector
+          selectedDocIds={selectedDocIds}
+          onSelectionChange={setSelectedDocIds}
+          contextMode={contextMode}
+          onModeChange={setContextMode}
+        />
+
         {/* Upload panel */}
         {showUpload && (
           <div className="pb-4 border-b border-workspace-border/30 mb-4">
