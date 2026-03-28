@@ -31,10 +31,10 @@ export function useWorkspaceActions() {
 
       try {
         const result = await parseIntentAI(query, state.objects, _documentIdsRef);
-        applyResult(result, origin);
+        await applyResult(result, origin);
       } catch {
         const result = await parseIntent(query, state.objects);
-        applyResult(result, origin);
+        await applyResult(result, origin);
       }
 
       dispatch({ type: 'SET_SHERPA_PROCESSING', payload: false });
@@ -42,7 +42,7 @@ export function useWorkspaceActions() {
     [state.objects, state.layoutMode, dispatch]
   );
 
-  function applyResult(result: { actions: any[] }, origin: IntentOrigin) {
+  async function applyResult(result: { actions: any[] }, origin: IntentOrigin) {
     for (const action of result.actions) {
       switch (action.type) {
         case 'respond':
@@ -91,25 +91,36 @@ export function useWorkspaceActions() {
             dispatch({ type: 'SET_SHERPA_RESPONSE', payload: 'Could not find the specified object to update.' });
             break;
           }
-          // Run async update via AI
-          (async () => {
-            dispatch({ type: 'SET_SHERPA_PROCESSING', payload: true });
+          // Await the full update — processing animation stays visible
+          await (async () => {
             try {
               const { columns, rows } = getActiveDataset();
-              const profile = await import('@/lib/data-analyzer').then(m => {
-                const p = m.getCurrentProfile(columns, rows);
-                return p;
-              });
+              const profile = await import('@/lib/data-analyzer').then(m => m.getCurrentProfile(columns, rows));
 
-              // Use AI to parse instruction into structured filter params
+              // Let AI parse the instruction into structured filter params — no regex
               const parseResult = await callAI(
-                [{ role: 'user', content: `Parse this instruction into filter parameters. Instruction: "${action.instruction}"\n\nReturn ONLY JSON:\n{\n  "limit": <number or null>,\n  "tierFilter": "<e.g. 'Tier 1' or null>",\n  "sortBy": "<column name or null>",\n  "sortDirection": "<'asc' or 'desc' or null>",\n  "textFilter": "<keyword to filter rows by, or null>"\n}` }],
+                [{ role: 'user', content: `You are a data filter parser. Given a user instruction about modifying a data view, extract structured filter parameters.
+
+Instruction: "${action.instruction}"
+
+Available columns in the dataset: ${columns.join(', ')}
+
+Return ONLY valid JSON (no markdown, no explanation):
+{
+  "limit": <number or null - how many rows to show>,
+  "tierFilter": "<exact tier label to filter by, e.g. 'Tier 1' — or null>",
+  "columnFilter": { "column": "<column name>", "value": "<filter value>" } or null,
+  "sortBy": "<column name or null>",
+  "sortDirection": "<'asc' or 'desc' or null>",
+  "textSearch": "<keyword to search across all columns, or null>"
+}` }],
                 'intent'
               );
 
               let limit: number | undefined;
               let tierFilter: string | undefined;
-              let textFilter: string | undefined;
+              let textSearch: string | undefined;
+              let columnFilter: { column: string; value: string } | undefined;
 
               if (parseResult) {
                 try {
@@ -118,22 +129,15 @@ export function useWorkspaceActions() {
                     const parsed = JSON.parse(jsonMatch[0]);
                     if (parsed.limit) limit = parsed.limit;
                     if (parsed.tierFilter) tierFilter = parsed.tierFilter;
-                    if (parsed.textFilter) textFilter = parsed.textFilter;
+                    if (parsed.textSearch) textSearch = parsed.textSearch;
+                    if (parsed.columnFilter?.column && parsed.columnFilter?.value) {
+                      columnFilter = parsed.columnFilter;
+                    }
                   }
-                } catch { /* fall through to regex */ }
+                } catch { /* AI returned unparseable — proceed without filters */ }
               }
 
-              // Regex fallback
-              if (!limit) {
-                const limitMatch = action.instruction.toLowerCase().match(/(?:top|first|limit(?:\s+to)?)\s+(\d+)/);
-                if (limitMatch) limit = parseInt(limitMatch[1]);
-              }
-              if (!tierFilter) {
-                const tierMatch = action.instruction.match(/tier\s*(\d)/i);
-                if (tierMatch) tierFilter = `Tier ${tierMatch[1]}`;
-              }
-
-              // Helper: filter rows by tier and/or text, then limit
+              // Apply filters to rows
               function applyFilters(sourceRows: string[][]): string[][] {
                 let filtered = sourceRows;
                 if (tierFilter && profile?.ordinalPriorityColumn) {
@@ -143,24 +147,25 @@ export function useWorkspaceActions() {
                     filtered = filtered.filter(r => String(r[colIdx]).includes(tierFilter!));
                   }
                 }
-                if (textFilter) {
-                  const lower = textFilter.toLowerCase();
+                if (columnFilter) {
+                  const colIdx = columns.indexOf(columnFilter.column);
+                  if (colIdx >= 0) {
+                    const val = columnFilter.value.toLowerCase();
+                    filtered = filtered.filter(r => String(r[colIdx]).toLowerCase().includes(val));
+                  }
+                }
+                if (textSearch) {
+                  const lower = textSearch.toLowerCase();
                   filtered = filtered.filter(r => r.some(cell => String(cell).toLowerCase().includes(lower)));
                 }
-                // Sort by profile rules first
                 const sorted = previewRows(columns, filtered, profile!, filtered.length);
-                const result = limit ? sorted.rows.slice(0, limit) : sorted.rows;
-                return result;
+                return limit ? sorted.rows.slice(0, limit) : sorted.rows;
               }
 
               let newContext: Record<string, any> = target.context;
 
               switch (target.type) {
-                case 'inspector': {
-                  const filteredRows = applyFilters(rows);
-                  newContext = { columns, rows: filteredRows };
-                  break;
-                }
+                case 'inspector':
                 case 'dataset': {
                   const filteredRows = applyFilters(rows);
                   newContext = { columns, rows: filteredRows };
@@ -176,8 +181,7 @@ export function useWorkspaceActions() {
                     }
                   }
                   const alerts = alertRows(columns, filteredRows, profile!);
-                  const limitedAlerts = limit ? alerts.slice(0, limit) : alerts;
-                  newContext = { alerts: limitedAlerts };
+                  newContext = { alerts: limit ? alerts.slice(0, limit) : alerts };
                   break;
                 }
                 case 'comparison': {
@@ -186,13 +190,11 @@ export function useWorkspaceActions() {
                   break;
                 }
                 case 'brief': {
-                  // Update BOTH table data and text content
-                  // If the brief has embedded table data, filter it
+                  // Update BOTH table data and text
                   if (target.context.columns && target.context.rows) {
                     const filteredRows = applyFilters(rows);
                     newContext = { ...target.context, columns, rows: filteredRows };
                   }
-                  // Regenerate text via AI with the instruction
                   const briefResult = await callAI(
                     [{ role: 'user', content: `Current brief context: ${JSON.stringify({ ...target.context, rows: target.context.rows?.slice(0, 10) })}\n\nUser instruction: "${action.instruction}"\n\nRegenerate the brief content incorporating this change. The data has been filtered to ${limit ? `top ${limit}` : 'match the criteria'}. Return ONLY markdown text, no JSON wrapper.` }],
                     'brief',
@@ -217,7 +219,6 @@ export function useWorkspaceActions() {
             } catch (e) {
               dispatch({ type: 'SET_SHERPA_RESPONSE', payload: `Could not update "${target.title}". Try a different instruction.` });
             }
-            dispatch({ type: 'SET_SHERPA_PROCESSING', payload: false });
           })();
           break;
         }
@@ -229,16 +230,13 @@ export function useWorkspaceActions() {
             dispatch({ type: 'SET_SHERPA_RESPONSE', payload: 'Could not find the specified objects to fuse.' });
             break;
           }
-          // Run fusion asynchronously
-          (async () => {
-            dispatch({ type: 'SET_SHERPA_PROCESSING', payload: true });
+          await (async () => {
             const result = await executeFusion(objA, objB);
             if (!result.success) {
               if (result.lowValue) {
                 toast({ title: 'Fusion not productive', description: result.errorMessage });
               }
               dispatch({ type: 'SET_SHERPA_RESPONSE', payload: result.errorMessage || 'Fusion failed.' });
-              dispatch({ type: 'SET_SHERPA_PROCESSING', payload: false });
               return;
             }
 
@@ -266,18 +264,15 @@ export function useWorkspaceActions() {
             });
             dispatch({ type: 'SET_SHERPA_RESPONSE', payload: `Synthesized "${objA.title}" and "${objB.title}" into a new insight.` });
             setTimeout(() => dispatch({ type: 'OPEN_OBJECT', payload: { id: result.id! } }), 400);
-            dispatch({ type: 'SET_SHERPA_PROCESSING', payload: false });
           })();
           break;
         }
 
         case 'refine-rules': {
-          (async () => {
-            dispatch({ type: 'SET_SHERPA_PROCESSING', payload: true });
+          await (async () => {
             try {
               const updatedProfile = await refineDataRules(action.feedback);
               
-              // Refresh all data-derived objects with new rules
               const { columns, rows } = getActiveDataset();
               const dataObjects = Object.values(state.objects).filter(
                 o => ['metric', 'inspector', 'alert', 'comparison'].includes(o.type) && o.status !== 'dissolved'
@@ -323,7 +318,6 @@ export function useWorkspaceActions() {
             } catch (e) {
               dispatch({ type: 'SET_SHERPA_RESPONSE', payload: 'Could not update rules. Try being more specific about what to change.' });
             }
-            dispatch({ type: 'SET_SHERPA_PROCESSING', payload: false });
           })();
           break;
         }

@@ -160,6 +160,24 @@
   }
 }
 
+/* Processing animation keyframes */
+@keyframes scanline {
+  0% { top: -2px; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+
+@keyframes progressDot {
+  0%, 100% { opacity: 0.2; transform: scaleX(1); }
+  50% { opacity: 1; transform: scaleX(1.8); background: hsl(var(--workspace-accent)); }
+}
+
+@keyframes dataStream {
+  0%, 100% { opacity: 0.1; transform: scaleY(1); }
+  50% { opacity: 0.6; transform: scaleY(2); background: hsl(var(--workspace-accent) / 0.5); }
+}
+
 /* Cognitive mode transitions are handled via JS on :root */
 :root {
   transition: --workspace-bg 1.5s ease,

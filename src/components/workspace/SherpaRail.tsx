@@ -255,16 +255,59 @@ export function SherpaRail() {
 
         {/* Fusion processing animation */}
         {isProcessing && (
-          <div className="flex items-center gap-3 rounded-xl border border-workspace-accent/15 bg-workspace-accent/[0.03] px-4 py-3 animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards]">
-            <div className="relative flex items-center gap-2">
-              <div className="h-6 w-6 rounded-full border border-workspace-accent/20 bg-workspace-accent/5 flex items-center justify-center">
-                <span className="text-workspace-accent text-[10px] animate-pulse">✦</span>
-              </div>
-              <div className="absolute inset-0 w-6 h-6 rounded-full border-2 border-workspace-accent/20 border-t-workspace-accent animate-spin" />
+          <div className="relative rounded-xl border border-workspace-accent/20 bg-gradient-to-b from-workspace-accent/[0.06] to-transparent px-4 py-4 animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards] overflow-hidden">
+            {/* Animated scan line */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+              <div className="absolute inset-x-0 h-px bg-gradient-to-r from-transparent via-workspace-accent/40 to-transparent animate-[scanline_2s_ease-in-out_infinite]" />
             </div>
-            <div>
-              <p className="text-xs font-medium text-workspace-text">Synthesizing…</p>
-              <p className="text-[10px] text-workspace-text-secondary">Analyzing cross-object patterns</p>
+
+            {/* Orbital spinner */}
+            <div className="flex items-center gap-3">
+              <div className="relative h-8 w-8 flex-shrink-0">
+                {/* Outer ring */}
+                <div className="absolute inset-0 rounded-full border border-workspace-accent/15 animate-[spin_3s_linear_infinite]">
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-px h-1.5 w-1.5 rounded-full bg-workspace-accent/60" />
+                </div>
+                {/* Inner ring — counter-rotate */}
+                <div className="absolute inset-1 rounded-full border border-workspace-accent/10 animate-[spin_2s_linear_infinite_reverse]">
+                  <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-px h-1 w-1 rounded-full bg-workspace-accent/40" />
+                </div>
+                {/* Core pulse */}
+                <div className="absolute inset-2.5 rounded-full bg-workspace-accent/10 animate-[pulse_1.5s_ease-in-out_infinite]">
+                  <div className="absolute inset-0.5 rounded-full bg-workspace-accent/20" />
+                </div>
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-workspace-text tracking-wide">Processing…</p>
+                <div className="mt-1.5 flex items-center gap-1.5">
+                  {/* Animated progress dots */}
+                  {[0, 1, 2, 3, 4].map((i) => (
+                    <div
+                      key={i}
+                      className="h-1 rounded-full bg-workspace-accent/30 animate-[progressDot_1.5s_ease-in-out_infinite]"
+                      style={{
+                        width: '12px',
+                        animationDelay: `${i * 0.15}s`,
+                      }}
+                    />
+                  ))}
+                  <span className="text-[9px] text-workspace-text-secondary/50 ml-1 tabular-nums animate-pulse">
+                    reasoning
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Data stream effect at bottom */}
+            <div className="mt-3 flex gap-0.5 overflow-hidden h-0.5">
+              {Array.from({ length: 20 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="flex-1 rounded-full bg-workspace-accent/20 animate-[dataStream_2s_ease-in-out_infinite]"
+                  style={{ animationDelay: `${i * 0.1}s` }}
+                />
+              ))}
             </div>
           </div>
         )}
