@@ -61,7 +61,7 @@ export async function createMemory(params: {
   if (!user) return null;
 
   const confidence = params.confidence ?? 0.5;
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('sherpa_memories')
     .upsert({
       user_id: user.id,
