@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer } from 'react';
+import React, { createContext, useContext, useReducer, useMemo } from 'react';
 import {
   WorkspaceState,
   WorkspaceReducerAction,
@@ -285,25 +285,34 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
   }
 }
 
-interface WorkspaceContextValue {
-  state: WorkspaceState;
-  dispatch: React.Dispatch<WorkspaceReducerAction>;
-}
-
-const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
+// Split contexts: dispatch is stable (never changes identity), state changes on every action.
+// Components that only dispatch (buttons, forms) won't re-render on state changes.
+const WorkspaceStateContext = createContext<WorkspaceState | null>(null);
+const WorkspaceDispatchContext = createContext<React.Dispatch<WorkspaceReducerAction> | null>(null);
 
 export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(workspaceReducer, initialState);
 
   return (
-    <WorkspaceContext.Provider value={{ state, dispatch }}>
-      {children}
-    </WorkspaceContext.Provider>
+    <WorkspaceDispatchContext.Provider value={dispatch}>
+      <WorkspaceStateContext.Provider value={state}>
+        {children}
+      </WorkspaceStateContext.Provider>
+    </WorkspaceDispatchContext.Provider>
   );
 }
 
+/** Read workspace state + dispatch. Most common usage. */
 export function useWorkspace() {
-  const ctx = useContext(WorkspaceContext);
-  if (!ctx) throw new Error('useWorkspace must be used within WorkspaceProvider');
-  return ctx;
+  const state = useContext(WorkspaceStateContext);
+  const dispatch = useContext(WorkspaceDispatchContext);
+  if (!state || !dispatch) throw new Error('useWorkspace must be used within WorkspaceProvider');
+  return useMemo(() => ({ state, dispatch }), [state, dispatch]);
+}
+
+/** Read only dispatch — stable identity, won't cause re-renders on state changes. */
+export function useWorkspaceDispatch() {
+  const dispatch = useContext(WorkspaceDispatchContext);
+  if (!dispatch) throw new Error('useWorkspaceDispatch must be used within WorkspaceProvider');
+  return dispatch;
 }
