@@ -39,9 +39,10 @@ export function invalidateProfileCache(): void {
  */
 export async function refineDataRules(userFeedback: string): Promise<DataProfile> {
   const current = await getProfile();
+  const ds = getActiveDataset();
   const updated = await refineProfile(
-    CANONICAL_DATASET.columns,
-    CANONICAL_DATASET.rows,
+    ds.columns,
+    ds.rows,
     current,
     userFeedback
   );
