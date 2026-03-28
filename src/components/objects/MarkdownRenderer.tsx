@@ -48,7 +48,7 @@ function getBadgeColor(_label: string, value: string): string {
 }
 
 function parseHeadingLevel(line: string): { level: number; text: string } | null {
-  const match = line.match(/^(#{1,3})\s+(.+)$/);
+  const match = line.match(/^(#{1,6})\s+(.+)$/);
   return match ? { level: match[1].length, text: match[2] } : null;
 }
 
@@ -235,7 +235,8 @@ export default function MarkdownRenderer({ content, isStreaming }: MarkdownRende
                 <span dangerouslySetInnerHTML={{ __html: applyInlineFormatting(block.content) }} />
               </h2>
             );
-            return <h3 key={i} className="text-base font-semibold text-workspace-text mt-5 mb-2" dangerouslySetInnerHTML={{ __html: applyInlineFormatting(block.content) }} />;
+            if (block.level === 3) return <h3 key={i} className="text-base font-semibold text-workspace-text mt-5 mb-2" dangerouslySetInnerHTML={{ __html: applyInlineFormatting(block.content) }} />;
+            return <h4 key={i} className="text-sm font-semibold text-workspace-text mt-4 mb-1.5" dangerouslySetInnerHTML={{ __html: applyInlineFormatting(block.content) }} />;
 
           case "callout":
             return (

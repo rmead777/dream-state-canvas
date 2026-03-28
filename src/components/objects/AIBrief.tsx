@@ -88,6 +88,7 @@ export function AIBrief({ object }: { object: WorkspaceObject }) {
   const d = object.context;
   const text = d.content || d.summary || '';
   const [expandedSource, setExpandedSource] = useState<string | null>(null);
+  const [tableCollapsed, setTableCollapsed] = useState(false);
 
   // Resolve source objects for fusion visuals
   const sourceObjects = (d.sourceObjects || [])
@@ -145,7 +146,20 @@ export function AIBrief({ object }: { object: WorkspaceObject }) {
       {/* Real data visualizations for fusion objects */}
       {sourceObjects.length > 0 && (
         <div className="animate-[materialize_0.5s_cubic-bezier(0.16,1,0.3,1)_forwards]">
-          <FusionDataVisuals sources={sourceObjects} />
+          <button
+            onClick={() => setTableCollapsed(!tableCollapsed)}
+            className="flex items-center gap-2 w-full text-left mb-2 group"
+          >
+            {tableCollapsed ? (
+              <ChevronRight className="h-3.5 w-3.5 text-workspace-accent flex-shrink-0" />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5 text-workspace-accent flex-shrink-0" />
+            )}
+            <span className="text-[10px] font-medium uppercase tracking-wider text-workspace-text-secondary group-hover:text-workspace-text transition-colors">
+              Data Table
+            </span>
+          </button>
+          {!tableCollapsed && <FusionDataVisuals sources={sourceObjects} />}
         </div>
       )}
 
