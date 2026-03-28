@@ -80,7 +80,7 @@ const SEED_DATA_BY_TYPE: Record<string, { data: Record<string, any>; defaultTitl
 async function getDynamicData(objectType: string): Promise<Record<string, any>> {
   try {
     const profile = await getProfile();
-    const { columns, rows } = CANONICAL_DATASET;
+    const { columns, rows } = getActiveDataset();
 
     switch (objectType) {
       case 'metric': {
