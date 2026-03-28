@@ -5,6 +5,7 @@ import { FusionDataVisuals } from './FusionTable';
 import { SYNTHESIS_LABELS, SynthesisType } from '@/lib/fusion-rules';
 import { ChevronDown, ChevronRight, Undo2, Eye } from 'lucide-react';
 import MarkdownRenderer from './MarkdownRenderer';
+import { getDisplayColumns, filterRowToColumns } from '@/lib/smart-columns';
 
 function formatPreviewMetric(value: unknown, unit = ''): string {
   const numeric = typeof value === 'number'
@@ -44,6 +45,7 @@ function CollapsibleSection({ collapsed, children }: { collapsed: boolean; child
 /** Compact preview of a source object's data for drillback */
 function SourceDrillback({ object }: { object: WorkspaceObject }) {
   const ctx = object.context;
+  const previewColumns = ctx?.columns && ctx?.rows ? getDisplayColumns(ctx.columns, ctx.rows).slice(0, 4) : [];
 
   return (
     <div className="rounded-lg border border-workspace-border/30 bg-workspace-surface/20 p-3 space-y-2 text-xs">
@@ -76,7 +78,7 @@ function SourceDrillback({ object }: { object: WorkspaceObject }) {
           <table className="w-full text-[11px]">
             <thead>
               <tr className="bg-workspace-surface/40">
-                {ctx.columns.slice(0, 4).map((col: string) => (
+                {previewColumns.map((col: string) => (
                   <th key={col} className="px-2 py-1 text-left text-[10px] font-medium text-workspace-text-secondary">{col}</th>
                 ))}
               </tr>
@@ -84,7 +86,7 @@ function SourceDrillback({ object }: { object: WorkspaceObject }) {
             <tbody>
               {ctx.rows.slice(0, 3).map((row: string[], i: number) => (
                 <tr key={i} className="border-t border-workspace-border/10">
-                  {row.slice(0, 4).map((cell: string, j: number) => (
+                  {filterRowToColumns(row, ctx.columns, previewColumns).map((cell: string, j: number) => (
                     <td key={j} className="px-2 py-1 text-workspace-text-secondary">{cell}</td>
                   ))}
                 </tr>
