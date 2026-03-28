@@ -146,6 +146,8 @@ export function SherpaRail() {
     onResult: handleVoiceResult,
     onInterim: handleVoiceInterim,
   });
+  const composerState = voice.isListening ? 'Listening' : isProcessing ? 'Reasoning' : input.trim() ? 'Ready to send' : 'Standing by';
+  const composerStateTone = voice.isListening ? 'bg-rose-500' : isProcessing ? 'bg-amber-500' : input.trim() ? 'bg-emerald-500' : 'bg-workspace-accent';
 
   const handleSuggestionClick = (query: string) => {
     trackAndProcess(query);
