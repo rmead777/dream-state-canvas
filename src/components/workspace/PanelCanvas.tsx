@@ -182,10 +182,18 @@ export function PanelCanvas() {
                 Nothing is materialized yet. Ask Sherpa for the one thing you need first, then let the workspace build outward from there.
               </p>
               <div className="mt-5 grid gap-2 sm:grid-cols-3">
-                {['Ctrl/⌘ K · Command palette', 'Ask Sherpa for a brief', 'Surface top risks first'].map((hint) => (
-                  <span key={hint} className="workspace-pill rounded-full px-3 py-2 text-[11px] text-workspace-text-secondary">
-                    {hint}
-                  </span>
+                {[
+                  { label: 'Ctrl/⌘ K · Command palette', action: () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true })) },
+                  { label: 'Ask Sherpa for a brief', action: () => document.dispatchEvent(new CustomEvent('sherpa-query', { detail: 'give me a brief' })) },
+                  { label: 'Surface top risks first', action: () => document.dispatchEvent(new CustomEvent('sherpa-query', { detail: 'show me urgent risks' })) },
+                ].map((hint) => (
+                  <button
+                    key={hint.label}
+                    onClick={hint.action}
+                    className="workspace-pill workspace-focus-ring rounded-full px-3 py-2 text-[11px] text-workspace-text-secondary transition-all hover:text-workspace-accent hover:border-workspace-accent/20 cursor-pointer"
+                  >
+                    {hint.label}
+                  </button>
                 ))}
               </div>
             </div>

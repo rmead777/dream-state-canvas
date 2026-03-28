@@ -101,6 +101,18 @@ export function SherpaRail() {
     processIntent(text);
   }, [processIntent]);
 
+  // Listen for sherpa-query events from empty state buttons
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const query = (e as CustomEvent).detail;
+      if (typeof query === 'string' && query.trim()) {
+        trackAndProcess(query);
+      }
+    };
+    document.addEventListener('sherpa-query', handler);
+    return () => document.removeEventListener('sherpa-query', handler);
+  }, [trackAndProcess]);
+
   const handleSubmit = useCallback(() => {
     const trimmed = input.trim();
     if (!trimmed) return;
