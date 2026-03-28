@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type HTMLAttributes } from 'react';
 import { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities';
 import { WorkspaceObject as WO } from '@/lib/workspace-types';
 import { useWorkspaceActions } from '@/hooks/useWorkspaceActions';
@@ -42,7 +42,7 @@ function ObjectContent({ object }: { object: WO }) {
   }
 }
 
-export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; dragListeners?: SyntheticListenerMap }) {
+export function WorkspaceObjectWrapper({ object, dragHandleProps }: { object: WO; dragHandleProps?: HTMLAttributes<HTMLSpanElement> | SyntheticListenerMap }) {
   const { collapseObject, dissolveObject, pinObject, unpinObject, focusObject, processIntent } = useWorkspaceActions();
   const { state } = useWorkspace();
   const { shouldDim, shouldHighlight, getContextualActions, cascadeDissolve } = useCrossObjectBehavior();
@@ -89,7 +89,7 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
     <div
       ref={cardRef}
       className={`
-        group relative isolate overflow-hidden rounded-2xl border workspace-card-surface
+        workspace-focus-ring group relative isolate overflow-hidden rounded-2xl border workspace-card-surface
         transition-all duration-300 workspace-spring
         ${size.height ? 'flex flex-col' : ''}
         ${isMaterializing
@@ -105,11 +105,26 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
               : 'border-workspace-border shadow-[0_10px_28px_rgba(15,23,42,0.06)] hover:-translate-y-0.5 hover:border-workspace-accent/12 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)]'
         }
       `}
+      tabIndex={0}
+      role="group"
+      aria-label={`${typeLabels[object.type] || object.type} ${object.title}`}
       style={{
         ...(size.width ? { width: size.width } : {}),
         ...(size.height ? { height: size.height } : {}),
       }}
       onClick={() => focusObject(object.id)}
+      onFocus={(e) => {
+        if (e.target === e.currentTarget) {
+          focusObject(object.id);
+        }
+      }}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          focusObject(object.id);
+        }
+      }}
     >
       <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-[linear-gradient(to_bottom,rgba(99,102,241,0.06),transparent)] opacity-80" />
 
@@ -128,9 +143,11 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
         <div className="flex items-center gap-2.5">
           {/* Drag handle */}
           <span
-            {...dragListeners}
-            className="flex h-7 w-7 items-center justify-center rounded-full border border-transparent cursor-grab text-workspace-text-secondary/35 transition-all duration-200 workspace-spring active:cursor-grabbing group-hover:border-workspace-border/70 group-hover:bg-white/85 group-hover:text-workspace-text-secondary/70"
-            title="Drag to reorder"
+            {...dragHandleProps}
+            onClick={(e) => e.stopPropagation()}
+            className="workspace-focus-ring flex h-7 w-7 items-center justify-center rounded-full border border-transparent cursor-grab text-workspace-text-secondary/35 transition-all duration-200 workspace-spring active:cursor-grabbing group-hover:border-workspace-border/70 group-hover:bg-white/85 group-hover:text-workspace-text-secondary/70 group-focus-within:border-workspace-border/70 group-focus-within:bg-white/85 group-focus-within:text-workspace-text-secondary/70"
+            title="Drag to reorder. Press space, then arrow keys to move."
+            aria-label={`Reorder ${object.title}`}
           >
             ⠿
           </span>
@@ -146,10 +163,10 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
         </div>
 
         {/* Contextual actions — visible on hover */}
-        <div className="flex items-center gap-1 opacity-0 translate-y-1 transition-all duration-200 workspace-spring group-hover:opacity-100 group-hover:translate-y-0">
+        <div className="flex items-center gap-1 opacity-0 translate-y-1 transition-all duration-200 workspace-spring group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:translate-y-0">
           <button
             onClick={(e) => { e.stopPropagation(); object.pinned ? unpinObject(object.id) : pinObject(object.id); }}
-            className={`rounded-md px-2 py-1 text-[10px] transition-colors ${
+            className={`workspace-focus-ring rounded-md px-2 py-1 text-[10px] transition-colors ${
               object.pinned
                 ? 'bg-workspace-accent/10 text-workspace-accent shadow-[0_10px_20px_rgba(99,102,241,0.12)]'
                 : 'text-workspace-text-secondary hover:bg-white/90'
@@ -160,14 +177,14 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); collapseObject(object.id); }}
-            className="rounded-md px-2 py-1 text-[10px] text-workspace-text-secondary transition-colors hover:bg-white/90"
+            className="workspace-focus-ring rounded-md px-2 py-1 text-[10px] text-workspace-text-secondary transition-colors hover:bg-white/90"
             title="Collapse"
           >
             ↓ Collapse
           </button>
           <button
             onClick={handleDissolve}
-            className="rounded-md px-2 py-1 text-[10px] text-workspace-text-secondary transition-colors hover:bg-white/90 hover:text-red-500"
+            className="workspace-focus-ring rounded-md px-2 py-1 text-[10px] text-workspace-text-secondary transition-colors hover:bg-white/90 hover:text-red-500"
             title="Dissolve"
           >
             ✕
@@ -202,7 +219,7 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
 
       {/* Cross-object contextual actions — appear on hover */}
       {contextualActions.length > 0 && (
-        <div className="border-t border-workspace-border/20 bg-white/40 px-5 py-2 opacity-0 translate-y-1 transition-all duration-200 workspace-spring group-hover:opacity-100 group-hover:translate-y-0">
+        <div className="border-t border-workspace-border/20 bg-white/40 px-5 py-2 opacity-0 translate-y-1 transition-all duration-200 workspace-spring group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:translate-y-0">
           <div className="flex items-center gap-2">
             {contextualActions.map((action) => (
               <button
@@ -211,7 +228,7 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
                   e.stopPropagation();
                   if (action.query) processIntent(action.query);
                 }}
-                className="flex items-center gap-1 rounded-md px-2 py-1 text-[10px] text-workspace-text-secondary
+                className="workspace-focus-ring flex items-center gap-1 rounded-md px-2 py-1 text-[10px] text-workspace-text-secondary
                     transition-colors hover:bg-white/85 hover:text-workspace-accent"
               >
                 <span>{action.icon}</span>
@@ -231,7 +248,7 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
 
       {/* Bottom edge — vertical resize only */}
       <div
-        className="absolute bottom-0 inset-x-4 h-3 cursor-ns-resize opacity-0 transition-opacity duration-200 z-10 group-hover:opacity-100"
+        className="absolute bottom-0 inset-x-4 h-3 cursor-ns-resize opacity-0 transition-opacity duration-200 z-10 group-hover:opacity-100 group-focus-within:opacity-100"
         title="Drag to resize height"
         onMouseDown={(e) => {
           e.stopPropagation();
@@ -258,7 +275,7 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
 
       {/* Corner — diagonal resize (width + height) */}
       <div
-        className="absolute bottom-0 right-0 flex h-6 w-6 cursor-nwse-resize items-end justify-end pr-1.5 pb-1.5 opacity-0 transition-opacity duration-200 group-hover:opacity-60 z-20"
+        className="absolute bottom-0 right-0 flex h-6 w-6 cursor-nwse-resize items-end justify-end pr-1.5 pb-1.5 opacity-0 transition-opacity duration-200 group-hover:opacity-60 group-focus-within:opacity-60 z-20"
         title="Drag to resize"
         onMouseDown={(e) => {
           e.stopPropagation();

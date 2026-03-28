@@ -3,6 +3,7 @@ import {
   DndContext,
   closestCenter,
   PointerSensor,
+  KeyboardSensor,
   useSensor,
   useSensors,
   DragEndEvent,
@@ -13,6 +14,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
   arrayMove,
+  sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { SortableObject } from './SortableObject';
@@ -33,7 +35,8 @@ export function PanelCanvas() {
   const [_activeDragId, setActiveDragId] = useState<string | null>(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
   const primaryObjects = spatialLayout.primary
@@ -169,15 +172,18 @@ export function PanelCanvas() {
       <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 lg:p-10">
         {!hasObjects ? (
           <div className="flex h-full items-center justify-center">
-            <div className="max-w-xl text-center">
-              <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-workspace-accent/12 bg-white/75 text-xl text-workspace-accent shadow-[0_16px_38px_rgba(99,102,241,0.12)] backdrop-blur-sm">✦</div>
+            <div className="workspace-card-surface max-w-xl rounded-[30px] border border-workspace-border/45 px-8 py-8 text-center shadow-[0_24px_60px_rgba(15,23,42,0.08)]">
+              <span className="workspace-pill inline-flex rounded-full px-3 py-1 text-[10px] font-medium uppercase tracking-[0.2em] text-workspace-accent/75">
+                Workspace idle
+              </span>
+              <div className="mx-auto mt-4 mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-workspace-accent/12 bg-white/75 text-xl text-workspace-accent shadow-[0_16px_38px_rgba(99,102,241,0.12)] backdrop-blur-sm">✦</div>
               <div className="mx-auto mb-5 h-px w-16 bg-workspace-border" />
-              <p className="text-sm text-workspace-text-secondary/55 leading-relaxed">
-                Your workspace is clear. Ask the Sherpa to surface what matters, or explore a suggestion.
+              <p className="text-sm text-workspace-text leading-relaxed">
+                Nothing is materialized yet. Ask Sherpa for the one thing you need first, then let the workspace build outward from there.
               </p>
-              <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-                {['Compare entities', 'Surface risks', 'Generate a brief'].map((hint) => (
-                  <span key={hint} className="workspace-pill rounded-full px-3 py-1.5 text-[11px] text-workspace-text-secondary">
+              <div className="mt-5 grid gap-2 sm:grid-cols-3">
+                {['Ctrl/⌘ K · Command palette', 'Ask Sherpa for a brief', 'Surface top risks first'].map((hint) => (
+                  <span key={hint} className="workspace-pill rounded-full px-3 py-2 text-[11px] text-workspace-text-secondary">
                     {hint}
                   </span>
                 ))}

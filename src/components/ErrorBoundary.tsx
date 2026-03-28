@@ -40,16 +40,26 @@ export class ErrorBoundary extends Component<Props, State> {
       if (this.props.fallback) return this.props.fallback;
 
       return (
-        <div className="flex flex-col items-center justify-center gap-3 p-6 text-center">
-          <div className="text-workspace-text-secondary/40 text-2xl">⚠</div>
-          <p className="text-sm text-workspace-text-secondary">
-            {this.props.label ? `"${this.props.label}" encountered an error` : 'Something went wrong'}
-          </p>
+        <div className="workspace-card-surface flex flex-col items-center justify-center gap-3 rounded-2xl border border-workspace-border/45 p-6 text-center">
+          <span className="workspace-pill rounded-full px-3 py-1 text-[10px] font-medium uppercase tracking-[0.2em] text-workspace-accent/75">
+            Panel recovery
+          </span>
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-workspace-accent/8 text-xl text-workspace-accent shadow-[0_14px_28px_rgba(99,102,241,0.12)]">
+            ⚠
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-workspace-text">
+              {this.props.label ? `“${this.props.label}” hit a render glitch` : 'This view hit an unexpected render glitch'}
+            </p>
+            <p className="max-w-[32ch] text-xs leading-5 text-workspace-text-secondary/75">
+              The rest of your workspace is still intact. Retry this panel to recover, or keep going while Sherpa pretends nothing happened.
+            </p>
+          </div>
           <button
             onClick={this.handleReset}
-            className="rounded-md bg-workspace-surface px-3 py-1.5 text-xs text-workspace-text-secondary hover:bg-workspace-accent/10 hover:text-workspace-accent transition-colors border border-workspace-border/50"
+            className="workspace-focus-ring workspace-pill rounded-full px-3.5 py-2 text-xs font-medium text-workspace-accent transition-all duration-200 workspace-spring hover:-translate-y-0.5 hover:bg-workspace-accent/10"
           >
-            Try again
+            Retry panel
           </button>
         </div>
       );

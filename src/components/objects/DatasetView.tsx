@@ -86,27 +86,27 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
     return (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <span className="text-xs text-workspace-text-secondary tabular-nums">
+          <span className="workspace-pill rounded-full px-3 py-1.5 text-xs text-workspace-text-secondary tabular-nums">
             {rawRows.length} rows · {allColumns.length} columns
           </span>
           <button
             onClick={handleEnterImmersive}
-            className="rounded-md px-2.5 py-1 text-[10px] text-workspace-accent transition-colors hover:bg-workspace-accent-subtle/30"
+            className="workspace-focus-ring rounded-full px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-workspace-accent transition-colors hover:bg-workspace-accent-subtle/30"
           >
             Expand dataset →
           </button>
         </div>
-        <div className="overflow-hidden rounded-lg border border-workspace-border">
+        <div className="workspace-card-surface overflow-hidden rounded-2xl border border-workspace-border/45">
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-workspace-border bg-workspace-surface/50">
+              <tr className="border-b border-workspace-border bg-workspace-surface/40">
                 {previewCols.map((col) => (
-                  <th key={col} className="px-3 py-2 text-left font-medium uppercase tracking-wider text-workspace-text-secondary">
+                  <th key={col} className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.18em] text-workspace-text-secondary whitespace-nowrap">
                     {col}
                   </th>
                 ))}
                 {allColumns.length > 4 && (
-                  <th className="px-3 py-2 text-left text-workspace-text-secondary/40">+{allColumns.length - 4}</th>
+                  <th className="px-4 py-2.5 text-left text-workspace-text-secondary/40 tabular-nums">+{allColumns.length - 4}</th>
                 )}
               </tr>
             </thead>
@@ -114,9 +114,9 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
               {rawRows.slice(0, 3).map((row, i) => {
                 const cells = filterRowToColumns(row, allColumns, previewCols);
                 return (
-                  <tr key={i} className={i < 2 ? 'border-b border-workspace-border/30' : ''}>
+                  <tr key={i} className={i < 2 ? 'border-b border-workspace-border/25' : ''}>
                     {cells.map((cell, j) => (
-                      <td key={j} className={`px-3 py-2 ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary tabular-nums'}`}>
+                      <td key={j} className={`px-4 py-2.5 ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary tabular-nums'}`}>
                         {cell}
                       </td>
                     ))}
@@ -142,6 +142,7 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
               type="text"
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
+              aria-label="Filter dataset rows"
               placeholder="Filter rows..."
               className="bg-transparent text-sm text-workspace-text placeholder:text-workspace-text-secondary/40 outline-none w-48"
             />
@@ -155,7 +156,7 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
           {needsExpand && (
             <button
               onClick={() => setShowAllCols(!showAllCols)}
-              className="workspace-pill flex items-center gap-1.5 rounded-full px-3 py-2 text-xs text-workspace-text-secondary transition-colors hover:text-workspace-text"
+              className="workspace-focus-ring workspace-pill flex items-center gap-1.5 rounded-full px-3 py-2 text-xs text-workspace-text-secondary transition-colors hover:text-workspace-text"
             >
               <Columns className="h-3.5 w-3.5" />
               {showAllCols ? 'Smart columns' : `All ${allColumns.length} columns`}
@@ -164,11 +165,11 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
           <button
             onClick={handleGenerateInsight}
             disabled={isStreaming}
-            className="flex items-center gap-1.5 rounded-full bg-workspace-accent/8 px-3.5 py-2 text-xs text-workspace-accent transition-all duration-200 workspace-spring hover:-translate-y-0.5 hover:bg-workspace-accent/15 hover:shadow-[0_14px_28px_rgba(99,102,241,0.12)] disabled:translate-y-0 disabled:opacity-50"
+            className="workspace-focus-ring flex items-center gap-1.5 rounded-full bg-workspace-accent/8 px-3.5 py-2 text-xs text-workspace-accent transition-all duration-200 workspace-spring hover:-translate-y-0.5 hover:bg-workspace-accent/15 hover:shadow-[0_14px_28px_rgba(99,102,241,0.12)] disabled:translate-y-0 disabled:opacity-50"
           >
             <span>✦</span> {isStreaming ? 'Analyzing...' : 'Generate insight'}
           </button>
-          <button className="workspace-pill flex items-center gap-1.5 rounded-full px-3 py-2 text-xs text-workspace-text-secondary transition-colors hover:text-workspace-text">
+          <button className="workspace-focus-ring workspace-pill flex items-center gap-1.5 rounded-full px-3 py-2 text-xs text-workspace-text-secondary transition-colors hover:text-workspace-text">
             📊 Generate chart
           </button>
         </div>
@@ -188,6 +189,8 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
       <VirtualizedTable
         columns={visibleCols}
         rows={filteredAndSorted}
+        totalRows={rawRows.length}
+        filterText={filterText}
         sortCol={sortCol}
         sortDir={sortDir}
         onSort={handleSort}
@@ -202,6 +205,8 @@ const ROW_HEIGHT = 44; // px per row for virtualizer estimation
 function VirtualizedTable({
   columns,
   rows,
+  totalRows,
+  filterText,
   sortCol,
   sortDir,
   onSort,
@@ -209,6 +214,8 @@ function VirtualizedTable({
 }: {
   columns: string[];
   rows: string[][];
+  totalRows: number;
+  filterText: string;
   sortCol: number | null;
   sortDir: SortDir;
   onSort: (idx: number) => void;
@@ -222,26 +229,50 @@ function VirtualizedTable({
     overscan: 10,
   });
 
+  if (rows.length === 0) {
+    return (
+      <div className="workspace-card-surface flex min-h-[240px] flex-col items-center justify-center gap-3 rounded-[28px] border border-workspace-border/45 bg-white px-6 py-8 text-center">
+        <span className="workspace-pill rounded-full px-3 py-1 text-[10px] font-medium uppercase tracking-[0.2em] text-workspace-accent/75">
+          Table filter
+        </span>
+        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-workspace-accent/8 text-lg text-workspace-accent shadow-[0_14px_28px_rgba(99,102,241,0.12)]">
+          ⌕
+        </div>
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-workspace-text">No rows match the current view</p>
+          <p className="max-w-[34ch] text-xs leading-5 text-workspace-text-secondary/75">
+            {filterText
+              ? `Nothing in ${totalRows} rows matches “${filterText}”. Try a broader filter or switch back to smart columns.`
+              : 'There are no rows available in this dataset view yet.'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="workspace-card-surface rounded-[28px] border border-workspace-border/45 bg-white overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-[13px]">
           <thead>
             <tr className="border-b border-workspace-border bg-workspace-surface/30">
               {columns.map((col, idx) => (
                 <th
                   key={col}
-                  onClick={() => onSort(idx)}
-                  className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wider text-workspace-text-secondary cursor-pointer transition-colors hover:text-workspace-text select-none whitespace-nowrap"
+                  aria-sort={sortCol === idx ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.18em] text-workspace-text-secondary whitespace-nowrap"
                 >
-                  <span className="inline-flex items-center gap-1">
+                  <button
+                    onClick={() => onSort(idx)}
+                    className="workspace-focus-ring inline-flex items-center gap-1 rounded-xl px-2 py-1 -mx-2 cursor-pointer select-none transition-colors hover:text-workspace-text"
+                  >
                     {col}
                     {sortCol === idx && (
                       <span className="text-workspace-accent">
                         {sortDir === 'asc' ? '↑' : '↓'}
                       </span>
                     )}
-                  </span>
+                  </button>
                 </th>
               ))}
             </tr>
@@ -254,7 +285,7 @@ function VirtualizedTable({
         style={{ maxHeight: '60vh' }}
       >
         <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
-          <table className="w-full text-sm" style={{ position: 'absolute', top: 0, left: 0, right: 0 }}>
+          <table className="w-full text-[13px]" style={{ position: 'absolute', top: 0, left: 0, right: 0 }}>
             <tbody>
               {virtualizer.getVirtualItems().map((virtualRow) => {
                 const row = rows[virtualRow.index];
@@ -262,7 +293,7 @@ function VirtualizedTable({
                 return (
                   <tr
                     key={virtualRow.index}
-                    className="transition-colors hover:bg-workspace-surface/30 border-b border-workspace-border/20"
+                    className="border-b border-workspace-border/20 transition-colors odd:bg-white even:bg-workspace-surface/[0.16] hover:bg-workspace-accent/[0.04]"
                     style={{
                       height: `${virtualRow.size}px`,
                       transform: `translateY(${virtualRow.start}px)`,
@@ -276,7 +307,7 @@ function VirtualizedTable({
                     {cells.map((cell, j) => (
                       <td
                         key={j}
-                        className={`px-5 py-3 whitespace-nowrap ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary tabular-nums'}`}
+                        className={`px-4 py-2.5 whitespace-nowrap ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary tabular-nums'}`}
                       >
                         <FormattedCell value={cell} />
                       </td>

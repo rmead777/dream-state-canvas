@@ -162,14 +162,21 @@ export function FreeformCanvas() {
 
       {visibleObjects.length === 0 ? (
         <div className="flex h-full items-center justify-center">
-          <div className="max-w-md text-center">
-            <div className="mx-auto mb-6 h-px w-16 bg-workspace-border" />
-            <p className="text-sm text-workspace-text-secondary/50 leading-relaxed">
-              Your workspace is clear. Ask the Sherpa to surface what matters.
+          <div className="workspace-card-surface max-w-md rounded-[28px] border border-workspace-border/45 px-7 py-7 text-center shadow-[0_22px_52px_rgba(15,23,42,0.08)]">
+            <span className="workspace-pill inline-flex rounded-full px-3 py-1 text-[10px] font-medium uppercase tracking-[0.2em] text-workspace-accent/75">
+              Freeform canvas
+            </span>
+            <div className="mx-auto mt-4 mb-6 h-px w-16 bg-workspace-border" />
+            <p className="text-sm text-workspace-text leading-relaxed">
+              The freeform layer is empty. Materialize a few objects first, then drag them here to compare, cluster, or fuse.
             </p>
-            <p className="mt-2 text-[10px] text-workspace-text-secondary/30">
-              Try voice input, ⌘K, or type in the Sherpa rail
-            </p>
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+              {['Voice input', 'Ctrl/⌘ K', 'Drag to fuse'].map((hint) => (
+                <span key={hint} className="workspace-pill rounded-full px-3 py-1.5 text-[11px] text-workspace-text-secondary">
+                  {hint}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
       ) : (

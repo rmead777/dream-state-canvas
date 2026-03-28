@@ -20,17 +20,18 @@ export function SortableObject({ object, isFusionTarget }: { object: WO; isFusio
     opacity: isDragging ? 0.85 : undefined,
   };
 
+  const dragHandleProps = { ...attributes, ...listeners };
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
       className={isFusionTarget
-        ? 'rounded-2xl ring-2 ring-workspace-accent/40 shadow-[0_0_24px_hsl(var(--workspace-accent)/0.15)] transition-shadow duration-300'
-        : 'transition-shadow duration-300'
+        ? 'rounded-2xl ring-2 ring-workspace-accent/40 shadow-[0_0_24px_hsl(var(--workspace-accent)/0.15)] transition-shadow duration-300 focus-within:shadow-[0_18px_40px_rgba(99,102,241,0.12)]'
+        : 'transition-shadow duration-300 focus-within:shadow-[0_18px_40px_rgba(99,102,241,0.12)]'
       }
     >
-      <WorkspaceObjectWrapper object={object} dragListeners={listeners} />
+      <WorkspaceObjectWrapper object={object} dragHandleProps={dragHandleProps} />
     </div>
   );
 }
