@@ -386,6 +386,8 @@ export function SherpaRail() {
           </div>
         )}
 
+  const composerState = voice.isListening ? 'Listening' : isProcessing ? 'Reasoning' : input.trim() ? 'Ready to send' : 'Standing by';
+  const composerStateTone = voice.isListening ? 'bg-rose-500' : isProcessing ? 'bg-amber-500' : input.trim() ? 'bg-emerald-500' : 'bg-workspace-accent';
 
         {showUpload && (
           <div className="workspace-card-surface mb-4 rounded-2xl border border-workspace-border/45 px-4 py-4">
