@@ -260,8 +260,8 @@ export async function parseIntentAI(
     }
 
     return { actions: actions.length > 0 ? actions : [{ type: 'respond', message: parsed.response || 'I processed your request.' }] };
-  } catch {
-    // Fallback to a safe no-op response when AI is unavailable or returns invalid JSON.
+  } catch (err) {
+    console.error('[parseIntentAI] FAILED — this is why Sherpa cannot respond:', err);
     return parseIntent(input, existingObjects);
   }
 }
