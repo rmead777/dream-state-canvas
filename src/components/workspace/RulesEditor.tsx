@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { DataProfile, getCurrentProfile, clearProfileCache } from '@/lib/data-analyzer';
 import { CANONICAL_DATASET } from '@/lib/seed-data';
 import { refineDataRules, invalidateProfileCache } from '@/lib/intent-engine';
+import { describeRankingLogic } from '@/lib/data-slicer';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { previewRows, alertRows, metricAggregate, comparisonPairs } from '@/lib/data-slicer';
 
