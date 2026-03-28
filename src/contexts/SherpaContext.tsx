@@ -49,24 +49,27 @@ export function SherpaProvider({ children }: { children: React.ReactNode }) {
     };
   }, [triggerObservationScan]);
 
-  // Also scan when object count changes (something was created/dissolved)
-  const objectCount = Object.values(state.objects).filter(
-    (o) => o.status !== 'dissolved'
-  ).length;
+  // Compute a lightweight fingerprint of object state for reactivity.
+  // Captures count, types, statuses, and pinned flags — not just count.
+  const objectFingerprint = Object.values(state.objects)
+    .filter((o) => o.status !== 'dissolved')
+    .map((o) => `${o.id}:${o.type}:${o.status}:${o.pinned ? 1 : 0}`)
+    .sort()
+    .join('|');
 
   useEffect(() => {
-    if (objectCount > 0) {
+    if (objectFingerprint) {
       // Delay observation scan slightly so state settles
       const timer = setTimeout(triggerObservationScan, 2000);
       return () => clearTimeout(timer);
     }
-  }, [objectCount]);
+  }, [objectFingerprint]);
 
-  // Update suggestions reactively
+  // Update suggestions reactively — responds to pin/unpin, type changes, not just count
   useEffect(() => {
     const suggestions = generateSuggestions(state.objects);
     dispatch({ type: 'SET_SHERPA_SUGGESTIONS', payload: suggestions });
-  }, [objectCount]);
+  }, [objectFingerprint]);
 
   const value: SherpaContextValue = {
     suggestions: state.sherpa.suggestions,
