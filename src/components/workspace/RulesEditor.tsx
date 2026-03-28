@@ -21,7 +21,7 @@ export function RulesEditor({ onClose }: { onClose: () => void }) {
   }, []);
 
   const refreshCards = (updated: DataProfile) => {
-    const { columns, rows } = CANONICAL_DATASET;
+    const { columns, rows } = getActiveDataset();
     const dataObjects = Object.values(state.objects).filter(
       o => ['metric', 'inspector', 'alert', 'comparison'].includes(o.type) && o.status !== 'dissolved'
     );
