@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { WorkspaceObject } from '@/lib/workspace-types';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useDocuments } from '@/contexts/DocumentContext';
@@ -146,6 +146,7 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
   const [aiResponse, setAiResponse] = useState<string | null>(null);
   const [highlights, setHighlights] = useState<number[]>([]);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   const normalizedContent = normalizeLegacyDocumentContent(d.summary || '', d.paragraphs || []);
   const paragraphs: string[] = normalizedContent.paragraphs;
@@ -162,14 +163,33 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
     const storagePath = d.storagePath;
     if (!storagePath) return;
 
+    let activeObjectUrl: string | null = null;
+    let cancelled = false;
+
+    setPdfError(null);
+    setPdfUrl(null);
+
     supabase.storage
       .from('documents')
-      .createSignedUrl(storagePath, 3600)
+      .download(storagePath)
       .then(({ data, error }) => {
-        if (!error && data?.signedUrl) {
-          setPdfUrl(data.signedUrl);
+        if (cancelled) return;
+
+        if (error || !data) {
+          setPdfError('Could not load the PDF file.');
+          return;
         }
+
+        activeObjectUrl = URL.createObjectURL(data);
+        setPdfUrl(activeObjectUrl);
       });
+
+    return () => {
+      cancelled = true;
+      if (activeObjectUrl) {
+        URL.revokeObjectURL(activeObjectUrl);
+      }
+    };
   }, [isPdf, isImmersive, d.storagePath]);
 
   useEffect(() => {
@@ -274,13 +294,24 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
   return (
     <div className="flex h-full">
       {/* PDF Viewer — main area */}
-      {isPdf && pdfUrl ? (
-        <div className="flex-1 min-w-0 bg-neutral-100">
-          <iframe
-            src={pdfUrl}
-            className="w-full h-full border-0"
-            title={fileName}
-          />
+      {isPdf ? (
+        <div className="flex-1 min-w-0 bg-workspace-surface">
+          {pdfUrl ? (
+            <object data={pdfUrl} type="application/pdf" className="h-full w-full">
+              <iframe src={pdfUrl} className="h-full w-full border-0" title={fileName} />
+            </object>
+          ) : (
+            <div className="flex h-full items-center justify-center px-6">
+              <div className="max-w-sm rounded-2xl border border-workspace-border bg-workspace-bg px-6 py-5 text-center shadow-sm">
+                <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.24em] text-workspace-accent">
+                  PDF Viewer
+                </div>
+                <p className="text-sm leading-relaxed text-workspace-text-secondary">
+                  {pdfError || 'Loading document…'}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="flex-1 min-w-0 overflow-y-auto px-8 py-10">
@@ -305,7 +336,7 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
       )}
 
       {/* Right sidebar — AI Summary + Ask */}
-      <div className="w-[380px] shrink-0 border-l border-workspace-border/30 overflow-y-auto bg-white">
+      <div className="w-[380px] shrink-0 overflow-y-auto border-l border-workspace-border/30 bg-workspace-bg">
         <div className="px-6 py-6 space-y-6">
           {summary && (
             <div className="rounded-xl bg-workspace-accent-subtle/15 border border-workspace-accent/10 px-5 py-4">
