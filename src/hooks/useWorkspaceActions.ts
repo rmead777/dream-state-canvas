@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { parseIntentAI, parseIntent, refineDataRules, invalidateProfileCache } from '@/lib/intent-engine';
 import { generateSuggestions } from '@/lib/sherpa-engine';
@@ -8,6 +8,9 @@ import { executeFusion } from '@/lib/fusion-executor';
 import { toast } from '@/hooks/use-toast';
 import { getActiveDataset } from '@/lib/active-dataset';
 import { previewRows, alertRows, metricAggregate, comparisonPairs } from '@/lib/data-slicer';
+
+// Store document IDs ref for context injection
+let _documentIdsRef: string[] = [];
 
 let objectCounter = 0;
 
