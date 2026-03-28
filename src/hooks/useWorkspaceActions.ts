@@ -127,6 +127,63 @@ export function useWorkspaceActions() {
           })();
           break;
         }
+
+        case 'refine-rules': {
+          (async () => {
+            dispatch({ type: 'SET_SHERPA_PROCESSING', payload: true });
+            try {
+              const updatedProfile = await refineDataRules(action.feedback);
+              
+              // Refresh all data-derived objects with new rules
+              const { columns, rows } = CANONICAL_DATASET;
+              const dataObjects = Object.values(state.objects).filter(
+                o => ['metric', 'inspector', 'alert', 'comparison'].includes(o.type) && o.status !== 'dissolved'
+              );
+              
+              for (const obj of dataObjects) {
+                let newContext: Record<string, any> = obj.context;
+                switch (obj.type) {
+                  case 'metric': {
+                    const agg = metricAggregate(columns, rows, updatedProfile);
+                    newContext = { ...obj.context, ...agg };
+                    break;
+                  }
+                  case 'inspector': {
+                    const preview = previewRows(columns, rows, updatedProfile, 8);
+                    newContext = { columns: preview.columns, rows: preview.rows };
+                    break;
+                  }
+                  case 'alert': {
+                    const alerts = alertRows(columns, rows, updatedProfile);
+                    newContext = { alerts };
+                    break;
+                  }
+                  case 'comparison': {
+                    const comp = comparisonPairs(columns, rows, updatedProfile);
+                    newContext = comp;
+                    break;
+                  }
+                }
+                dispatch({ type: 'UPDATE_OBJECT_CONTEXT', payload: { id: obj.id, context: newContext } });
+              }
+
+              const changes = [];
+              if (updatedProfile.primaryMeasureColumn) changes.push(`sorting by ${updatedProfile.primaryMeasureColumn}`);
+              if (updatedProfile.groupByColumn) changes.push(`grouping by ${updatedProfile.groupByColumn}`);
+              if (updatedProfile.sortDirection) changes.push(`${updatedProfile.sortDirection}ending order`);
+              
+              dispatch({
+                type: 'SET_SHERPA_RESPONSE',
+                payload: `Rules updated: ${changes.join(', ')}. ${dataObjects.length} cards refreshed with new prioritization.`,
+              });
+              toast({ title: 'Rules updated', description: `Data prioritization refreshed for ${dataObjects.length} objects.` });
+            } catch (e) {
+              dispatch({ type: 'SET_SHERPA_RESPONSE', payload: 'Could not update rules. Try being more specific about what to change.' });
+            }
+            dispatch({ type: 'SET_SHERPA_PROCESSING', payload: false });
+          })();
+          break;
+        }
       }
     }
 
