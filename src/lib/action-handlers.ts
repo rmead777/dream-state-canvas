@@ -402,7 +402,7 @@ async function refreshComparisonHighlights(
   nextContext: Record<string, unknown>,
   instruction: string,
   profile: DataProfile
-): Promise<{ title?: string; highlights?: { insight: string }[] }> {
+): Promise<{ title?: string; highlights?: { metric: string; insight: string }[] }> {
   const result = await callAI(
     [{ role: 'user', content: `You are updating a comparison object.
 
