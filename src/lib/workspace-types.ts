@@ -43,7 +43,7 @@ export interface WorkspaceObject {
 
 // ─── Intent Engine Types ──────────────────────────────────────────────────────
 
-export type WorkspaceActionType = 'create' | 'focus' | 'dissolve' | 'respond' | 'fuse' | 'refine-rules';
+export type WorkspaceActionType = 'create' | 'focus' | 'dissolve' | 'respond' | 'fuse' | 'refine-rules' | 'update';
 
 export interface CreateAction {
   type: 'create';
@@ -79,7 +79,13 @@ export interface RefineRulesAction {
   feedback: string;
 }
 
-export type WorkspaceAction = CreateAction | FocusAction | DissolveAction | RespondAction | FuseAction | RefineRulesAction;
+export interface UpdateAction {
+  type: 'update';
+  objectId: string;
+  instruction: string;
+}
+
+export type WorkspaceAction = CreateAction | FocusAction | DissolveAction | RespondAction | FuseAction | RefineRulesAction | UpdateAction;
 
 export interface IntentResult {
   actions: WorkspaceAction[];

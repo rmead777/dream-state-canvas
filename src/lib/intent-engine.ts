@@ -175,6 +175,8 @@ export async function parseIntentAI(
           actions.push({ type: 'focus', objectId: action.objectId });
         } else if (action.type === 'dissolve' && action.objectId) {
           actions.push({ type: 'dissolve', objectId: action.objectId });
+        } else if (action.type === 'update' && action.objectId && action.instruction) {
+          actions.push({ type: 'update', objectId: action.objectId, instruction: action.instruction });
         } else if (action.type === 'fuse' && action.objectIdA && action.objectIdB) {
           actions.push({ type: 'fuse', objectIdA: action.objectIdA, objectIdB: action.objectIdB });
         } else if (action.type === 'refine-rules' && action.feedback) {
