@@ -8,6 +8,12 @@ import { useCognitiveMode } from '@/hooks/useCognitiveMode';
 import { MODE_LABELS } from '@/lib/cognitive-modes';
 import { VoiceIndicator } from './VoiceIndicator';
 import { RulesEditor } from './RulesEditor';
+import { DocumentUpload } from './DocumentUpload';
+import { useDocuments } from '@/contexts/DocumentContext';
+import { getDocument, extractDataset } from '@/lib/document-store';
+import { setActiveDataset } from '@/lib/active-dataset';
+import { invalidateProfileCache } from '@/lib/intent-engine';
+import { clearProfileCache } from '@/lib/data-analyzer';
 import { toast } from 'sonner';
 
 export function SherpaRail() {
