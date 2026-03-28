@@ -257,7 +257,7 @@ const patterns: IntentPattern[] = [
       }
       const data = await getDynamicData('metric');
       return [
-        { type: 'respond', message: `Total AP is $${(data.currentValue / 1000000).toFixed(2)}M across ${CANONICAL_DATASET.rows.length} vendors.` },
+        { type: 'respond', message: `Total AP is $${(data.currentValue / 1000000).toFixed(2)}M across ${getActiveDataset().rows.length} vendors.` },
         { type: 'create', objectType: 'metric', title: 'AP Exposure', data: { ...data, label: 'ap-exposure' } },
       ];
     },
