@@ -15,6 +15,7 @@ import { AIBrief } from '@/components/objects/AIBrief';
 import { Timeline } from '@/components/objects/Timeline';
 import { DocumentReader } from '@/components/objects/DocumentReader';
 import { DatasetView } from '@/components/objects/DatasetView';
+import { AnalysisCard } from '@/components/objects/AnalysisCard';
 
 const typeLabels: Record<string, string> = {
   metric: 'Metric',
@@ -26,9 +27,15 @@ const typeLabels: Record<string, string> = {
   monitor: 'Monitor',
   document: 'Document',
   dataset: 'Dataset',
+  analysis: 'Analysis',
 };
 
 function ObjectContent({ object }: { object: WO }) {
+  // If any card type has AI-generated sections, use the universal renderer
+  if (object.context?.sections?.length > 0) {
+    return <AnalysisCard object={object} />;
+  }
+
   switch (object.type) {
     case 'metric': return <MetricDetail object={object} />;
     case 'comparison': return <ComparisonPanel object={object} />;
@@ -38,6 +45,7 @@ function ObjectContent({ object }: { object: WO }) {
     case 'timeline': return <Timeline object={object} />;
     case 'document': return <DocumentReader object={object} />;
     case 'dataset': return <DatasetView object={object} />;
+    case 'analysis': return <AnalysisCard object={object} />;
     default: return <div className="text-sm text-workspace-text-secondary">Unknown object type</div>;
   }
 }

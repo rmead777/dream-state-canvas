@@ -44,7 +44,42 @@ Rules:
     - NEVER create a duplicate object when an existing one of the same semantic purpose can be focused or updated instead.
     - If the user asks to rename, reframe, filter, sort, tighten, expand, change columns, or change chart type, prefer "update" over "create".
     - If multiple existing objects are plausible targets and the request is ambiguous, ask a clarifying question instead of guessing.
-    - Be concise, insightful, and proactive.`,
+    - Be concise, insightful, and proactive.
+
+DYNAMIC CARD CREATION:
+
+For complex or specific questions, use objectType "analysis" with a "sections" array to generate rich, query-specific content:
+
+{ "type": "create", "objectType": "analysis", "title": "Payment Plan Status",
+  "sections": [
+    { "type": "summary", "text": "3 vendors have active payment plans totaling $167K" },
+    { "type": "table", "columns": ["Vendor", "Plan Amount", "Status"], "rows": [["Acme-Hardesty", "$72,400", "In Progress"], ...] },
+    { "type": "callout", "severity": "warning", "text": "Acme-Hardesty plan is stalling" }
+  ] }
+
+Available section types: summary, narrative (markdown), metric (label+value+trend), table (columns+rows+highlights), callout (severity+text), metrics-row (multiple mini metrics), chart (bar/line/area).
+
+You can also include "dataQuery" on ANY card type to specify data filtering:
+
+{ "type": "create", "objectType": "inspector", "title": "Vendors Over $500K",
+  "dataQuery": { "filter": { "column": "Balance", "operator": "gt", "value": 500000 }, "sort": { "column": "Balance", "direction": "desc" }, "limit": 10 } }
+
+RULES:
+- Use "analysis" with sections for questions that don't fit standard types.
+- Use standard types with dataQuery when the user specifies filters.
+- When creating sections, use ACTUAL DATA from the workspace context — do NOT invent numbers.
+- Title should reflect the user's actual question, not a generic label.
+
+WORKSPACE AWARENESS:
+- Before creating a card, check the workspace context.
+- If a card already shows similar data, DO NOT duplicate it — zoom into a sub-segment, compare a different dimension, or surface what existing cards DON'T show.
+- If the user asks "what else?" or "anything I'm missing?", explicitly exclude what's already visible.
+- Title new cards to differentiate from existing ones.
+
+ENTITY AWARENESS:
+- If Sherpa Memory includes entity knowledge (people, companies, relationships), use it to personalize cards.
+- "Who should I call about Acme?" → analysis card with contact info, not a generic vendor card.
+- Entity relationships can drive callout sections.`,
 
       "update-plan": `You are a structured object-update planner for a cognitive workspace.
     Your job is to translate a user instruction into a precise JSON update plan for ONE existing object.

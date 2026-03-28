@@ -6,6 +6,8 @@ import { computeFreeformPosition } from '@/lib/freeform-placement';
 import { handleUpdate, handleFuse, handleRefineRules, HandlerResult, DispatchInstruction } from '@/lib/action-handlers';
 import { toast } from '@/hooks/use-toast';
 import { buildDocumentObjectContext, resolveDocumentRecord } from '@/lib/document-store';
+import { validateSections } from '@/lib/card-schema';
+import { executeDataQuery } from '@/lib/data-query';
 import { addQuery, updateLastResponse } from '@/lib/conversation-memory';
 import { retrieveRelevantMemories, formatMemoriesForPrompt, determineWorkspaceState } from '@/lib/memory-retriever';
 import { recordAction, detectLearningSignals } from '@/lib/memory-detector';
@@ -329,6 +331,31 @@ export function useWorkspaceActions() {
         })
       : null;
 
+    // Build context — merge AI-generated sections + dataQuery results
+    let context: Record<string, unknown> = resolvedDocument
+      ? buildDocumentObjectContext(resolvedDocument)
+      : (action.data || {});
+
+    // If AI provided sections (analysis or enhanced standard card)
+    if ((action as any).sections) {
+      const validSections = validateSections((action as any).sections);
+      if (validSections.length > 0) {
+        context = { ...context, sections: validSections };
+      }
+    }
+
+    // If AI provided a dataQuery, execute and merge results
+    if ((action as any).dataQuery) {
+      const queryResult = executeDataQuery((action as any).dataQuery);
+      context = {
+        ...context,
+        columns: queryResult.columns,
+        rows: queryResult.rows,
+        dataQuery: (action as any).dataQuery,
+        queryMeta: { totalMatched: queryResult.totalMatched, truncated: queryResult.truncated },
+      };
+    }
+
     const obj: Omit<WorkspaceObject, 'status' | 'createdAt' | 'lastInteractedAt'> = {
       id,
       type: action.objectType,
@@ -336,7 +363,7 @@ export function useWorkspaceActions() {
       pinned: false,
       origin,
       relationships,
-      context: resolvedDocument ? buildDocumentObjectContext(resolvedDocument) : action.data,
+      context,
       position: { zone: 'primary', order: 0 },
       freeformPosition,
     };

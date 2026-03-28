@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CardSection, DataQuerySchema } from './card-schema';
 
 /**
  * Zod schemas for validating LLM intent output.
@@ -9,6 +10,7 @@ import { z } from 'zod';
 export const ObjectTypeSchema = z.enum([
   'metric', 'comparison', 'alert', 'inspector', 'brief',
   'timeline', 'monitor', 'document', 'dataset',
+  'analysis',
 ]);
 
 export const CreateActionSchema = z.object({
@@ -16,6 +18,8 @@ export const CreateActionSchema = z.object({
   objectType: ObjectTypeSchema,
   title: z.string().min(1).default('Untitled'),
   relatedTo: z.array(z.string()).optional(),
+  sections: z.array(CardSection).optional(),
+  dataQuery: DataQuerySchema.optional(),
 });
 
 export const FocusActionSchema = z.object({

@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 // ─── Workspace Object Model ───────────────────────────────────────────────────
 
-export type ObjectType = 'metric' | 'comparison' | 'alert' | 'inspector' | 'brief' | 'timeline' | 'monitor' | 'document' | 'dataset';
+export type ObjectType = 'metric' | 'comparison' | 'alert' | 'inspector' | 'brief' | 'timeline' | 'monitor' | 'document' | 'dataset' | 'analysis';
 
 export type ObjectStatus = 'materializing' | 'open' | 'collapsed' | 'dissolved';
 
@@ -10,8 +12,15 @@ export type IntentOriginType = 'user-query' | 'sherpa-suggestion' | 'cross-objec
 
 export interface IntentOrigin {
   type: IntentOriginType;
+  intentId?: string;
   query?: string;
   sourceObjectId?: string;
+  timestamp?: number;
+  response?: string;
+  outcomeSummary?: string;
+  resultingFocusObjectId?: string | null;
+  affectedObjectIds?: string[];
+  createdObjectIds?: string[];
 }
 
 export interface SpatialPosition {
@@ -148,10 +157,12 @@ export type WorkspaceReducerAction =
   | { type: 'ADD_SHERPA_OBSERVATION'; payload: string }
   | { type: 'SET_SHERPA_PROCESSING'; payload: boolean }
   | { type: 'ADD_RECENT_INTENT'; payload: IntentOrigin }
+  | { type: 'UPDATE_RECENT_INTENT_OUTCOME'; payload: { intentId: string; patch: Partial<IntentOrigin> } }
   | { type: 'REORDER_ZONE'; payload: { zone: 'primary' | 'secondary'; ids: string[] } }
   | { type: 'SET_LAYOUT_MODE'; payload: LayoutMode }
   | { type: 'UPDATE_FREEFORM_POSITION'; payload: { id: string; position: FreeformPosition } }
   | { type: 'UPDATE_OBJECT_CONTEXT'; payload: { id: string; context: Record<string, any> } }
+  | { type: 'UPDATE_OBJECT'; payload: { id: string; title?: string; context?: Record<string, any> } }
   | { type: 'ENTER_IMMERSIVE'; payload: { id: string } }
   | { type: 'EXIT_IMMERSIVE' }
   | { type: 'CLEAR_SHERPA' }
