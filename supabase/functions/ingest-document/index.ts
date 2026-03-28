@@ -492,6 +492,14 @@ Return ONLY JSON.`,
         .maybeSingle();
 
       if (existing) {
+        // If the duplicate has no user_id, claim it for the current user
+        if (userId) {
+          await supabase
+            .from("documents")
+            .update({ user_id: userId })
+            .eq("id", existing.id)
+            .is("user_id", null);
+        }
         return jsonResp({
           id: existing.id,
           status: "duplicate",
