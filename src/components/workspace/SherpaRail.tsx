@@ -44,6 +44,11 @@ export function SherpaRail() {
   const inputRef = useRef<HTMLInputElement>(null);
   const { addDocument, documents } = useDocuments();
   const railControlsBase = 'flex h-7 w-7 items-center justify-center rounded-full border border-transparent text-[10px] transition-all duration-200 workspace-spring';
+  const composerState = voice.isListening ? 'Listening' : isProcessing ? 'Reasoning' : input.trim() ? 'Ready to send' : 'Standing by';
+  const composerStateTone = voice.isListening ? 'bg-rose-500' : isProcessing ? 'bg-amber-500' : input.trim() ? 'bg-emerald-500' : 'bg-workspace-accent';
+  const contextScopeLabel = contextMode === 'auto'
+    ? `${documents.length} docs in ambient scope`
+    : `${selectedDocIds.length} selected docs`;
 
   // Sync document IDs to the workspace actions layer
   useEffect(() => {
@@ -166,7 +171,7 @@ export function SherpaRail() {
   }
 
   return (
-    <div className="relative flex h-full w-80 flex-shrink-0 flex-col overflow-hidden border-l border-workspace-border/50 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.94),rgba(248,248,252,0.92))] backdrop-blur-xl lg:w-[340px]">
+    <div className="workspace-noise relative flex h-full w-80 flex-shrink-0 flex-col overflow-hidden border-l border-workspace-border/50 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.94),rgba(248,248,252,0.92))] backdrop-blur-xl lg:w-[340px]">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[linear-gradient(to_bottom,rgba(99,102,241,0.08),transparent)]" />
 
       {/* Header */}
@@ -193,6 +198,9 @@ export function SherpaRail() {
               </span>
               <span className="workspace-pill rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-workspace-text-secondary/70">
                 {contextMode}
+              </span>
+              <span className="workspace-pill rounded-full px-2.5 py-1 text-[10px] text-workspace-text-secondary/72 tabular-nums">
+                {contextScopeLabel}
               </span>
             </div>
           </div>
@@ -274,6 +282,23 @@ export function SherpaRail() {
       </div>
 
       <div className="relative z-10 flex-1 overflow-y-auto px-5 py-4">
+        <div className="workspace-card-surface mb-4 rounded-2xl border border-workspace-border/45 px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-workspace-accent/70">Session pulse</div>
+              <p className="mt-1 text-[12px] leading-5 text-workspace-text-secondary/78">
+                {lastResponse
+                  ? 'Sherpa has context from the current workspace and can push the next best move.'
+                  : 'Give Sherpa a target and it will materialize the right analytical objects around it.'}
+              </p>
+            </div>
+            <div className="workspace-pill rounded-full px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-workspace-text-secondary/72">
+              <span className={`mr-2 inline-block h-1.5 w-1.5 rounded-full ${composerStateTone} ${voice.isListening || isProcessing ? 'animate-pulse' : ''}`} />
+              {composerState}
+            </div>
+          </div>
+        </div>
+
         {/* Rules editor panel */}
         {showRules && (
           <div className="workspace-card-surface mb-4 rounded-2xl border border-workspace-border/45 px-4 py-4">
@@ -498,6 +523,12 @@ export function SherpaRail() {
 
         {/* Suggestion chips */}
         <div className="space-y-2 pb-4">
+          {suggestions.length > 0 && (
+            <div className="flex items-center justify-between px-1 pb-1">
+              <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-workspace-accent/65">Next moves</span>
+              <span className="text-[10px] text-workspace-text-secondary/55 tabular-nums">{suggestions.length} queued</span>
+            </div>
+          )}
           {suggestions.map((s) => (
             <button
               key={s.id}
@@ -506,8 +537,11 @@ export function SherpaRail() {
                 text-left text-xs text-workspace-text transition-all duration-200 workspace-spring
                 hover:-translate-y-0.5 hover:border-workspace-accent/20 hover:bg-workspace-accent-subtle/30 hover:shadow-[0_18px_38px_rgba(99,102,241,0.12)]"
             >
-              <div className="mb-1 text-[10px] uppercase tracking-[0.2em] text-workspace-accent/65">Suggested next move</div>
-              {s.label}
+              <div className="mb-1 flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.2em] text-workspace-accent/65">
+                <span>Suggested next move</span>
+                <span aria-hidden="true">↗</span>
+              </div>
+              <span className="block leading-5">{s.label}</span>
             </button>
           ))}
         </div>
@@ -515,6 +549,14 @@ export function SherpaRail() {
 
       {/* Input area */}
       <div className="relative z-10 border-t border-workspace-border/50 bg-white/70 p-4 space-y-3 backdrop-blur-md">
+        <div className="flex items-center justify-between gap-3 px-1">
+          <div className="flex items-center gap-2 text-[10px] text-workspace-text-secondary/62">
+            <span className={`inline-block h-1.5 w-1.5 rounded-full ${composerStateTone} ${voice.isListening || isProcessing ? 'animate-pulse' : ''}`} />
+            <span className="uppercase tracking-[0.18em]">{composerState}</span>
+          </div>
+          <span className="text-[10px] text-workspace-text-secondary/50">Enter to send · Hold mic to dictate</span>
+        </div>
+
         {/* Voice indicator */}
         <VoiceIndicator volume={voice.volume} isListening={voice.isListening} />
 

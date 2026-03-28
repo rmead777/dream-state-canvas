@@ -39,9 +39,10 @@ export function WorkspaceShell() {
   }, [isImmersive]);
 
   return (
-    <div className={`relative flex h-screen flex-col overflow-hidden bg-workspace-bg transition-colors duration-1500`}>
+    <div className={`workspace-noise relative flex h-screen flex-col overflow-hidden bg-workspace-bg transition-colors duration-1500`}>
       <div className="pointer-events-none absolute inset-x-0 top-0 z-0 h-28 bg-[linear-gradient(to_bottom,rgba(99,102,241,0.07),transparent)]" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-24 bg-[linear-gradient(to_top,rgba(255,255,255,0.45),transparent)]" />
+      <div className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(circle_at_15%_15%,rgba(99,102,241,0.07),transparent_24%),radial-gradient(circle_at_85%_10%,rgba(99,102,241,0.05),transparent_20%)]" />
       {/* Cognitive mode passed to SherpaRail via context */}
 
       {/* Audio mute toggle */}
@@ -80,7 +81,7 @@ export function WorkspaceShell() {
       {/* Over-capacity indicator */}
       {isOverCapacity && !isImmersive && (
         <div className="fixed bottom-16 left-1/2 -translate-x-1/2 z-40 animate-[materialize_0.4s_cubic-bezier(0.16,1,0.3,1)_forwards]">
-          <div className="rounded-full bg-workspace-accent/8 border border-workspace-accent/15 px-4 py-1.5 text-[10px] text-workspace-accent backdrop-blur-sm">
+          <div className="workspace-pill rounded-full px-4 py-1.5 text-[10px] uppercase tracking-[0.18em] text-workspace-accent backdrop-blur-sm">
             Workspace is busy — inactive objects will recede shortly
           </div>
         </div>

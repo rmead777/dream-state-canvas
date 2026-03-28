@@ -13,6 +13,12 @@ export default function Auth() {
     'Cross-reference datasets, documents, and risk signals in one canvas',
     'Let Sherpa surface what matters before you ask for it',
   ];
+  const heroMetrics = [
+    { label: 'Object system', value: '9 types' },
+    { label: 'Analytical flow', value: 'Prompt → canvas' },
+    { label: 'Ambient guide', value: 'Sherpa live' },
+  ];
+  const workflowSteps = ['Authenticate', 'Restore context', 'Materialize the next best view'];
   const isBusy = loading || checkingSession;
   const statusTitle = checkingSession ? 'Restoring workspace' : loading ? 'Redirecting' : 'Secure sign-in';
   const statusDetail = checkingSession
@@ -56,15 +62,16 @@ export default function Auth() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(116,115,255,0.16),_transparent_32%),radial-gradient(circle_at_bottom_right,_rgba(116,115,255,0.12),_transparent_28%)] bg-workspace-bg">
+    <div className="workspace-noise relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(116,115,255,0.16),_transparent_32%),radial-gradient(circle_at_bottom_right,_rgba(116,115,255,0.12),_transparent_28%)] bg-workspace-bg">
       <div className="pointer-events-none absolute inset-0 opacity-60">
         <div className="absolute left-[-12rem] top-[-8rem] h-[26rem] w-[26rem] rounded-full bg-workspace-accent/10 blur-3xl" />
         <div className="absolute bottom-[-10rem] right-[-6rem] h-[24rem] w-[24rem] rounded-full bg-workspace-accent/10 blur-3xl" />
         <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.35),transparent_30%,transparent_70%,rgba(116,115,255,0.05))]" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.18)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.14)_1px,transparent_1px)] bg-[size:80px_80px] opacity-[0.16]" />
       </div>
 
       <div className="relative mx-auto flex min-h-screen w-full max-w-7xl flex-col justify-center px-6 py-10 lg:flex-row lg:items-center lg:gap-16 lg:px-10">
-        <section className="mb-10 max-w-xl space-y-6 lg:mb-0 lg:flex-1">
+        <section className="mb-10 max-w-[46rem] space-y-6 lg:mb-0 lg:flex-1">
           <div className="inline-flex items-center gap-2 rounded-full border border-workspace-accent/15 bg-white/55 px-3 py-1.5 text-[11px] uppercase tracking-[0.24em] text-workspace-accent shadow-[0_10px_30px_rgba(99,102,241,0.08)] backdrop-blur-sm">
             <span className="text-sm leading-none">✦</span>
             Dream State Canvas
@@ -79,11 +86,20 @@ export default function Auth() {
             </p>
           </div>
 
+          <div className="flex flex-wrap gap-2.5">
+            {heroMetrics.map((metric) => (
+              <div key={metric.label} className="workspace-pill rounded-full px-3.5 py-2 text-[11px] text-workspace-text-secondary">
+                <span className="mr-2 uppercase tracking-[0.18em] text-workspace-accent/70">{metric.label}</span>
+                <span className="font-medium text-workspace-text">{metric.value}</span>
+              </div>
+            ))}
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-3">
             {productMoments.map((moment, index) => (
               <div
                 key={moment}
-                className="rounded-2xl border border-white/70 bg-white/60 px-4 py-4 text-sm leading-6 text-workspace-text-secondary shadow-[0_14px_40px_rgba(15,23,42,0.06)] backdrop-blur-md"
+                className="workspace-noise rounded-2xl border border-white/70 bg-white/60 px-4 py-4 text-sm leading-6 text-workspace-text-secondary shadow-[0_14px_40px_rgba(15,23,42,0.06)] backdrop-blur-md"
                 style={{ animationDelay: `${Math.min(index * 40, 120)}ms` }}
               >
                 <div className="mb-2 flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.22em] text-workspace-accent/70">
@@ -94,10 +110,66 @@ export default function Auth() {
               </div>
             ))}
           </div>
+
+          <div className="relative hidden lg:block">
+            <div className="workspace-card-surface workspace-noise relative ml-6 mt-4 max-w-[36rem] overflow-hidden rounded-[34px] border border-white/75 px-6 py-6 shadow-[0_28px_90px_rgba(15,23,42,0.11)]">
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.12),transparent_28%),linear-gradient(to_bottom,rgba(255,255,255,0.18),transparent_45%)]" />
+              <div className="relative z-10">
+                <div className="mb-5 flex items-center justify-between">
+                  <span className="workspace-pill rounded-full px-3 py-1 text-[10px] font-medium uppercase tracking-[0.22em] text-workspace-accent/75">
+                    Spatial preview
+                  </span>
+                  <span className="text-[11px] text-workspace-text-secondary/65">What the workspace feels like after one good prompt</span>
+                </div>
+
+                <div className="grid grid-cols-[1.2fr_0.85fr] gap-4">
+                  <div className="workspace-float rounded-[28px] border border-workspace-accent/12 bg-white/88 px-5 py-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)]">
+                    <div className="mb-3 flex items-center justify-between">
+                      <span className="text-[10px] uppercase tracking-[0.2em] text-workspace-accent/70">Primary metric</span>
+                      <span className="workspace-pill rounded-full px-2 py-1 text-[10px] text-workspace-text-secondary/65">Live</span>
+                    </div>
+                    <div className="text-4xl font-semibold tracking-[-0.04em] text-workspace-text tabular-nums">12.4%</div>
+                    <p className="mt-2 text-sm leading-6 text-workspace-text-secondary/78">Portfolio risk concentration surfaced automatically from your latest uploaded materials.</p>
+                    <div className="mt-4 grid grid-cols-6 gap-1.5">
+                      {[32, 48, 40, 62, 54, 74].map((bar, idx) => (
+                        <div key={idx} className="h-16 rounded-full bg-workspace-accent/8 px-1 pt-1">
+                          <div className="w-full rounded-full bg-workspace-accent/65 workspace-float" style={{ height: `${bar}%`, animationDelay: `${idx * 0.35}s` }} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 pt-3">
+                    <div className="workspace-float rounded-[24px] border border-workspace-border/70 bg-white/86 px-4 py-4 shadow-[0_14px_34px_rgba(15,23,42,0.06)]" style={{ animationDelay: '0.7s' }}>
+                      <div className="mb-2 text-[10px] uppercase tracking-[0.2em] text-workspace-accent/70">Sherpa noticed</div>
+                      <p className="text-sm leading-6 text-workspace-text/82">Urgent vendors cluster in two subsidiaries with aging balances drifting upward.</p>
+                    </div>
+                    <div className="workspace-float ml-8 rounded-[24px] border border-workspace-border/70 bg-white/82 px-4 py-4 shadow-[0_14px_34px_rgba(15,23,42,0.06)]" style={{ animationDelay: '1.2s' }}>
+                      <div className="mb-2 text-[10px] uppercase tracking-[0.2em] text-workspace-accent/70">Suggested next move</div>
+                      <p className="text-sm leading-6 text-workspace-text/82">Fuse the risk panel with the source document set to generate a board-ready brief.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 flex items-center gap-2">
+                  {workflowSteps.map((step, index) => (
+                    <div key={step} className="flex items-center gap-2 text-[11px] text-workspace-text-secondary/72">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full border border-workspace-accent/12 bg-white/84 text-[10px] font-medium text-workspace-accent shadow-[0_8px_20px_rgba(99,102,241,0.08)]">
+                        {index + 1}
+                      </span>
+                      <span>{step}</span>
+                      {index < workflowSteps.length - 1 && <span className="text-workspace-text-secondary/35">→</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section className="w-full max-w-md lg:w-[27rem]">
-          <div className="rounded-[28px] border border-white/75 bg-white/72 p-7 shadow-[0_24px_90px_rgba(15,23,42,0.12)] backdrop-blur-xl sm:p-8">
+          <div className="workspace-noise relative rounded-[30px] border border-white/80 bg-white/74 p-7 shadow-[0_24px_90px_rgba(15,23,42,0.12)] backdrop-blur-xl sm:p-8">
+            <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-[linear-gradient(to_right,transparent,rgba(99,102,241,0.45),transparent)]" />
             <div className="mb-7 flex items-start justify-between gap-4">
               <div className="space-y-2">
                 <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-workspace-accent/10 text-lg text-workspace-accent shadow-[0_8px_20px_rgba(99,102,241,0.16)]">
@@ -112,7 +184,10 @@ export default function Auth() {
               </div>
               <div className="rounded-2xl border border-workspace-accent/10 bg-workspace-accent/5 px-3 py-2 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
                 <div className="text-[10px] uppercase tracking-[0.22em] text-workspace-accent/60">Status</div>
-                <div className="mt-1 text-sm font-medium text-workspace-text" aria-live="polite">{statusTitle}</div>
+                <div className="mt-1 inline-flex items-center gap-2 text-sm font-medium text-workspace-text" aria-live="polite">
+                  <span className={`inline-block h-1.5 w-1.5 rounded-full ${checkingSession ? 'bg-amber-500 animate-pulse' : loading ? 'bg-workspace-accent animate-pulse' : 'bg-emerald-500'}`} />
+                  {statusTitle}
+                </div>
                 <div className="mt-0.5 text-[11px] text-workspace-text-secondary/65">{statusDetail}</div>
               </div>
             </div>
@@ -129,7 +204,7 @@ export default function Auth() {
                 disabled={isBusy}
                 aria-busy={isBusy}
                 aria-describedby="auth-feedback"
-                className="workspace-focus-ring group flex w-full items-center justify-center gap-3 rounded-2xl border border-workspace-border/70 bg-white px-4 py-4 text-sm font-medium text-workspace-text shadow-[0_14px_30px_rgba(15,23,42,0.08)] transition-all duration-200 hover:-translate-y-0.5 hover:border-workspace-accent/20 hover:shadow-[0_18px_40px_rgba(99,102,241,0.14)] disabled:translate-y-0 disabled:opacity-50"
+                className="workspace-focus-ring group flex w-full items-center justify-center gap-3 rounded-2xl border border-workspace-border/70 bg-white px-4 py-4 text-sm font-medium text-workspace-text shadow-[0_14px_30px_rgba(15,23,42,0.08)] transition-all duration-200 workspace-spring hover:-translate-y-0.5 hover:border-workspace-accent/20 hover:shadow-[0_18px_40px_rgba(99,102,241,0.14)] disabled:translate-y-0 disabled:opacity-50"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" className="transition-transform duration-200 group-hover:scale-105">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
@@ -162,6 +237,17 @@ export default function Auth() {
                   </>
                 )}
               </div>
+
+              {!checkingSession && (
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {workflowSteps.map((step, index) => (
+                    <div key={step} className="rounded-2xl border border-workspace-border/45 bg-white/55 px-3 py-3 text-center shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+                      <div className="mb-1 text-[10px] uppercase tracking-[0.2em] text-workspace-accent/65">Step {index + 1}</div>
+                      <div className="text-[11px] leading-5 text-workspace-text-secondary/78">{step}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <p className="mt-5 text-center text-[11px] leading-5 text-workspace-text-secondary/55">
