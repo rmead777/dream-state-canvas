@@ -181,6 +181,20 @@ export function SherpaRail() {
           )}
         </div>
         <div className="flex items-center gap-1">
+          {/* Admin toggle (only visible when unlocked) */}
+          {adminUnlocked && (
+            <button
+              onClick={() => setShowAdmin(!showAdmin)}
+              className={`rounded-md p-1 transition-colors text-[10px] ${
+                showAdmin
+                  ? 'bg-workspace-accent/10 text-workspace-accent'
+                  : 'text-workspace-accent/40 hover:bg-workspace-surface hover:text-workspace-accent'
+              }`}
+              title={showAdmin ? 'Hide admin' : 'Admin controls'}
+            >
+              ⚡
+            </button>
+          )}
           {/* Upload toggle */}
           <button
             onClick={() => setShowUpload(!showUpload)}
