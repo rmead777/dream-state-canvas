@@ -226,7 +226,7 @@ export function PanelCanvas() {
             sourceTitle={objects[fusionTarget.sourceId]?.title || ''}
             targetTitle={objects[fusionTarget.targetId]?.title || ''}
             isProcessing={fusionProcessing}
-            onConfirm={handleFuse}
+            onFuse={handleFuse}
             onCancel={handleCancelFusion}
           />
         )}
