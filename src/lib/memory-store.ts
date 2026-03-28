@@ -111,7 +111,7 @@ export async function getOverrideMemories(userId: string): Promise<SherpaMemory[
     .order('confidence', { ascending: false });
 
   if (error) return [];
-  return ((data || []) as MemoryRow[]).map(rowToMemory);
+  return ((data || []) as unknown as MemoryRow[]).map(rowToMemory);
 }
 
 export async function getPendingMemories(userId: string): Promise<SherpaMemory[]> {
