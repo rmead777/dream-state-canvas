@@ -14,7 +14,7 @@ import {
   CANONICAL_DATASET,
 } from './seed-data';
 import { callAI } from '@/hooks/useAI';
-import { analyzeDataset, DataProfile } from './data-analyzer';
+import { analyzeDataset, refineProfile, getCurrentProfile, DataProfile } from './data-analyzer';
 import { previewRows, alertRows, metricAggregate, comparisonPairs } from './data-slicer';
 
 // Cached profile promise (runs once)
