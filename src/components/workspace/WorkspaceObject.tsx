@@ -85,7 +85,7 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
       `}
       style={{
         ...(size.width ? { width: size.width } : {}),
-        ...(size.height ? { height: size.height, overflow: 'auto' } : {}),
+        ...(size.height ? { height: size.height } : {}),
       }}
       onClick={() => focusObject(object.id)}
     >
