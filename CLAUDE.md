@@ -2,6 +2,32 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## SUPER DUPER IMPORTANT
+
+### Always push to main
+Push ALL changes to `main` immediately after committing. Do NOT ask for permission. Ryan does not need to approve pushes.
+
+### Edge Function & Migration Deployment Alerts
+Supabase edge functions and database migrations are NOT auto-deployed from git. When you change ANY file under `supabase/functions/` or create a new file under `supabase/migrations/`, you MUST tell Ryan explicitly using this format:
+
+```
+⚠️ DEPLOYMENT NEEDED:
+- Edge functions changed: [list function names]
+  → Action: Tell Lovable to redeploy edge functions, or run `supabase functions deploy [name]`
+- New migration: [filename]
+  → Action: Run this SQL in the Supabase Dashboard SQL Editor
+```
+
+If you forget this, the deployed code stays stale and nothing works. This has caused hours of debugging. DO NOT skip this step. EVER.
+
+### AI-First, No Keyword Fallbacks
+The AI is the primary AND fallback path. When AI fails, show an error message — never fall back to keyword/regex matching. Keyword matching cannot distinguish "show risks" from "stop showing risks."
+
+### Design Philosophy
+This is an **intent manifestation engine**, not a dashboard with AI. The AI IS the app. Objects materialize from user intent, not from pre-built UI. Every architectural decision should make the intent→manifestation loop better.
+
+---
+
 ## Project Overview
 
 Dream State Canvas is an AI-powered analytical workspace where users upload documents (spreadsheets, PDFs, etc.) and interact with them through natural language. The app materializes data as "workspace objects" — cards that appear, collapse, fuse together, and dissolve — on a spatial canvas. An AI assistant called "Sherpa" observes workspace state and proactively offers suggestions.
