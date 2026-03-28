@@ -272,7 +272,9 @@ function DraggableFreeformObject({
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       const target = e.target as HTMLElement;
+      // Only start drag from the freeform handle area, but not from buttons/inputs
       if (!target.closest('[data-freeform-handle]')) return;
+      if (target.closest('button') || target.closest('input') || target.closest('a')) return;
 
       e.preventDefault();
       setDragging(true);
