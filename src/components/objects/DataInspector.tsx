@@ -3,6 +3,17 @@ import { ChevronDown, ChevronRight, Columns } from 'lucide-react';
 import { WorkspaceObject } from '@/lib/workspace-types';
 import { getDisplayColumns, filterRowToColumns } from '@/lib/smart-columns';
 
+function CollapsibleSection({ collapsed, children }: { collapsed: boolean; children: React.ReactNode }) {
+  return (
+    <div
+      className={`grid transition-all duration-200 ${collapsed ? 'grid-rows-[0fr] opacity-0 -translate-y-1' : 'grid-rows-[1fr] opacity-100 translate-y-0'}`}
+      aria-hidden={collapsed}
+    >
+      <div className="min-h-0 overflow-hidden">{children}</div>
+    </div>
+  );
+}
+
 export function DataInspector({ object }: { object: WorkspaceObject }) {
   const allColumns: string[] = object.context?.columns || [];
   const rows: string[][] = object.context?.rows || [];
@@ -29,7 +40,7 @@ export function DataInspector({ object }: { object: WorkspaceObject }) {
             <ChevronDown className="h-3.5 w-3.5 text-workspace-accent flex-shrink-0" />
           )}
           <span className="text-[10px] font-medium uppercase tracking-wider text-workspace-text-secondary group-hover:text-workspace-text transition-colors">
-            Data Table · {rows.length} rows · {visibleCols.length} of {allColumns.length} columns
+            Data Table · <span className="tabular-nums">{rows.length}</span> rows · <span className="tabular-nums">{visibleCols.length}</span> of <span className="tabular-nums">{allColumns.length}</span> columns
           </span>
         </button>
 
@@ -44,7 +55,7 @@ export function DataInspector({ object }: { object: WorkspaceObject }) {
         )}
       </div>
 
-      {!collapsed && (
+      <CollapsibleSection collapsed={collapsed}>
         <div className="overflow-x-auto rounded-lg border border-workspace-border">
           <table className="w-full text-sm">
             <thead>
@@ -70,7 +81,7 @@ export function DataInspector({ object }: { object: WorkspaceObject }) {
                     {cells.map((cell, j) => (
                       <td
                         key={j}
-                        className={`px-4 py-2.5 whitespace-nowrap ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary'}`}
+                        className={`px-4 py-2.5 whitespace-nowrap ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary tabular-nums'}`}
                       >
                         <FormattedCell value={cell} />
                       </td>
@@ -81,7 +92,7 @@ export function DataInspector({ object }: { object: WorkspaceObject }) {
             </tbody>
           </table>
         </div>
-      )}
+      </CollapsibleSection>
     </div>
   );
 }

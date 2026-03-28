@@ -6,6 +6,17 @@ import { SYNTHESIS_LABELS, SynthesisType } from '@/lib/fusion-rules';
 import { ChevronDown, ChevronRight, Undo2, Eye } from 'lucide-react';
 import MarkdownRenderer from './MarkdownRenderer';
 
+function CollapsibleSection({ collapsed, children }: { collapsed: boolean; children: React.ReactNode }) {
+  return (
+    <div
+      className={`grid transition-all duration-200 ${collapsed ? 'grid-rows-[0fr] opacity-0 -translate-y-1' : 'grid-rows-[1fr] opacity-100 translate-y-0'}`}
+      aria-hidden={collapsed}
+    >
+      <div className="min-h-0 overflow-hidden">{children}</div>
+    </div>
+  );
+}
+
 /** Compact preview of a source object's data for drillback */
 function SourceDrillback({ object }: { object: WorkspaceObject }) {
   const ctx = object.context;
@@ -159,7 +170,11 @@ export function AIBrief({ object }: { object: WorkspaceObject }) {
               Data Table
             </span>
           </button>
-          {!tableCollapsed && <FusionDataVisuals sources={sourceObjects} />}
+          <CollapsibleSection collapsed={tableCollapsed}>
+            <div className="pt-0.5">
+              <FusionDataVisuals sources={sourceObjects} />
+            </div>
+          </CollapsibleSection>
         </div>
       )}
 
@@ -237,11 +252,11 @@ export function AIBrief({ object }: { object: WorkspaceObject }) {
                     )}
                     <span className="truncate">Preview: {srcObj.title}</span>
                   </button>
-                  {expandedSource === srcObj.id && (
-                    <div className="mt-1.5 ml-4 animate-[materialize_0.2s_ease_forwards]">
+                  <CollapsibleSection collapsed={expandedSource !== srcObj.id}>
+                    <div className="mt-1.5 ml-4">
                       <SourceDrillback object={srcObj} />
                     </div>
-                  )}
+                  </CollapsibleSection>
                 </div>
               ))}
             </div>

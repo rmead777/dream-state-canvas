@@ -2,6 +2,17 @@ import { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { WorkspaceObject } from '@/lib/workspace-types';
 
+function CollapsibleSection({ collapsed, children }: { collapsed: boolean; children: React.ReactNode }) {
+  return (
+    <div
+      className={`grid transition-all duration-200 ${collapsed ? 'grid-rows-[0fr] opacity-0 -translate-y-1' : 'grid-rows-[1fr] opacity-100 translate-y-0'}`}
+      aria-hidden={collapsed}
+    >
+      <div className="min-h-0 overflow-hidden">{children}</div>
+    </div>
+  );
+}
+
 export function ComparisonPanel({ object }: { object: WorkspaceObject }) {
   const d = object.context;
   const entities = d.entities || [];
@@ -30,7 +41,7 @@ export function ComparisonPanel({ object }: { object: WorkspaceObject }) {
           </span>
         </button>
 
-        {!tableCollapsed && (
+        <CollapsibleSection collapsed={tableCollapsed}>
           <div className="overflow-hidden rounded-lg border border-workspace-border">
             <table className="w-full text-sm">
               <thead>
@@ -65,7 +76,7 @@ export function ComparisonPanel({ object }: { object: WorkspaceObject }) {
               </tbody>
             </table>
           </div>
-        )}
+        </CollapsibleSection>
       </div>
 
       {/* Highlights */}

@@ -264,11 +264,23 @@ function DraggableFreeformObject({
 }) {
   const { dispatch } = useWorkspace();
   const [dragging, setDragging] = useState(false);
-  const dragStart = useRef<{ mouseX: number; mouseY: number; objX: number; objY: number } | null>(null);
+  const [showHint, setShowHint] = useState(false);
+  const dragStart = useRef<{ pointerId: number; mouseX: number; mouseY: number; objX: number; objY: number } | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const pos = object.freeformPosition ?? { x: 100, y: 100 };
 
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
+  const finishDrag = useCallback(() => {
+    const active = dragStart.current;
+    if (active && rootRef.current?.hasPointerCapture(active.pointerId)) {
+      rootRef.current.releasePointerCapture(active.pointerId);
+    }
+    setDragging(false);
+    dragStart.current = null;
+    onDragEnd(object.id);
+  }, [object.id, onDragEnd]);
+
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
       const target = e.target as HTMLElement;
       // Only start drag from the freeform handle area, but not from buttons/inputs
       if (!target.closest('[data-freeform-handle]')) return;
@@ -276,44 +288,53 @@ function DraggableFreeformObject({
 
       e.preventDefault();
       setDragging(true);
+      setShowHint(false);
       onDragStart(object.id);
       dragStart.current = {
+        pointerId: e.pointerId,
         mouseX: e.clientX,
         mouseY: e.clientY,
         objX: pos.x,
         objY: pos.y,
       };
 
-      const onMove = (ev: MouseEvent) => {
-        if (!dragStart.current) return;
-        const dx = ev.clientX - dragStart.current.mouseX;
-        const dy = ev.clientY - dragStart.current.mouseY;
-        dispatch({
-          type: 'UPDATE_FREEFORM_POSITION',
-          payload: {
-            id: object.id,
-            position: {
-              x: Math.max(0, dragStart.current.objX + dx),
-              y: Math.max(0, dragStart.current.objY + dy),
-            },
-          },
-        });
-        onDragMove(object.id);
-      };
-
-      const onUp = () => {
-        setDragging(false);
-        dragStart.current = null;
-        window.removeEventListener('mousemove', onMove);
-        window.removeEventListener('mouseup', onUp);
-        onDragEnd(object.id);
-      };
-
-      window.addEventListener('mousemove', onMove);
-      window.addEventListener('mouseup', onUp);
+      e.currentTarget.setPointerCapture(e.pointerId);
     },
-    [pos, object.id, dispatch, onDragStart, onDragMove, onDragEnd]
+    [pos, object.id, onDragStart]
   );
+
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!dragStart.current) return;
+      const dx = e.clientX - dragStart.current.mouseX;
+      const dy = e.clientY - dragStart.current.mouseY;
+      dispatch({
+        type: 'UPDATE_FREEFORM_POSITION',
+        payload: {
+          id: object.id,
+          position: {
+            x: Math.max(0, dragStart.current.objX + dx),
+            y: Math.max(0, dragStart.current.objY + dy),
+          },
+        },
+      });
+      onDragMove(object.id);
+    },
+    [object.id, dispatch, onDragMove]
+  );
+
+  const handlePointerUp = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!dragStart.current || dragStart.current.pointerId !== e.pointerId) return;
+      finishDrag();
+    },
+    [finishDrag]
+  );
+
+  const handlePointerCancel = useCallback(() => {
+    if (!dragStart.current) return;
+    finishDrag();
+  }, [finishDrag]);
 
   const glowShadow = fusionGlow > 0
     ? `0 0 ${12 + fusionGlow * 24}px ${fusionGlow * 8}px hsl(var(--workspace-accent) / ${fusionGlow * 0.3}), 0 0 ${4 + fusionGlow * 12}px ${fusionGlow * 4}px hsl(var(--workspace-accent) / ${fusionGlow * 0.15})`
@@ -321,6 +342,7 @@ function DraggableFreeformObject({
 
   return (
     <div
+      ref={rootRef}
       className={`absolute transition-shadow duration-150 ${
         dragging ? 'z-50 shadow-2xl' : 'z-10'
       } ${fusionGlow > 0.5 ? 'scale-[1.01]' : ''}`}
@@ -335,8 +357,25 @@ function DraggableFreeformObject({
           ? 'box-shadow 0.15s cubic-bezier(0.34,1.56,0.64,1)'
           : 'box-shadow 0.3s cubic-bezier(0.34,1.56,0.64,1), transform 0.2s cubic-bezier(0.34,1.56,0.64,1)',
       }}
-      onMouseDown={handleMouseDown}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
+      onPointerEnter={() => setShowHint(true)}
+      onPointerLeave={() => setShowHint(false)}
     >
+      {showHint && !dragging && (
+        <div className="pointer-events-none absolute -top-8 left-4 z-30 rounded-full border border-workspace-accent/15 bg-white/80 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-workspace-accent/70 shadow-[0_10px_25px_rgba(99,102,241,0.12)] backdrop-blur-sm animate-[materialize_0.18s_cubic-bezier(0.34,1.56,0.64,1)_forwards]">
+          Drag to compare or fuse
+        </div>
+      )}
+
+      {dragging && (
+        <div className="pointer-events-none absolute -bottom-8 left-4 z-30 rounded-full border border-workspace-accent/15 bg-workspace-accent/8 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-workspace-accent/80 shadow-[0_10px_25px_rgba(99,102,241,0.12)] backdrop-blur-sm animate-[materialize_0.18s_cubic-bezier(0.34,1.56,0.64,1)_forwards]">
+          Release near another object to fuse
+        </div>
+      )}
+
       {fusionGlow > 0.5 && (
         <div
           className="absolute -inset-1 rounded-2xl pointer-events-none"
@@ -346,6 +385,13 @@ function DraggableFreeformObject({
           }}
         />
       )}
+
+      {fusionGlow > 0.35 && !dragging && (
+        <div className="pointer-events-none absolute inset-x-5 -bottom-4 z-20 rounded-full border border-workspace-accent/20 bg-white/80 px-3 py-1 text-center text-[10px] uppercase tracking-[0.18em] text-workspace-accent/80 shadow-[0_14px_28px_rgba(99,102,241,0.12)] backdrop-blur-sm animate-[materialize_0.18s_cubic-bezier(0.34,1.56,0.64,1)_forwards]">
+          Fusion candidate nearby
+        </div>
+      )}
+
       {/* Drag handle covers the entire header area — use data attribute for detection */}
       <div data-freeform-handle className="absolute inset-x-0 top-0 h-14 cursor-grab active:cursor-grabbing z-20 rounded-t-xl" />
       <WorkspaceObjectWrapper object={object} />
