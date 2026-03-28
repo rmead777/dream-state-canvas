@@ -11,7 +11,14 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { messages, mode, adminModel, adminMaxTokens, memories } = await req.json();
+    const { messages, mode, adminModel, adminMaxTokens, memories, promptOverride } = await req.json();
+
+    // Admin: list all prompt modes and their content
+    if (mode === '__list-prompts') {
+      return new Response(JSON.stringify({ prompts: systemPrompts }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // System prompts by mode
     const systemPrompts: Record<string, string> = {
@@ -244,7 +251,10 @@ Generate a worst-case scenario.
 Return JSON matching the ProductionRiskData schema.`,
     };
 
-    let systemPrompt = systemPrompts[mode] || systemPrompts.intent;
+    // Use admin prompt override if provided, otherwise server default
+    let systemPrompt = (promptOverride && typeof promptOverride === 'string')
+      ? promptOverride
+      : (systemPrompts[mode] || systemPrompts.intent);
 
     // Inject Sherpa memories into the system prompt (Tier 1: soft influence)
     if (memories && typeof memories === 'string' && memories.length > 0) {

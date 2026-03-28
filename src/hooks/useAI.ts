@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 
 import { getAdminSettings } from '@/lib/admin-settings';
+import { getPromptOverride } from '@/lib/system-prompts';
 import { supabase } from '@/integrations/supabase/client';
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`;
@@ -48,6 +49,9 @@ export function useAI() {
           body.adminModel = admin.model;
           body.adminMaxTokens = admin.maxTokens;
         }
+        // Send prompt override if admin has customized this mode
+        const promptOverride = getPromptOverride(mode);
+        if (promptOverride) body.promptOverride = promptOverride;
 
         const token = await getAuthToken();
         const resp = await fetch(CHAT_URL, {
@@ -176,6 +180,9 @@ export async function callAI(
       body.adminModel = admin.model;
       body.adminMaxTokens = admin.maxTokens;
     }
+    // Send prompt override if admin has customized this mode
+    const promptOverride = getPromptOverride(mode);
+    if (promptOverride) body.promptOverride = promptOverride;
 
     const token = await getAuthToken();
     const resp = await fetch(CHAT_URL, {

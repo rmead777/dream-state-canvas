@@ -18,6 +18,7 @@ import {
   getAdminSettings, setAdminModel, setAdminMaxTokens, setAdminContextWindow, AVAILABLE_MODELS,
 } from '@/lib/admin-settings';
 import { toast } from 'sonner';
+import { PromptEditor } from './PromptEditor';
 
 export function SherpaRail() {
   const { state, dispatch } = useWorkspace();
@@ -350,6 +351,11 @@ export function SherpaRail() {
             <div className="flex justify-between text-[8px] text-workspace-text-secondary/30 mt-1">
               <span>1 turn</span>
               <span>50 turns</span>
+            </div>
+
+            {/* Prompt Editor */}
+            <div className="mt-4 pt-4 border-t border-workspace-border/30">
+              <PromptEditor />
             </div>
           </div>
         )}
