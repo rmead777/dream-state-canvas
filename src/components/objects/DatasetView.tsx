@@ -132,10 +132,11 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
 
   /* ── Immersive full view ── */
   return (
-    <div className="px-8 py-8">
-      <div className="flex items-center justify-between mb-6">
+    <div className="space-y-5 px-4 py-4">
+      <div className="workspace-card-surface rounded-[28px] border border-workspace-border/45 px-6 py-5">
+        <div className="flex items-center justify-between mb-6 gap-4">
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 rounded-lg border border-workspace-border bg-white px-3 py-2 transition-all focus-within:border-workspace-accent/30">
+          <div className="flex items-center gap-2 rounded-2xl border border-workspace-border/55 bg-white/85 px-3.5 py-2.5 transition-all duration-200 workspace-spring focus-within:border-workspace-accent/30 focus-within:shadow-[0_14px_30px_rgba(99,102,241,0.12)]">
             <span className="text-workspace-text-secondary/40 text-xs">⌕</span>
             <input
               type="text"
@@ -145,7 +146,7 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
               className="bg-transparent text-sm text-workspace-text placeholder:text-workspace-text-secondary/40 outline-none w-48"
             />
           </div>
-          <span className="text-xs text-workspace-text-secondary tabular-nums">
+          <span className="workspace-pill rounded-full px-3 py-1.5 text-xs text-workspace-text-secondary tabular-nums">
             {filteredAndSorted.length} of {rawRows.length} rows · {visibleCols.length} of {allColumns.length} cols
           </span>
         </div>
@@ -154,7 +155,7 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
           {needsExpand && (
             <button
               onClick={() => setShowAllCols(!showAllCols)}
-              className="flex items-center gap-1.5 rounded-lg border border-workspace-border px-3 py-2 text-xs text-workspace-text-secondary transition-colors hover:bg-workspace-surface hover:text-workspace-text"
+              className="workspace-pill flex items-center gap-1.5 rounded-full px-3 py-2 text-xs text-workspace-text-secondary transition-colors hover:text-workspace-text"
             >
               <Columns className="h-3.5 w-3.5" />
               {showAllCols ? 'Smart columns' : `All ${allColumns.length} columns`}
@@ -163,18 +164,18 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
           <button
             onClick={handleGenerateInsight}
             disabled={isStreaming}
-            className="flex items-center gap-1.5 rounded-lg bg-workspace-accent/8 px-3 py-2 text-xs text-workspace-accent transition-colors hover:bg-workspace-accent/15 disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-full bg-workspace-accent/8 px-3.5 py-2 text-xs text-workspace-accent transition-all duration-200 workspace-spring hover:-translate-y-0.5 hover:bg-workspace-accent/15 hover:shadow-[0_14px_28px_rgba(99,102,241,0.12)] disabled:translate-y-0 disabled:opacity-50"
           >
             <span>✦</span> {isStreaming ? 'Analyzing...' : 'Generate insight'}
           </button>
-          <button className="flex items-center gap-1.5 rounded-lg border border-workspace-border px-3 py-2 text-xs text-workspace-text-secondary transition-colors hover:bg-workspace-surface">
+          <button className="workspace-pill flex items-center gap-1.5 rounded-full px-3 py-2 text-xs text-workspace-text-secondary transition-colors hover:text-workspace-text">
             📊 Generate chart
           </button>
         </div>
-      </div>
+        </div>
 
       {aiInsight && (
-        <div className="mb-6 animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards] rounded-xl bg-workspace-accent-subtle/15 border border-workspace-accent/10 px-5 py-4">
+        <div className="animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards] rounded-2xl bg-workspace-accent-subtle/15 border border-workspace-accent/10 px-5 py-4 shadow-[0_16px_36px_rgba(99,102,241,0.08)]">
           <div className="flex items-center gap-2 mb-2">
             <span className="text-workspace-accent text-sm">✦</span>
             <span className="text-[10px] font-medium uppercase tracking-widest text-workspace-accent">AI Insight</span>
@@ -182,6 +183,7 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
           <MarkdownRenderer content={aiInsight} isStreaming={isStreaming} />
         </div>
       )}
+      </div>
 
       <VirtualizedTable
         columns={visibleCols}
@@ -221,7 +223,7 @@ function VirtualizedTable({
   });
 
   return (
-    <div className="rounded-xl border border-workspace-border bg-white overflow-hidden">
+    <div className="workspace-card-surface rounded-[28px] border border-workspace-border/45 bg-white overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>

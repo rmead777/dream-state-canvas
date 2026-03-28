@@ -5,6 +5,8 @@
 import { useMemo } from "react";
 import DOMPurify from "dompurify";
 
+const TABLE_DIVIDER_CELL_REGEX = new RegExp('^[' + '-' + ':' + '\\s]+$');
+
 /**
  * Sanitized inline formatting — converts markdown-like syntax to HTML,
  * then sanitizes through DOMPurify to prevent XSS from AI-generated content.
@@ -161,7 +163,7 @@ function parseMarkdown(text: string): ParsedBlock[] {
 
     if (trimmed.includes("|")) {
       const cells = trimmed.replace(/^\|/, "").replace(/\|$/, "").split("|").map(c => c.trim());
-      if (cells.every(c => /^[-:\s]+$/.test(c))) continue;
+      if (cells.every(c => TABLE_DIVIDER_CELL_REGEX.test(c))) continue;
       if (cells.length >= 2) {
         flushList();
         if (!inTable) { inTable = true; tableHeaders = cells; tableRows = []; } else { tableRows.push(cells); }

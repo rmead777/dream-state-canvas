@@ -35,14 +35,15 @@ export function VoiceIndicator({ volume, isListening }: VoiceIndicatorProps) {
   if (!isListening) return null;
 
   return (
-    <div className="flex items-center gap-2 animate-[materialize_0.2s_cubic-bezier(0.34,1.56,0.64,1)_forwards]">
+    <div className="workspace-pill inline-flex items-center gap-2 rounded-full px-3 py-1.5 animate-[materialize_0.2s_cubic-bezier(0.34,1.56,0.64,1)_forwards]">
+      <span className="inline-block h-1.5 w-1.5 rounded-full bg-workspace-accent animate-pulse" />
       <canvas
         ref={canvasRef}
         width={60}
         height={20}
         className="opacity-80"
       />
-      <span className="text-[10px] text-workspace-accent animate-pulse">Listening...</span>
+      <span className="text-[10px] uppercase tracking-[0.18em] text-workspace-accent animate-pulse">Listening</span>
     </div>
   );
 }

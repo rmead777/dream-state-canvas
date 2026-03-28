@@ -288,10 +288,10 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
   }
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full gap-4">
       {/* PDF Viewer — main area */}
       {isPdf ? (
-        <div className="flex-1 min-w-0 bg-workspace-surface">
+        <div className="workspace-card-surface flex-1 min-w-0 overflow-hidden rounded-[28px] border border-workspace-border/45 bg-workspace-surface">
           {pdfBlob ? (
             <PdfCanvasViewer fileBlob={pdfBlob} fileName={fileName} />
           ) : (
@@ -308,8 +308,15 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
           )}
         </div>
       ) : (
-        <div className="flex-1 min-w-0 overflow-y-auto px-8 py-10">
+        <div className="workspace-card-surface flex-1 min-w-0 overflow-y-auto rounded-[28px] border border-workspace-border/45 px-8 py-10">
           <div className="mx-auto max-w-3xl">
+            <div className="mb-6 flex flex-wrap items-center gap-2">
+              <span className="workspace-pill rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-workspace-accent/75">Document</span>
+              <span className="workspace-pill rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-workspace-text-secondary/70 tabular-nums">{paragraphs.length} excerpts</span>
+              {highlights.length > 0 && (
+                <span className="workspace-pill rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-workspace-accent/75 tabular-nums">{highlights.length} highlighted</span>
+              )}
+            </div>
             <div className="space-y-6">
               {paragraphs.map((para, idx) => (
                 <p
@@ -330,10 +337,20 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
       )}
 
       {/* Right sidebar — AI Summary + Ask */}
-      <div className="w-[380px] shrink-0 overflow-y-auto border-l border-workspace-border/30 bg-workspace-bg">
+      <div className="workspace-card-surface w-[380px] shrink-0 overflow-y-auto rounded-[28px] border border-workspace-border/45 bg-workspace-bg">
         <div className="px-6 py-6 space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-workspace-accent/70">Document brief</div>
+              <h3 className="mt-1 text-sm font-semibold text-workspace-text">{fileName}</h3>
+            </div>
+            <span className="workspace-pill rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-workspace-text-secondary/70">
+              {fileType || 'file'}
+            </span>
+          </div>
+
           {summary && (
-            <div className="rounded-xl bg-workspace-accent-subtle/15 border border-workspace-accent/10 px-5 py-4">
+            <div className="rounded-2xl bg-workspace-accent-subtle/15 border border-workspace-accent/10 px-5 py-4 shadow-[0_16px_36px_rgba(99,102,241,0.08)]">
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-workspace-accent text-sm">✦</span>
                 <span className="text-[10px] font-medium uppercase tracking-widest text-workspace-accent">
@@ -351,7 +368,7 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
               <span className="text-xs font-medium text-workspace-text">Ask about this document</span>
             </div>
 
-            <div className="flex items-center gap-2 rounded-xl border border-workspace-border bg-white px-4 py-3 transition-all focus-within:border-workspace-accent/30 focus-within:shadow-sm">
+            <div className="workspace-card-surface flex items-center gap-2 rounded-2xl border border-workspace-border/55 px-4 py-3 transition-all duration-200 workspace-spring focus-within:border-workspace-accent/30 focus-within:shadow-[0_14px_32px_rgba(99,102,241,0.12)]">
               <input
                 type="text"
                 value={askInput}
@@ -370,7 +387,7 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
             </div>
 
             {aiResponse && (
-              <div className="mt-4 animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards] rounded-xl bg-workspace-surface/60 px-5 py-4">
+              <div className="mt-4 animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards] rounded-2xl bg-workspace-surface/60 px-5 py-4 border border-workspace-border/35">
                 <MarkdownRenderer content={aiResponse} isStreaming={isStreaming} />
               </div>
             )}

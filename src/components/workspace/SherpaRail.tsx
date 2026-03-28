@@ -43,6 +43,7 @@ export function SherpaRail() {
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const { addDocument, documents } = useDocuments();
+  const railControlsBase = 'flex h-7 w-7 items-center justify-center rounded-full border border-transparent text-[10px] transition-all duration-200 workspace-spring';
 
   // Sync document IDs to the workspace actions layer
   useEffect(() => {
@@ -157,8 +158,7 @@ export function SherpaRail() {
     return (
       <button
         onClick={() => setIsExpanded(true)}
-        className="fixed right-4 top-4 z-50 rounded-full bg-white border border-workspace-border px-4 py-2
-          text-xs text-workspace-accent shadow-sm transition-all hover:shadow-md"
+        className="workspace-pill fixed right-4 top-4 z-50 rounded-full px-4 py-2 text-xs text-workspace-accent transition-all duration-200 workspace-spring hover:-translate-y-0.5 hover:shadow-[0_16px_30px_rgba(99,102,241,0.12)]"
       >
         ✦ Sherpa
       </button>
@@ -166,29 +166,51 @@ export function SherpaRail() {
   }
 
   return (
-    <div className="flex h-full w-80 flex-shrink-0 flex-col border-l border-workspace-border/50 bg-white/80 backdrop-blur-sm lg:w-[340px]">
+    <div className="relative flex h-full w-80 flex-shrink-0 flex-col overflow-hidden border-l border-workspace-border/50 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.94),rgba(248,248,252,0.92))] backdrop-blur-xl lg:w-[340px]">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[linear-gradient(to_bottom,rgba(99,102,241,0.08),transparent)]" />
+
       {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-5 pb-3">
-        <div className="flex items-center gap-2">
-          <span className="text-workspace-accent text-sm">✦</span>
-          <span className="text-xs font-semibold uppercase tracking-widest text-workspace-text">
-            Sherpa
-          </span>
+      <div className="relative z-10 border-b border-workspace-border/40 px-5 pt-5 pb-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-workspace-accent/10 text-sm text-workspace-accent shadow-[0_10px_24px_rgba(99,102,241,0.12)]">
+                ✦
+              </div>
+              <div>
+                <span className="text-xs font-semibold uppercase tracking-[0.22em] text-workspace-text">
+                  Sherpa
+                </span>
+                <p className="mt-0.5 text-[11px] leading-5 text-workspace-text-secondary/70">
+                  Ambient guide for your current analytical state
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="workspace-pill rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-workspace-accent/75 tabular-nums">
+                {activeObjectCount} live objects
+              </span>
+              <span className="workspace-pill rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-workspace-text-secondary/70">
+                {contextMode}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1">
           {cognitiveMode !== 'neutral' && (
-            <span className="rounded-full bg-workspace-accent/8 border border-workspace-accent/10 px-2 py-0.5 text-[8px] uppercase tracking-widest text-workspace-accent/60 animate-[materialize_0.4s_cubic-bezier(0.16,1,0.3,1)_forwards]">
+            <span className="workspace-pill rounded-full px-2 py-1 text-[8px] uppercase tracking-[0.22em] text-workspace-accent/70 animate-[materialize_0.4s_cubic-bezier(0.16,1,0.3,1)_forwards]">
               {MODE_LABELS[cognitiveMode]}
             </span>
           )}
-        </div>
-        <div className="flex items-center gap-1">
           {/* Admin toggle (only visible when unlocked) */}
           {adminUnlocked && (
             <button
               onClick={() => setShowAdmin(!showAdmin)}
-              className={`rounded-md p-1 transition-colors text-[10px] ${
+              className={`${railControlsBase} ${
                 showAdmin
-                  ? 'bg-workspace-accent/10 text-workspace-accent'
-                  : 'text-workspace-accent/40 hover:bg-workspace-surface hover:text-workspace-accent'
+                  ? 'border-workspace-accent/15 bg-workspace-accent/10 text-workspace-accent shadow-[0_10px_20px_rgba(99,102,241,0.12)]'
+                  : 'text-workspace-accent/45 hover:border-workspace-border/70 hover:bg-white/90 hover:text-workspace-accent'
               }`}
               title={showAdmin ? 'Hide admin' : 'Admin controls'}
             >
@@ -198,10 +220,10 @@ export function SherpaRail() {
           {/* Upload toggle */}
           <button
             onClick={() => setShowUpload(!showUpload)}
-            className={`rounded-md p-1 transition-colors text-[10px] ${
+            className={`${railControlsBase} ${
               showUpload
-                ? 'bg-workspace-accent/10 text-workspace-accent'
-                : 'text-workspace-text-secondary/40 hover:bg-workspace-surface hover:text-workspace-text-secondary'
+                ? 'border-workspace-accent/15 bg-workspace-accent/10 text-workspace-accent shadow-[0_10px_20px_rgba(99,102,241,0.12)]'
+                : 'text-workspace-text-secondary/45 hover:border-workspace-border/70 hover:bg-white/90 hover:text-workspace-text-secondary'
             }`}
             title={showUpload ? 'Hide upload' : 'Upload documents'}
           >
@@ -210,10 +232,10 @@ export function SherpaRail() {
           {/* Rules toggle */}
           <button
             onClick={() => setShowRules(!showRules)}
-            className={`rounded-md p-1 transition-colors text-[10px] ${
+            className={`${railControlsBase} ${
               showRules
-                ? 'bg-workspace-accent/10 text-workspace-accent'
-                : 'text-workspace-text-secondary/40 hover:bg-workspace-surface hover:text-workspace-text-secondary'
+                ? 'border-workspace-accent/15 bg-workspace-accent/10 text-workspace-accent shadow-[0_10px_20px_rgba(99,102,241,0.12)]'
+                : 'text-workspace-text-secondary/45 hover:border-workspace-border/70 hover:bg-white/90 hover:text-workspace-text-secondary'
             }`}
             title={showRules ? 'Hide rules' : 'Data rules'}
           >
@@ -222,10 +244,10 @@ export function SherpaRail() {
           {promptHistory.length > 0 && (
             <button
               onClick={() => setShowHistory(!showHistory)}
-              className={`rounded-md p-1 transition-colors text-[10px] ${
+              className={`${railControlsBase} ${
                 showHistory
-                  ? 'bg-workspace-accent/10 text-workspace-accent'
-                  : 'text-workspace-text-secondary/40 hover:bg-workspace-surface hover:text-workspace-text-secondary'
+                  ? 'border-workspace-accent/15 bg-workspace-accent/10 text-workspace-accent shadow-[0_10px_20px_rgba(99,102,241,0.12)]'
+                  : 'text-workspace-text-secondary/45 hover:border-workspace-border/70 hover:bg-white/90 hover:text-workspace-text-secondary'
               }`}
               title={showHistory ? 'Hide conversation' : 'Show conversation'}
             >
@@ -235,7 +257,7 @@ export function SherpaRail() {
           {(lastResponse || observations.length > 0) && (
             <button
               onClick={handleClearSherpaFull}
-              className="rounded-md p-1 text-workspace-text-secondary/40 transition-colors hover:bg-workspace-surface hover:text-workspace-text-secondary text-[10px]"
+              className={`${railControlsBase} text-workspace-text-secondary/45 hover:border-workspace-border/70 hover:bg-white/90 hover:text-workspace-text-secondary`}
               title="Clear conversation"
             >
               ⌫
@@ -243,17 +265,18 @@ export function SherpaRail() {
           )}
           <button
             onClick={() => setIsExpanded(false)}
-            className="rounded-md p-1 text-workspace-text-secondary transition-colors hover:bg-workspace-surface text-xs"
+            className={`${railControlsBase} text-workspace-text-secondary hover:border-workspace-border/70 hover:bg-white/90 text-xs`}
           >
             ▸
           </button>
         </div>
       </div>
+      </div>
 
-      <div className="flex-1 overflow-y-auto px-5">
+      <div className="relative z-10 flex-1 overflow-y-auto px-5 py-4">
         {/* Rules editor panel */}
         {showRules && (
-          <div className="pb-4 border-b border-workspace-border/30 mb-4">
+          <div className="workspace-card-surface mb-4 rounded-2xl border border-workspace-border/45 px-4 py-4">
             <RulesEditor onClose={() => setShowRules(false)} />
           </div>
         )}
@@ -268,7 +291,7 @@ export function SherpaRail() {
 
         {/* Admin panel */}
         {adminUnlocked && showAdmin && (
-          <div className="pb-4 border-b border-workspace-accent/20 mb-4 animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards]">
+          <div className="workspace-card-surface mb-4 rounded-2xl border border-workspace-accent/15 px-4 py-4 animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards]">
             <div className="flex items-center justify-between mb-3">
               <span className="text-[9px] uppercase tracking-widest text-workspace-accent/60 flex items-center gap-1.5">
                 <span className="inline-block h-1.5 w-1.5 rounded-full bg-workspace-accent animate-pulse" />
@@ -330,7 +353,7 @@ export function SherpaRail() {
 
 
         {showUpload && (
-          <div className="pb-4 border-b border-workspace-border/30 mb-4">
+          <div className="workspace-card-surface mb-4 rounded-2xl border border-workspace-border/45 px-4 py-4">
             <span className="text-[9px] uppercase tracking-widest text-workspace-text-secondary/40 block mb-2">
               Upload Documents
             </span>
@@ -343,7 +366,7 @@ export function SherpaRail() {
 
         {/* Conversation history (optional) */}
         {showHistory && promptHistory.length > 0 && (
-          <div className="space-y-3 pb-4 border-b border-workspace-border/30 mb-4">
+          <div className="workspace-card-surface mb-4 rounded-2xl border border-workspace-border/45 px-4 py-4 space-y-3">
             <span className="text-[9px] uppercase tracking-widest text-workspace-text-secondary/40">
               History
             </span>
@@ -360,7 +383,7 @@ export function SherpaRail() {
 
         {/* Fusion processing animation */}
         {isProcessing && (
-          <div className="relative rounded-xl border border-workspace-accent/20 bg-gradient-to-b from-workspace-accent/[0.06] to-transparent px-4 py-4 animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards] overflow-hidden">
+          <div className="relative rounded-2xl border border-workspace-accent/20 bg-gradient-to-b from-workspace-accent/[0.08] via-white/90 to-white/80 px-4 py-4 shadow-[0_18px_46px_rgba(99,102,241,0.1)] animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards] overflow-hidden">
             {/* Animated scan line */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
               <div className="absolute inset-x-0 h-px bg-gradient-to-r from-transparent via-workspace-accent/40 to-transparent animate-[scanline_2s_linear_infinite]" />
@@ -420,7 +443,8 @@ export function SherpaRail() {
         {/* Response area */}
         <div className="space-y-4 pb-4">
           {!lastResponse && !isProcessing && (
-            <div className="animate-[materialize_0.5s_cubic-bezier(0.16,1,0.3,1)_forwards]">
+            <div className="workspace-card-surface animate-[materialize_0.5s_cubic-bezier(0.16,1,0.3,1)_forwards] rounded-2xl border border-workspace-border/45 px-4 py-4">
+              <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.22em] text-workspace-accent/70">Conversation starter</div>
               <p className="text-sm leading-relaxed text-workspace-text">
                 Good morning. What would you like to focus on?
               </p>
@@ -433,8 +457,9 @@ export function SherpaRail() {
           {lastResponse && (
             <div
               key={lastResponse}
-              className="animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards]"
+              className="workspace-card-surface animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards] rounded-2xl border border-workspace-border/45 px-4 py-4"
             >
+              <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.22em] text-workspace-accent/70">Verdict</div>
               <p className="text-sm leading-relaxed text-workspace-text">{lastResponse}</p>
             </div>
           )}
@@ -465,10 +490,11 @@ export function SherpaRail() {
             <button
               key={s.id}
               onClick={() => handleSuggestionClick(s.query)}
-              className="block w-full rounded-lg border border-workspace-border/60 bg-workspace-surface/30 px-3.5 py-2.5
-                text-left text-xs text-workspace-text transition-all duration-200
-                hover:border-workspace-accent/20 hover:bg-workspace-accent-subtle/30 hover:shadow-sm"
+              className="block w-full rounded-2xl border border-workspace-border/60 bg-white/78 px-4 py-3.5
+                text-left text-xs text-workspace-text transition-all duration-200 workspace-spring
+                hover:-translate-y-0.5 hover:border-workspace-accent/20 hover:bg-workspace-accent-subtle/30 hover:shadow-[0_18px_38px_rgba(99,102,241,0.12)]"
             >
+              <div className="mb-1 text-[10px] uppercase tracking-[0.2em] text-workspace-accent/65">Suggested next move</div>
               {s.label}
             </button>
           ))}
@@ -476,12 +502,12 @@ export function SherpaRail() {
       </div>
 
       {/* Input area */}
-      <div className="border-t border-workspace-border/50 p-4 space-y-3">
+      <div className="relative z-10 border-t border-workspace-border/50 bg-white/70 p-4 space-y-3 backdrop-blur-md">
         {/* Voice indicator */}
         <VoiceIndicator volume={voice.volume} isListening={voice.isListening} />
 
-        <div className="flex items-center gap-2 rounded-xl border border-workspace-border bg-white px-3.5 py-2.5
-          transition-all focus-within:border-workspace-accent/30 focus-within:shadow-sm">
+        <div className="workspace-card-surface flex items-center gap-2 rounded-2xl border border-workspace-border/60 px-3.5 py-2.5
+          transition-all duration-200 workspace-spring focus-within:border-workspace-accent/30 focus-within:shadow-[0_16px_34px_rgba(99,102,241,0.12)]">
           <span className="text-workspace-accent/40 text-sm">→</span>
           <input
             ref={inputRef}
@@ -500,9 +526,9 @@ export function SherpaRail() {
               onMouseDown={(e) => { e.preventDefault(); voice.startListening(); }}
               onMouseUp={() => voice.stopListening()}
               onMouseLeave={() => { if (voice.isListening) voice.stopListening(); }}
-              className={`rounded-full p-1.5 transition-all ${
+              className={`rounded-full p-2 transition-all duration-200 workspace-spring ${
                 voice.isListening
-                  ? 'bg-workspace-accent/15 text-workspace-accent scale-110'
+                  ? 'bg-workspace-accent/15 text-workspace-accent scale-110 shadow-[0_10px_24px_rgba(99,102,241,0.14)]'
                   : 'text-workspace-text-secondary/40 hover:text-workspace-accent/60 hover:bg-workspace-accent/5'
               }`}
               title="Hold to speak"
@@ -521,7 +547,7 @@ export function SherpaRail() {
         </div>
 
         {/* Canvas controls + user */}
-        <div className="flex items-center justify-between text-[9px] text-workspace-text-secondary/30">
+        <div className="flex items-center justify-between text-[9px] text-workspace-text-secondary/35">
           <div className="flex items-center gap-2">
             <span>⌘K</span>
             {user && (
@@ -538,12 +564,12 @@ export function SherpaRail() {
             <div className="relative">
               <button
                 onClick={() => setShowCanvasMenu(!showCanvasMenu)}
-                className="rounded px-1.5 py-0.5 text-workspace-text-secondary/40 transition-colors hover:text-workspace-text-secondary hover:bg-workspace-surface"
+                className="workspace-pill rounded-full px-2 py-1 text-workspace-text-secondary/55 transition-colors hover:text-workspace-text-secondary"
               >
                 Canvas ▾
               </button>
               {showCanvasMenu && (
-                <div className="absolute bottom-full right-0 mb-1 w-40 rounded-lg border border-workspace-border bg-white shadow-lg overflow-hidden animate-[materialize_0.2s_cubic-bezier(0.16,1,0.3,1)_forwards]">
+                <div className="workspace-card-surface absolute bottom-full right-0 mb-2 w-40 rounded-2xl border border-workspace-border/55 overflow-hidden animate-[materialize_0.2s_cubic-bezier(0.16,1,0.3,1)_forwards]">
                   <button
                     onClick={handleCollapseAll}
                     className="block w-full px-3 py-2 text-left text-[11px] text-workspace-text transition-colors hover:bg-workspace-surface"
