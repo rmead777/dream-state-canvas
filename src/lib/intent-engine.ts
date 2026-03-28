@@ -3,6 +3,7 @@ import {
   WorkspaceAction,
   WorkspaceObject,
 } from './workspace-types';
+import { IntentLLMOutputSchema } from './intent-schema';
 import {
   SEED_LEVERAGE_DATA,
   SEED_COMPARISON_DATA,
@@ -153,18 +154,26 @@ export async function parseIntentAI(
     const jsonMatch = result.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('No JSON in response');
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    const raw = JSON.parse(jsonMatch[0]);
+
+    // Validate with Zod — rejects unknown objectTypes, malformed actions
+    const validated = IntentLLMOutputSchema.safeParse(raw);
+    if (!validated.success) {
+      console.warn('[intent-engine] LLM output failed Zod validation:', validated.error.issues);
+      throw new Error('Invalid LLM output');
+    }
+
+    const parsed = validated.data;
     const actions: WorkspaceAction[] = [];
 
     if (parsed.response) {
       actions.push({ type: 'respond', message: parsed.response });
     }
 
-    if (parsed.actions && Array.isArray(parsed.actions)) {
+    if (parsed.actions) {
       for (const action of parsed.actions) {
-        if (action.type === 'create' && action.objectType) {
+        if (action.type === 'create') {
           const seedInfo = SEED_DATA_BY_TYPE[action.objectType];
-          // Use dynamic data for data-derived types, seed for narrative types
           const dynamicTypes = ['metric', 'inspector', 'alert', 'comparison', 'dataset'];
           const data = dynamicTypes.includes(action.objectType)
             ? await getDynamicData(action.objectType)
@@ -176,15 +185,15 @@ export async function parseIntentAI(
             data,
             relatedTo: action.relatedTo || [],
           });
-        } else if (action.type === 'focus' && action.objectId) {
+        } else if (action.type === 'focus') {
           actions.push({ type: 'focus', objectId: action.objectId });
-        } else if (action.type === 'dissolve' && action.objectId) {
+        } else if (action.type === 'dissolve') {
           actions.push({ type: 'dissolve', objectId: action.objectId });
-        } else if (action.type === 'update' && action.objectId && action.instruction) {
+        } else if (action.type === 'update') {
           actions.push({ type: 'update', objectId: action.objectId, instruction: action.instruction });
-        } else if (action.type === 'fuse' && action.objectIdA && action.objectIdB) {
+        } else if (action.type === 'fuse') {
           actions.push({ type: 'fuse', objectIdA: action.objectIdA, objectIdB: action.objectIdB });
-        } else if (action.type === 'refine-rules' && action.feedback) {
+        } else if (action.type === 'refine-rules') {
           actions.push({ type: 'refine-rules', feedback: action.feedback });
         }
       }
@@ -351,12 +360,21 @@ export async function parseIntent(
 ): Promise<IntentResult> {
   const lower = input.toLowerCase().trim();
 
+  // Score each pattern by number of keyword matches — pick highest to avoid shadowing
+  let bestPattern: IntentPattern | null = null;
+  let bestScore = 0;
   for (const pattern of patterns) {
-    if (pattern.keywords.some((kw) => lower.includes(kw))) {
-      const result = pattern.generate(input, existingObjects);
-      const actions = result instanceof Promise ? await result : result;
-      return { actions };
+    const score = pattern.keywords.filter((kw) => lower.includes(kw)).length;
+    if (score > bestScore) {
+      bestScore = score;
+      bestPattern = pattern;
     }
+  }
+
+  if (bestPattern) {
+    const result = bestPattern.generate(input, existingObjects);
+    const actions = result instanceof Promise ? await result : result;
+    return { actions };
   }
 
   return {
