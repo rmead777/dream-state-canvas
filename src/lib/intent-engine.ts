@@ -291,7 +291,7 @@ const patterns: IntentPattern[] = [
     generate: async () => {
       const data = await getDynamicData('inspector');
       return [
-        { type: 'respond', message: `Top vendors by priority. Showing ${data.rows?.length || 0} of ${CANONICAL_DATASET.rows.length}.` },
+        { type: 'respond', message: `Top vendors by priority. Showing ${data.rows?.length || 0} of ${getActiveDataset().rows.length}.` },
         { type: 'create', objectType: 'inspector', title: 'Top Vendors', data },
       ];
     },
