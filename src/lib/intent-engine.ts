@@ -322,7 +322,7 @@ const patterns: IntentPattern[] = [
     generate: async () => {
       const data = await getDynamicData('dataset');
       return [
-        { type: 'respond', message: `Full dataset ready — ${data.rows?.length || CANONICAL_DATASET.rows.length} items sorted by priority rules.` },
+        { type: 'respond', message: `Full dataset ready — ${data.rows?.length || getActiveDataset().rows.length} items sorted by priority rules.` },
         { type: 'create', objectType: 'dataset', title: 'Full Portfolio Dataset', data },
       ];
     },
