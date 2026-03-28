@@ -110,7 +110,7 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
       if (!obj) return state;
       const updated = { ...obj, pinned: false };
       const newObjects = { ...state.objects, [obj.id]: updated };
-      return { ...state, objects: newObjects };
+      return { ...state, objects: newObjects, spatialLayout: computeLayout(newObjects) };
     }
 
     case 'FOCUS_OBJECT': {
