@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { ChevronDown, ChevronRight, Columns } from 'lucide-react';
 import { WorkspaceObject } from '@/lib/workspace-types';
 import { getDisplayColumns, filterRowToColumns } from '@/lib/smart-columns';
+import { getObjectViewState } from '@/lib/workspace-intelligence';
+import { TableVisualization } from './TableVisualization';
 
 function CollapsibleSection({ collapsed, children }: { collapsed: boolean; children: React.ReactNode }) {
   return (
@@ -17,12 +19,20 @@ function CollapsibleSection({ collapsed, children }: { collapsed: boolean; child
 export function DataInspector({ object }: { object: WorkspaceObject }) {
   const allColumns: string[] = object.context?.columns || [];
   const rows: string[][] = object.context?.rows || [];
+  const view = getObjectViewState(object.context);
   const [collapsed, setCollapsed] = useState(false);
   const [showAllCols, setShowAllCols] = useState(false);
 
-  const smartCols = getDisplayColumns(allColumns, rows);
+  const persistedColumns = (view.preferredColumns || []).filter((column) => allColumns.includes(column));
+  const smartCols = persistedColumns.length > 0 ? persistedColumns : getDisplayColumns(allColumns, rows);
   const needsExpand = allColumns.length > smartCols.length;
   const visibleCols = showAllCols ? allColumns : smartCols;
+  const activeViewBadges = [
+    view.tierFilter ? `Tier: ${view.tierFilter}` : null,
+    view.limit ? `Top ${view.limit}` : null,
+    view.sortBy ? `Sort: ${view.sortBy}${view.sortDirection ? ` ${view.sortDirection}` : ''}` : null,
+    view.displayMode === 'chart' ? `${view.chartType || 'bar'} chart` : null,
+  ].filter(Boolean);
 
   const getVisibleRow = (row: string[]) =>
     showAllCols ? row : filterRowToColumns(row, allColumns, smartCols);
@@ -55,6 +65,19 @@ export function DataInspector({ object }: { object: WorkspaceObject }) {
         )}
       </div>
 
+      {activeViewBadges.length > 0 && !collapsed && (
+        <div className="flex flex-wrap gap-1.5">
+          {activeViewBadges.map((badge) => (
+            <span
+              key={badge}
+              className="workspace-pill rounded-full px-2.5 py-1 text-[10px] text-workspace-text-secondary"
+            >
+              {badge}
+            </span>
+          ))}
+        </div>
+      )}
+
       <CollapsibleSection collapsed={collapsed}>
         {rows.length === 0 || visibleCols.length === 0 ? (
           <div className="workspace-card-surface flex min-h-[180px] flex-col items-center justify-center gap-3 rounded-2xl border border-workspace-border/45 px-5 py-6 text-center">
@@ -67,42 +90,48 @@ export function DataInspector({ object }: { object: WorkspaceObject }) {
             </p>
           </div>
         ) : (
-        <div className="workspace-card-surface overflow-x-auto rounded-2xl border border-workspace-border/45">
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr className="border-b border-workspace-border bg-workspace-surface/40">
-                {visibleCols.map((col: string) => (
-                  <th
-                    key={col}
-                    className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.18em] text-workspace-text-secondary whitespace-nowrap"
-                  >
-                    {col}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row: string[], i: number) => {
-                const cells = getVisibleRow(row);
-                return (
-                  <tr
-                    key={i}
-                    className={`${i < rows.length - 1 ? 'border-b border-workspace-border/25' : ''} transition-colors odd:bg-white even:bg-workspace-surface/[0.14] hover:bg-workspace-accent/[0.04]`}
-                  >
-                    {cells.map((cell, j) => (
-                      <td
-                        key={j}
-                        className={`px-4 py-2.5 whitespace-nowrap ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary tabular-nums'}`}
+          <div className="space-y-3">
+            {view.displayMode === 'chart' && (
+              <TableVisualization columns={allColumns} rows={rows} view={view} title={object.title} />
+            )}
+
+            <div className="workspace-card-surface overflow-x-auto rounded-2xl border border-workspace-border/45">
+              <table className="w-full text-[13px]">
+                <thead>
+                  <tr className="border-b border-workspace-border bg-workspace-surface/40">
+                    {visibleCols.map((col: string) => (
+                      <th
+                        key={col}
+                        className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.18em] text-workspace-text-secondary whitespace-nowrap"
                       >
-                        <FormattedCell value={cell} />
-                      </td>
+                        {col}
+                      </th>
                     ))}
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {rows.map((row: string[], i: number) => {
+                    const cells = getVisibleRow(row);
+                    return (
+                      <tr
+                        key={i}
+                        className={`${i < rows.length - 1 ? 'border-b border-workspace-border/25' : ''} transition-colors odd:bg-white even:bg-workspace-surface/[0.14] hover:bg-workspace-accent/[0.04]`}
+                      >
+                        {cells.map((cell, j) => (
+                          <td
+                            key={j}
+                            className={`px-4 py-2.5 whitespace-nowrap ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary tabular-nums'}`}
+                          >
+                            <FormattedCell value={cell} />
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
         )}
       </CollapsibleSection>
     </div>

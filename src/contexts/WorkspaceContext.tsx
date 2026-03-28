@@ -197,6 +197,19 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
         },
       };
 
+    case 'UPDATE_RECENT_INTENT_OUTCOME':
+      return {
+        ...state,
+        activeContext: {
+          ...state.activeContext,
+          recentIntents: state.activeContext.recentIntents.map((intent) =>
+            intent.intentId === action.payload.intentId
+              ? { ...intent, ...action.payload.patch }
+              : intent
+          ),
+        },
+      };
+
     case 'REORDER_ZONE': {
       const { zone, ids } = action.payload;
       return {
@@ -228,6 +241,23 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
         objects: {
           ...state.objects,
           [obj.id]: { ...obj, context: action.payload.context },
+        },
+      };
+    }
+
+    case 'UPDATE_OBJECT': {
+      const obj = state.objects[action.payload.id];
+      if (!obj) return state;
+      return {
+        ...state,
+        objects: {
+          ...state.objects,
+          [obj.id]: {
+            ...obj,
+            title: action.payload.title ?? obj.title,
+            context: action.payload.context ?? obj.context,
+            lastInteractedAt: now,
+          },
         },
       };
     }

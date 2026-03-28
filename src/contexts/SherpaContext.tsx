@@ -62,13 +62,13 @@ export function SherpaProvider({ children }: { children: React.ReactNode }) {
       const timer = setTimeout(triggerObservationScan, 2000);
       return () => clearTimeout(timer);
     }
-  }, [objectFingerprint]);
+  }, [objectFingerprint, triggerObservationScan]);
 
   // Update suggestions reactively — responds to pin/unpin, type changes, not just count
   useEffect(() => {
-    const suggestions = generateSuggestions(state.objects);
+    const suggestions = generateSuggestions(state.objects, state.activeContext);
     dispatch({ type: 'SET_SHERPA_SUGGESTIONS', payload: suggestions });
-  }, [objectFingerprint]);
+  }, [objectFingerprint, state.activeContext, state.objects, dispatch]);
 
   const value: SherpaContextValue = {
     suggestions: state.sherpa.suggestions,

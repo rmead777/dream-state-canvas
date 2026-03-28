@@ -7,6 +7,8 @@ import { useAI } from '@/hooks/useAI';
 import MarkdownRenderer from '@/components/objects/MarkdownRenderer';
 import { getDisplayColumns, filterRowToColumns } from '@/lib/smart-columns';
 import { getActiveDataset } from '@/lib/active-dataset';
+import { getObjectViewState } from '@/lib/workspace-intelligence';
+import { TableVisualization } from './TableVisualization';
 
 interface DatasetViewProps {
   object: WorkspaceObject;
@@ -19,12 +21,19 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
   const { dispatch } = useWorkspace();
   const { streamChat, isStreaming } = useAI();
   const d = object.context;
+  const persistedView = getObjectViewState(d);
 
   // Use live active dataset for full column set — object context may have been
   // captured from seed data before the real document loaded.
   const liveDs = getActiveDataset();
-  const allColumns: string[] = (liveDs.columns.length > (d.columns || []).length) ? liveDs.columns : (d.columns || []);
-  const rawRows: string[][] = (liveDs.columns.length > (d.columns || []).length) ? liveDs.rows : (d.rows || []);
+  const allColumns = useMemo<string[]>(
+    () => ((liveDs.columns.length > (d.columns || []).length) ? liveDs.columns : (d.columns || [])),
+    [d.columns, liveDs.columns]
+  );
+  const rawRows = useMemo<string[][]>(
+    () => ((liveDs.columns.length > (d.columns || []).length) ? liveDs.rows : (d.rows || [])),
+    [d.columns, d.rows, liveDs.columns.length, liveDs.rows]
+  );
   const [sortCol, setSortCol] = useState<number | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>(null);
   const [filterText, setFilterText] = useState('');
@@ -32,7 +41,10 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
   const [showAllCols, setShowAllCols] = useState(false);
   const showInsightCard = isStreaming || Boolean(aiInsight);
 
-  const smartCols = useMemo(() => getDisplayColumns(allColumns, rawRows), [allColumns, rawRows]);
+  const smartCols = useMemo(() => {
+    const preferred = (persistedView.preferredColumns || []).filter((column) => allColumns.includes(column));
+    return preferred.length > 0 ? preferred : getDisplayColumns(allColumns, rawRows);
+  }, [allColumns, rawRows, persistedView.preferredColumns]);
   const needsExpand = allColumns.length > smartCols.length;
   const visibleCols = showAllCols ? allColumns : smartCols;
 
@@ -102,36 +114,40 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
             Expand dataset →
           </button>
         </div>
-        <div className="workspace-card-surface overflow-hidden rounded-2xl border border-workspace-border/45">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-workspace-border bg-workspace-surface/40">
-                {previewCols.map((col) => (
-                  <th key={col} className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.18em] text-workspace-text-secondary whitespace-nowrap">
-                    {col}
-                  </th>
-                ))}
-                {allColumns.length > 4 && (
-                  <th className="px-4 py-2.5 text-left text-workspace-text-secondary/40 tabular-nums">+{allColumns.length - 4}</th>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {rawRows.slice(0, 3).map((row, i) => {
-                const cells = filterRowToColumns(row, allColumns, previewCols);
-                return (
-                  <tr key={i} className={i < 2 ? 'border-b border-workspace-border/25' : ''}>
-                    {cells.map((cell, j) => (
-                      <td key={j} className={`px-4 py-2.5 ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary tabular-nums'}`}>
-                        {cell}
-                      </td>
-                    ))}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        {persistedView.displayMode === 'chart' ? (
+          <TableVisualization columns={allColumns} rows={rawRows} view={persistedView} title={object.title} />
+        ) : (
+          <div className="workspace-card-surface overflow-hidden rounded-2xl border border-workspace-border/45">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-workspace-border bg-workspace-surface/40">
+                  {previewCols.map((col) => (
+                    <th key={col} className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.18em] text-workspace-text-secondary whitespace-nowrap">
+                      {col}
+                    </th>
+                  ))}
+                  {allColumns.length > 4 && (
+                    <th className="px-4 py-2.5 text-left text-workspace-text-secondary/40 tabular-nums">+{allColumns.length - 4}</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {rawRows.slice(0, 3).map((row, i) => {
+                  const cells = filterRowToColumns(row, allColumns, previewCols);
+                  return (
+                    <tr key={i} className={i < 2 ? 'border-b border-workspace-border/25' : ''}>
+                      {cells.map((cell, j) => (
+                        <td key={j} className={`px-4 py-2.5 ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary tabular-nums'}`}>
+                          {cell}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     );
   }
@@ -180,6 +196,12 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
           </button>
         </div>
         </div>
+
+      {persistedView.displayMode === 'chart' && (
+        <div className="mb-5">
+          <TableVisualization columns={allColumns} rows={filteredAndSorted} view={persistedView} title={object.title} />
+        </div>
+      )}
 
       {showInsightCard && (
         <div role="status" aria-live="polite" className="animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards] rounded-2xl bg-workspace-accent-subtle/15 border border-workspace-accent/10 px-5 py-4 shadow-[0_16px_36px_rgba(99,102,241,0.08)]">
@@ -267,7 +289,9 @@ function VirtualizedTable({
   }
 
   const colCount = columns.length;
-  const gridCols = `minmax(180px, 2fr) ${Array(colCount - 1).fill('minmax(120px, 1fr)').join(' ')}`;
+  // Wider minimums for many-column datasets to prevent header overlap
+  const minColWidth = colCount > 10 ? '160px' : '120px';
+  const gridCols = `minmax(200px, 2fr) ${Array(colCount - 1).fill(`minmax(${minColWidth}, 1fr)`).join(' ')}`;
 
   return (
     <div className="workspace-card-surface rounded-[28px] border border-workspace-border/45 bg-white overflow-hidden">
@@ -280,12 +304,12 @@ function VirtualizedTable({
           {columns.map((col, idx) => (
             <div
               key={col}
-              className="px-4 py-2.5 whitespace-nowrap"
+              className="px-4 py-2.5"
             >
               <button
                 onClick={() => onSort(idx)}
                 aria-sort={sortCol === idx ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
-                className="workspace-focus-ring inline-flex items-center gap-1 rounded-xl px-2 py-1 -mx-2 cursor-pointer select-none transition-colors hover:text-workspace-text"
+                className="workspace-focus-ring inline-flex items-center gap-1 rounded-xl px-2 py-1 -mx-2 cursor-pointer select-none transition-colors hover:text-workspace-text text-left leading-tight"
               >
                 {col}
                 {sortCol === idx && (
