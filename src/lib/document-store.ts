@@ -38,8 +38,9 @@ function detectFileType(file: File): FileType {
  * Returns all worksheets with headers and rows.
  */
 async function parseXLSXClientSide(file: File): Promise<Record<string, { headers: string[]; rows: string[][] }>> {
-  // Dynamically import SheetJS
-  const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs');
+  // Dynamically import SheetJS from CDN
+  // @ts-ignore - dynamic CDN import
+  const XLSX = await import(/* @vite-ignore */ 'https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs');
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: 'array' });
 
