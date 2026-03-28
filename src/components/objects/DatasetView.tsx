@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { WorkspaceObject } from '@/lib/workspace-types';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useAI } from '@/hooks/useAI';
-import { MarkdownRenderer } from '@/components/objects/MarkdownRenderer';
+import MarkdownRenderer from '@/components/objects/MarkdownRenderer';
 
 interface DatasetViewProps {
   object: WorkspaceObject;
