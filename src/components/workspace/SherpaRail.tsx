@@ -7,6 +7,7 @@ import { useAmbientAudio } from '@/hooks/useAmbientAudio';
 import { useCognitiveMode } from '@/hooks/useCognitiveMode';
 import { MODE_LABELS } from '@/lib/cognitive-modes';
 import { VoiceIndicator } from './VoiceIndicator';
+import { RulesEditor } from './RulesEditor';
 import { toast } from 'sonner';
 
 export function SherpaRail() {
@@ -18,6 +19,7 @@ export function SherpaRail() {
   const [input, setInput] = useState('');
   const [isExpanded, setIsExpanded] = useState(true);
   const [showCanvasMenu, setShowCanvasMenu] = useState(false);
+  const [showRules, setShowRules] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [promptHistory, setPromptHistory] = useState<Array<{ query: string; response: string | null; timestamp: number }>>([]);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -105,6 +107,18 @@ export function SherpaRail() {
           )}
         </div>
         <div className="flex items-center gap-1">
+          {/* Rules toggle */}
+          <button
+            onClick={() => setShowRules(!showRules)}
+            className={`rounded-md p-1 transition-colors text-[10px] ${
+              showRules
+                ? 'bg-workspace-accent/10 text-workspace-accent'
+                : 'text-workspace-text-secondary/40 hover:bg-workspace-surface hover:text-workspace-text-secondary'
+            }`}
+            title={showRules ? 'Hide rules' : 'Data rules'}
+          >
+            ⚙
+          </button>
           {promptHistory.length > 0 && (
             <button
               onClick={() => setShowHistory(!showHistory)}
@@ -137,6 +151,13 @@ export function SherpaRail() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-5">
+        {/* Rules editor panel */}
+        {showRules && (
+          <div className="pb-4 border-b border-workspace-border/30 mb-4">
+            <RulesEditor onClose={() => setShowRules(false)} />
+          </div>
+        )}
+
         {/* Conversation history (optional) */}
         {showHistory && promptHistory.length > 0 && (
           <div className="space-y-3 pb-4 border-b border-workspace-border/30 mb-4">
