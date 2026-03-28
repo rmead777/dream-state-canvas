@@ -48,6 +48,7 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
   const ambientHints = useAmbientSherpa();
   const [size, setSize] = useState<{ width: number | null; height: number | null }>({ width: null, height: null });
   const [dismissedHints, setDismissedHints] = useState<Set<string>>(new Set());
+  const [showFocusFlash, setShowFocusFlash] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
   const isFocused = state.activeContext.focusedObjectId === object.id;
@@ -58,6 +59,16 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
       cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [isFocused]);
+
+  // Sherpa-driven focus flash / glow
+  useEffect(() => {
+    if (!isFocused) return;
+
+    setShowFocusFlash(true);
+    const timeout = window.setTimeout(() => setShowFocusFlash(false), 900);
+    return () => window.clearTimeout(timeout);
+  }, [isFocused, object.lastInteractedAt]);
+
   const isDimmed = shouldDim(object.id);
   const isHighlighted = shouldHighlight(object.id);
   const isMaterializing = object.status === 'materializing';
