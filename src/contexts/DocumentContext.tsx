@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { DocumentRecord, listDocuments, getDocument, extractDataset } from '@/lib/document-store';
 import { CANONICAL_DATASET } from '@/lib/seed-data';
+import { setActiveDataset as setGlobalDataset } from '@/lib/active-dataset';
+import { clearProfileCache } from '@/lib/data-analyzer';
+import { invalidateProfileCache } from '@/lib/intent-engine';
 
 interface ActiveDataset {
   columns: string[];
