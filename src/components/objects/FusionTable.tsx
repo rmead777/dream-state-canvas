@@ -137,6 +137,11 @@ function extractMetricCards(sources: WorkspaceObject[]): { title: string; value:
 export function FusionDataVisuals({ sources }: { sources: WorkspaceObject[] }) {
   const table = extractTableData(sources);
   const metrics = extractMetricCards(sources);
+  const [showAllCols, setShowAllCols] = useState(false);
+
+  const smartCols = table ? getDisplayColumns(table.columns, table.rows) : [];
+  const needsExpand = table ? table.columns.length > smartCols.length : false;
+  const visibleCols = showAllCols ? (table?.columns || []) : smartCols;
 
   if (!table && metrics.length === 0) return null;
 
@@ -196,31 +201,47 @@ export function FusionDataVisuals({ sources }: { sources: WorkspaceObject[] }) {
         </div>
       ))}
 
-      {/* Formatted data table with badges */}
+      {/* Formatted data table with smart column selection */}
       {table && (
-        <div className="overflow-hidden rounded-lg border border-workspace-border/30">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-workspace-border/30 bg-workspace-surface/30">
-                {table.columns.map(col => (
-                  <th key={col} className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-wider text-workspace-text-secondary">
-                    {col}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {table.rows.map((row, i) => (
-                <tr key={i} className={i < table.rows.length - 1 ? 'border-b border-workspace-border/20' : ''}>
-                  {row.map((cell, j) => (
-                    <td key={j} className={`px-3 py-1.5 ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary'}`}>
-                      <FormattedCell value={cell} />
-                    </td>
+        <div className="space-y-1.5">
+          {needsExpand && (
+            <div className="flex justify-end">
+              <button
+                onClick={() => setShowAllCols(!showAllCols)}
+                className="flex items-center gap-1 rounded-md px-2 py-1 text-[10px] text-workspace-text-secondary transition-colors hover:bg-workspace-surface hover:text-workspace-text"
+              >
+                <Columns className="h-3 w-3" />
+                {showAllCols ? 'Smart columns' : `All ${table.columns.length} columns`}
+              </button>
+            </div>
+          )}
+          <div className="overflow-x-auto rounded-lg border border-workspace-border/30">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-workspace-border/30 bg-workspace-surface/30">
+                  {visibleCols.map(col => (
+                    <th key={col} className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-wider text-workspace-text-secondary whitespace-nowrap">
+                      {col}
+                    </th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {table.rows.map((row, i) => {
+                  const cells = showAllCols ? row : filterRowToColumns(row, table.columns, smartCols);
+                  return (
+                    <tr key={i} className={i < table.rows.length - 1 ? 'border-b border-workspace-border/20' : ''}>
+                      {cells.map((cell, j) => (
+                        <td key={j} className={`px-3 py-1.5 whitespace-nowrap ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary'}`}>
+                          <FormattedCell value={cell} />
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
