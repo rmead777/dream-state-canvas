@@ -148,6 +148,23 @@ export function RulesEditor({ onClose }: { onClose: () => void }) {
         </div>
       )}
 
+      {/* Ranking logic description */}
+      <div className="rounded-md bg-workspace-surface/30 px-2.5 py-2">
+        <div className="text-[9px] uppercase tracking-wider text-workspace-text-secondary/50 mb-1">Sorting Logic</div>
+        <p className="text-[10px] text-workspace-text-secondary leading-relaxed">
+          {describeRankingLogic(profile)}
+        </p>
+      </div>
+
+      {!profile.ordinalPriorityColumn && (
+        <div className="rounded-md border border-amber-200/60 bg-amber-50/30 px-2.5 py-2">
+          <p className="text-[10px] text-amber-700 leading-relaxed">
+            ⚠ No explicit priority column detected. The current ranking is provisional. 
+            You can define one by saying e.g. "use Status column as priority" or "Tier 1 is highest priority".
+          </p>
+        </div>
+      )}
+
       <div className="text-[10px] text-workspace-text-secondary/60 italic leading-relaxed">
         "{profile.previewStrategy}"
       </div>
