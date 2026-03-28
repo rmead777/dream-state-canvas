@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { Columns } from 'lucide-react';
 import { WorkspaceObject } from '@/lib/workspace-types';
+import { getDisplayColumns, filterRowToColumns } from '@/lib/smart-columns';
 
 /** Animated sparkline matching MetricDetail style — draw-in + pulse dot */
 function AnimatedSparkline({ data, color = 'hsl(var(--workspace-accent))' }: { data: number[]; color?: string }) {
