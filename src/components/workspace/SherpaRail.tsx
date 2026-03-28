@@ -16,6 +16,10 @@ import { getDocument, extractDataset } from '@/lib/document-store';
 import { setActiveDataset } from '@/lib/active-dataset';
 import { invalidateProfileCache } from '@/lib/intent-engine';
 import { clearProfileCache } from '@/lib/data-analyzer';
+import {
+  checkPassphrase, unlockAdmin, lockAdmin, isAdminUnlocked,
+  getAdminSettings, setAdminModel, setAdminMaxTokens, AVAILABLE_MODELS,
+} from '@/lib/admin-settings';
 import { toast } from 'sonner';
 
 export function SherpaRail() {
