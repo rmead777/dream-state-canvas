@@ -9,6 +9,7 @@ import { executeFusion } from '@/lib/fusion-executor';
 import { toast } from '@/hooks/use-toast';
 import { getActiveDataset } from '@/lib/active-dataset';
 import { previewRows, alertRows, metricAggregate, comparisonPairs } from '@/lib/data-slicer';
+import { buildDocumentObjectContext, resolveDocumentRecord } from '@/lib/document-store';
 
 // Store document IDs ref for context injection
 let _documentIdsRef: string[] = [];
@@ -57,14 +58,23 @@ export function useWorkspaceActions() {
             state.layoutMode === 'freeform'
               ? computeFreeformPosition(state.objects, { relationships }, window.innerWidth, window.innerHeight)
               : undefined;
+
+          const resolvedDocument = action.objectType === 'document'
+            ? await resolveDocumentRecord({
+                title: action.title,
+                query: origin.query,
+                preferredIds: _documentIdsRef,
+              })
+            : null;
+
           const obj: Omit<WorkspaceObject, 'status' | 'createdAt' | 'lastInteractedAt'> = {
             id,
             type: action.objectType,
-            title: action.title,
+            title: resolvedDocument?.filename || action.title,
             pinned: false,
             origin,
             relationships,
-            context: action.data,
+            context: resolvedDocument ? buildDocumentObjectContext(resolvedDocument) : action.data,
             position: { zone: 'primary', order: 0 },
             freeformPosition,
           };

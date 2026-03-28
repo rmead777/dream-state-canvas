@@ -48,6 +48,7 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
   const ambientHints = useAmbientSherpa();
   const [size, setSize] = useState<{ width: number | null; height: number | null }>({ width: null, height: null });
   const [dismissedHints, setDismissedHints] = useState<Set<string>>(new Set());
+  const [showFocusFlash, setShowFocusFlash] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
   const isFocused = state.activeContext.focusedObjectId === object.id;
@@ -58,6 +59,16 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
       cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [isFocused]);
+
+  // Sherpa-driven focus flash / glow
+  useEffect(() => {
+    if (!isFocused) return;
+
+    setShowFocusFlash(true);
+    const timeout = window.setTimeout(() => setShowFocusFlash(false), 900);
+    return () => window.clearTimeout(timeout);
+  }, [isFocused, object.lastInteractedAt]);
+
   const isDimmed = shouldDim(object.id);
   const isHighlighted = shouldHighlight(object.id);
   const isMaterializing = object.status === 'materializing';
@@ -102,6 +113,11 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
       {/* Relationship highlight pulse */}
       {isHighlighted && (
         <div className="absolute inset-0 rounded-xl bg-workspace-accent/[0.02] animate-pulse pointer-events-none" />
+      )}
+
+      {/* Sherpa focus flash */}
+      {showFocusFlash && (
+        <div className="pointer-events-none absolute inset-0 rounded-xl border border-workspace-accent/30 bg-workspace-accent-subtle/40 animate-enter" />
       )}
 
       {/* Header — actions appear on hover only (anti-drift: no always-visible action bars) */}

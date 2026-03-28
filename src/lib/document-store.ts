@@ -20,6 +20,16 @@ export interface DocumentRecord {
 
 type FileType = 'xlsx' | 'csv' | 'pdf' | 'docx' | 'txt' | 'md' | 'image';
 
+export interface DocumentObjectContext {
+  sourceDocId: string;
+  fileName: string;
+  fileType: string;
+  summary: string;
+  paragraphs: string[];
+  storagePath: string;
+  mimeType: string;
+}
+
 function detectFileType(file: File): FileType {
   const ext = file.name.split('.').pop()?.toLowerCase() || '';
   const mime = file.type;
@@ -31,6 +41,110 @@ function detectFileType(file: File): FileType {
   if (ext === 'md') return 'md';
   if (mime.startsWith('image/')) return 'image';
   return 'txt';
+}
+
+function normalizeFileStem(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/\.[a-z0-9]+$/i, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function getPreferredFileType(text: string): string | null {
+  const lower = text.toLowerCase();
+  if (lower.includes('pdf') || lower.includes('report') || lower.includes('document')) return 'pdf';
+  if (lower.includes('excel') || lower.includes('spreadsheet') || lower.includes('xlsx')) return 'xlsx';
+  if (lower.includes('csv')) return 'csv';
+  return null;
+}
+
+function splitDocumentParagraphs(text: string): string[] {
+  const normalized = text.replace(/\r/g, '').trim();
+  if (!normalized) return [];
+
+  const paragraphSplit = normalized
+    .split(/\n\s*\n+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (paragraphSplit.length >= 2) return paragraphSplit.slice(0, 120);
+
+  return normalized
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 120);
+}
+
+export function buildDocumentObjectContext(doc: DocumentRecord): DocumentObjectContext {
+  const paragraphs = splitDocumentParagraphs(doc.extracted_text || '');
+  const metadata = (doc.metadata || {}) as { aiSummary?: string };
+  const summary = metadata.aiSummary?.trim() || paragraphs[0] || 'No summary available.';
+
+  return {
+    sourceDocId: doc.id,
+    fileName: doc.filename,
+    fileType: doc.file_type,
+    summary,
+    paragraphs,
+    storagePath: doc.storage_path,
+    mimeType: doc.mime_type,
+  };
+}
+
+export async function resolveDocumentRecord(options: {
+  title?: string;
+  query?: string;
+  preferredIds?: string[];
+} = {}): Promise<DocumentRecord | null> {
+  const { title = '', query = '', preferredIds = [] } = options;
+  const docs = await listDocuments();
+  const scopedDocs = preferredIds.length > 0
+    ? docs.filter((doc) => preferredIds.includes(doc.id))
+    : docs;
+  const candidates = scopedDocs.length > 0 ? scopedDocs : docs;
+
+  if (candidates.length === 0) return null;
+
+  const titleStem = normalizeFileStem(title);
+  const queryStem = normalizeFileStem(query);
+  const hintedType = getPreferredFileType(`${title} ${query}`);
+
+  const scored = candidates
+    .map((doc) => {
+      const filenameStem = normalizeFileStem(doc.filename);
+      let score = 0;
+
+      if (titleStem) {
+        if (filenameStem === titleStem) score += 120;
+        if (filenameStem.includes(titleStem) || titleStem.includes(filenameStem)) score += 60;
+      }
+
+      if (queryStem) {
+        if (queryStem.includes(filenameStem) || filenameStem.includes(queryStem)) score += 35;
+      }
+
+      if (hintedType) {
+        if (hintedType === 'pdf' && doc.file_type === 'pdf') score += 30;
+        if (hintedType === 'xlsx' && (doc.file_type === 'xlsx' || doc.file_type === 'csv')) score += 30;
+        if (hintedType === 'csv' && doc.file_type === 'csv') score += 30;
+      }
+
+      if (query.toLowerCase().includes('source document') && doc.file_type === 'pdf') score += 15;
+      if (query.toLowerCase().includes('dataset') && (doc.file_type === 'xlsx' || doc.file_type === 'csv')) score += 15;
+
+      return { doc, score };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  if (scored[0]?.score > 0) return scored[0].doc;
+
+  if (hintedType === 'pdf') return candidates.find((doc) => doc.file_type === 'pdf') || candidates[0];
+  if (hintedType === 'xlsx') return candidates.find((doc) => doc.file_type === 'xlsx' || doc.file_type === 'csv') || candidates[0];
+  if (hintedType === 'csv') return candidates.find((doc) => doc.file_type === 'csv') || candidates[0];
+
+  return candidates[0];
 }
 
 /**
