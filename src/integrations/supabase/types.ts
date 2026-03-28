@@ -83,12 +83,72 @@ export type Database = {
         }
         Relationships: []
       }
+      sherpa_memories: {
+        Row: {
+          confidence: number
+          content: string
+          created_at: string
+          hit_count: number
+          id: string
+          last_activated_at: string | null
+          miss_count: number
+          reasoning: string | null
+          source: string
+          tags: string[]
+          tier: string
+          trigger: Json
+          type: string
+          user_id: string
+        }
+        Insert: {
+          confidence?: number
+          content: string
+          created_at?: string
+          hit_count?: number
+          id?: string
+          last_activated_at?: string | null
+          miss_count?: number
+          reasoning?: string | null
+          source?: string
+          tags?: string[]
+          tier?: string
+          trigger?: Json
+          type: string
+          user_id: string
+        }
+        Update: {
+          confidence?: number
+          content?: string
+          created_at?: string
+          hit_count?: number
+          id?: string
+          last_activated_at?: string | null
+          miss_count?: number
+          reasoning?: string | null
+          source?: string
+          tags?: string[]
+          tier?: string
+          trigger?: Json
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      decay_stale_memories: {
+        Args: {
+          decay_factor?: number
+          stale_threshold_days?: number
+          target_user_id: string
+        }
+        Returns: undefined
+      }
+      increment_memory_hit: { Args: { memory_id: string }; Returns: undefined }
+      increment_memory_miss: { Args: { memory_id: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
