@@ -92,7 +92,7 @@ function getCachedProfile(fingerprint: string): DataProfile | null {
       // Stale cache — remove it
       localStorage.removeItem(CACHE_PREFIX + fingerprint);
     }
-  } catch { /* corrupt */ }
+  } catch (e) { console.warn('[data-analyzer] Corrupt cached profile in localStorage:', e); }
   return null;
 }
 
@@ -101,7 +101,7 @@ function setCachedProfile(fingerprint: string, profile: DataProfile): void {
   try {
     const entry: CachedEntry = { version: CACHE_VERSION, profile };
     localStorage.setItem(CACHE_PREFIX + fingerprint, JSON.stringify(entry));
-  } catch { /* storage full */ }
+  } catch (e) { console.warn('[data-analyzer] Failed to cache profile to localStorage:', e); }
 }
 
 /**
@@ -359,5 +359,5 @@ export function clearProfileCache(): void {
   try {
     const keys = Object.keys(localStorage).filter(k => k.startsWith(CACHE_PREFIX));
     keys.forEach(k => localStorage.removeItem(k));
-  } catch { /* ignore */ }
+  } catch (e) { console.warn('[data-analyzer] Failed to cache refined profile:', e); }
 }

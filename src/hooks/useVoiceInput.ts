@@ -70,7 +70,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
         animFrameRef.current = requestAnimationFrame(tick);
       };
       tick();
-    } catch { /* mic not available — still do speech recognition */ }
+    } catch (e) { console.warn('[useVoiceInput] Mic not available, continuing with speech recognition only:', e); }
 
     recognition.start();
     setIsListening(true);

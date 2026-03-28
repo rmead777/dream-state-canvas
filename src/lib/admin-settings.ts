@@ -35,12 +35,12 @@ try {
     const parsed = JSON.parse(stored);
     _settings = { ...DEFAULT_SETTINGS, ...parsed };
   }
-} catch { /* ignore */ }
+} catch (e) { console.warn('[admin-settings] Failed to load from localStorage:', e); }
 
 function persist() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(_settings));
-  } catch { /* ignore */ }
+  } catch (e) { console.warn('[admin-settings] Failed to persist:', e); }
 }
 
 export function getAdminSettings(): AdminSettings {

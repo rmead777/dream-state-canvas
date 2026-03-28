@@ -33,9 +33,15 @@ export function useWorkspaceActions() {
       try {
         const result = await parseIntentAI(query, state.objects, _documentIdsRef);
         await applyResult(result, origin);
-      } catch {
-        const result = await parseIntent(query, state.objects);
-        await applyResult(result, origin);
+      } catch (aiError) {
+        console.warn('[processIntent] AI intent parsing failed, trying keyword fallback:', aiError);
+        try {
+          const result = await parseIntent(query, state.objects);
+          await applyResult(result, origin);
+        } catch (fallbackError) {
+          console.error('[processIntent] Both AI and keyword fallback failed:', fallbackError);
+          dispatch({ type: 'SET_SHERPA_RESPONSE', payload: 'Something went wrong processing your request. Please try rephrasing.' });
+        }
       }
 
       dispatch({ type: 'SET_SHERPA_PROCESSING', payload: false });
@@ -149,7 +155,7 @@ Return ONLY valid JSON (no markdown, no explanation):
                       columnFilter = parsed.columnFilter;
                     }
                   }
-                } catch { /* AI returned unparseable — proceed without filters */ }
+                } catch (e) { console.warn('[useWorkspaceActions] AI returned unparseable filter JSON, proceeding without filters:', e); }
               }
 
               // Apply filters to rows
@@ -270,7 +276,7 @@ Return ONLY valid JSON (no markdown, no explanation):
                 type: 'brief',
                 title: result.title!,
                 pinned: false,
-                origin: { type: 'fusion' as any, query: `Fusion of ${objA.title} and ${objB.title}` },
+                origin: { type: 'cross-object', sourceObjectId: objA.id, query: `Fusion of ${objA.title} and ${objB.title}` },
                 relationships: [objA.id, objB.id],
                 context: result.context!,
                 position: { zone: 'primary', order: 0 },

@@ -128,7 +128,7 @@ export function FreeformCanvas() {
         type: 'brief',
         title: result.title!,
         pinned: false,
-        origin: { type: 'fusion' as any, query: `Fusion of ${source.title} and ${target.title}` },
+        origin: { type: 'cross-object', sourceObjectId: source.id, query: `Fusion of ${source.title} and ${target.title}` },
         relationships: [source.id, target.id],
         context: result.context!,
         position: { zone: 'primary', order: 0 },

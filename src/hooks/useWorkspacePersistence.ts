@@ -49,21 +49,32 @@ export function useWorkspacePersistence() {
       if (parsed.layoutMode) {
         dispatch({ type: 'SET_LAYOUT_MODE', payload: parsed.layoutMode });
       }
-    } catch { /* corrupt storage — ignore */ }
+    } catch (e) { console.warn('[useWorkspacePersistence] Failed to restore workspace (corrupt storage):', e); }
   }, [dispatch]);
 
   // Save on change (debounced)
   useEffect(() => {
     const timer = setTimeout(() => {
-      try {
-        const serializable: Partial<WorkspaceState> = {
-          objects: state.objects,
-          layoutMode: state.layoutMode,
-        };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
-      } catch { /* storage full — ignore */ }
+      saveWorkspace();
     }, 1000);
 
     return () => clearTimeout(timer);
   }, [state.objects, state.layoutMode]);
+
+  // Save immediately on tab close to prevent data loss (ME-004)
+  useEffect(() => {
+    const handleBeforeUnload = () => saveWorkspace();
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [state.objects, state.layoutMode]);
+
+  function saveWorkspace() {
+    try {
+      const serializable: Partial<WorkspaceState> = {
+        objects: state.objects,
+        layoutMode: state.layoutMode,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
+    } catch (e) { console.warn('[useWorkspacePersistence] Failed to save workspace (storage full?):', e); }
+  }
 }

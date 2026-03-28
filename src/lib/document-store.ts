@@ -361,7 +361,7 @@ export async function uploadDocument(
       // Also try to extract text if possible
       try {
         payload.textContent = await readAsText(file);
-      } catch { /* binary docx, rely on base64 */ }
+      } catch (e) { console.warn('[document-store] Failed to read as text (binary doc), falling back to base64:', e); }
     }
 
     // 3. Call ingestion edge function

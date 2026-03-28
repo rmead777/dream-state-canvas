@@ -65,7 +65,7 @@ export function RulesEditor({ onClose }: { onClose: () => void }) {
         type: 'SET_SHERPA_RESPONSE',
         payload: `Rules updated based on your instruction. Cards refreshed.`,
       });
-    } catch { /* ignore */ }
+    } catch (e) { console.error('[RulesEditor] Failed to refine data rules:', e); }
     setIsRefining(false);
   };
 

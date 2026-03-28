@@ -73,7 +73,7 @@ Return ONLY valid JSON:
         if (parsed.synthesisType) synthesisType = parsed.synthesisType as SynthesisType;
         if (parsed.confidence) confidence = parsed.confidence;
       }
-    } catch { /* fallback */ }
+    } catch (e) { console.warn('[fusion-executor] Failed to parse fusion AI response:', e); }
 
     if (synthesisType === 'low-value') {
       return { success: false, lowValue: true, errorMessage: 'These objects don\'t reveal non-obvious relationships when combined. Try a different pair.' };

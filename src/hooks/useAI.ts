@@ -116,7 +116,7 @@ export function useAI() {
                 fullText += content;
                 onDelta?.(content);
               }
-            } catch { /* ignore */ }
+            } catch (e) { console.warn('[useAI] Failed to parse SSE flush line:', e); }
           }
         }
 
@@ -200,7 +200,7 @@ export async function callAI(
           const parsed = JSON.parse(jsonStr);
           const content = parsed.choices?.[0]?.delta?.content;
           if (content) result += content;
-        } catch { /* skip */ }
+        } catch (e) { console.warn('[callAI] Failed to parse SSE line:', e); }
       }
     }
 

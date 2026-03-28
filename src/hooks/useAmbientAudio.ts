@@ -46,7 +46,7 @@ export function useAmbientAudio() {
         gain.connect(ctx.destination);
         osc.start(ctx.currentTime);
         osc.stop(ctx.currentTime + cfg.duration + 0.05);
-      } catch { /* Web Audio not available */ }
+      } catch (e) { console.warn('[useAmbientAudio] Web Audio not available:', e); }
     },
     [muted, getCtx]
   );
@@ -54,7 +54,7 @@ export function useAmbientAudio() {
   const toggleMute = useCallback(() => {
     setMuted((prev) => {
       const next = !prev;
-      try { localStorage.setItem('ws-audio-muted', String(next)); } catch {}
+      try { localStorage.setItem('ws-audio-muted', String(next)); } catch (e) { console.warn('[useAmbientAudio] Failed to persist mute:', e); }
       return next;
     });
   }, []);
