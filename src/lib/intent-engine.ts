@@ -317,6 +317,13 @@ const patterns: IntentPattern[] = [
       { type: 'create', objectType: 'dataset', title: 'Vendor Dataset', data: CANONICAL_DATASET },
     ],
   },
+  {
+    keywords: ['prioritize', 'sort by', 'group by', 'change priority', 'change sorting', 'reorder by', 'rank by', 'filter by', 'show first', 'show last', 'ascending', 'descending'],
+    generate: (input) => [
+      { type: 'respond', message: 'Updating data prioritization rules based on your feedback...' },
+      { type: 'refine-rules' as any, feedback: input },
+    ],
+  },
 ];
 
 export async function parseIntent(
