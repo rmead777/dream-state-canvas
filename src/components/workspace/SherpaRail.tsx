@@ -29,7 +29,6 @@ export function SherpaRail() {
   const { user, signOut } = useAuth();
   const [input, setInput] = useState('');
   const [isExpanded, setIsExpanded] = useState(true);
-  const [showHistory, setShowHistory] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [adminUnlocked, setAdminUnlocked] = useState(isAdminUnlocked());
   const [adminState, setAdminState] = useState(getAdminSettings());
@@ -37,6 +36,7 @@ export function SherpaRail() {
   const [contextMode, setContextMode] = useState<ContextMode>('auto');
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
   const { addDocument, documents } = useDocuments();
   const railControlsBase = 'flex h-7 w-7 items-center justify-center rounded-full border border-transparent text-[10px] transition-all duration-200 workspace-spring';
   const contextScopeLabel = contextMode === 'auto'
@@ -55,6 +55,25 @@ export function SherpaRail() {
 
   // handleDocumentIngested, handleCollapseAll, handleDissolveAll moved to WorkspaceBar
   const activeObjectCount = Object.values(state.objects).filter(o => o.status !== 'dissolved').length;
+
+  // Sync Sherpa responses into the conversation thread
+  useEffect(() => {
+    if (lastResponse && promptHistory.length > 0) {
+      const last = promptHistory[promptHistory.length - 1];
+      if (last.response !== lastResponse) {
+        setPromptHistory(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1] = { ...updated[updated.length - 1], response: lastResponse };
+          return updated;
+        });
+      }
+    }
+  }, [lastResponse]);
+
+  // Auto-scroll to latest message
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [promptHistory, lastResponse, isProcessing]);
 
   const trackAndProcess = useCallback((text: string) => {
     setPromptHistory(prev => [...prev, { query: text, response: null, timestamp: Date.now() }]);
@@ -143,7 +162,7 @@ export function SherpaRail() {
   }
 
   return (
-    <div className="workspace-noise relative flex h-full w-80 flex-shrink-0 flex-col overflow-hidden border-l border-workspace-border/50 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.94),rgba(248,248,252,0.92))] backdrop-blur-xl lg:w-[340px]">
+    <div className="workspace-noise relative flex h-full w-[360px] flex-shrink-0 flex-col overflow-hidden border-l border-workspace-border/50 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.94),rgba(248,248,252,0.92))] backdrop-blur-xl lg:w-[420px]">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[linear-gradient(to_bottom,rgba(99,102,241,0.08),transparent)]" />
 
       {/* Header */}
@@ -208,20 +227,7 @@ export function SherpaRail() {
               </button>
             )}
             {/* Upload, Rules, Memory moved to WorkspaceBar bottom bar */}
-            {promptHistory.length > 0 && (
-              <button
-                onClick={() => setShowHistory(!showHistory)}
-                className={`${railControlsBase} ${
-                  showHistory
-                    ? 'border-workspace-accent/15 bg-workspace-accent/10 text-workspace-accent shadow-[0_10px_20px_rgba(99,102,241,0.12)]'
-                    : 'text-workspace-text-secondary/45 hover:border-workspace-border/70 hover:bg-white/90 hover:text-workspace-text-secondary'
-                }`}
-                title={showHistory ? 'Hide conversation' : 'Show conversation'}
-              >
-                ≡
-              </button>
-            )}
-            {(lastResponse || observations.length > 0) && (
+            {(lastResponse || observations.length > 0 || promptHistory.length > 0) && (
               <button
                 onClick={handleClearSherpaFull}
                 className={`${railControlsBase} text-workspace-text-secondary/45 hover:border-workspace-border/70 hover:bg-white/90 hover:text-workspace-text-secondary`}
@@ -234,25 +240,91 @@ export function SherpaRail() {
         </div>
       </div>
 
-      <div className="relative z-10 flex-1 overflow-y-auto px-5 py-4">
-        <div className="workspace-card-surface mb-4 rounded-2xl border border-workspace-border/45 px-4 py-3">
-          <div className="mb-2 flex items-center gap-2">
-            <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-workspace-accent/70">Session pulse</div>
-            <div className="ml-auto flex items-center gap-1.5">
-              <span className={`inline-block h-1.5 w-1.5 rounded-full ${composerStateTone} ${voice.isListening || isProcessing ? 'animate-pulse' : ''}`} />
-              <span className="text-[10px] uppercase tracking-[0.16em] text-workspace-text-secondary/60">{composerState}</span>
-            </div>
-          </div>
-          <p className="text-[12px] leading-5 text-workspace-text-secondary/78">
-            {lastResponse
-              ? 'Sherpa has context from the current workspace and can push the next best move.'
-              : 'Give Sherpa a target and it will materialize the right analytical objects around it.'}
-          </p>
+      <div className="relative z-10 flex-1 overflow-y-auto px-4 py-3">
+        {/* Compact session pulse */}
+        <div className="mb-3 flex items-center gap-2 px-1">
+          <span className={`inline-block h-1.5 w-1.5 rounded-full ${composerStateTone} ${voice.isListening || isProcessing ? 'animate-pulse' : ''}`} />
+          <span className="text-[10px] uppercase tracking-[0.16em] text-workspace-text-secondary/50">{composerState}</span>
+          <span className="ml-auto text-[10px] text-workspace-text-secondary/40 tabular-nums">{activeObjectCount} live</span>
         </div>
 
-        {/* Rules, Upload, Memory panels moved to WorkspaceBar */}
+        {/* ═══ Chat Thread ═══ */}
+        <div className="space-y-3">
+          {promptHistory.length === 0 && !lastResponse && !isProcessing && (
+            <div className="rounded-2xl border border-workspace-border/30 bg-workspace-surface/20 px-4 py-4 text-center">
+              <p className="text-sm text-workspace-text/80">Good morning. What would you like to focus on?</p>
+              <p className="mt-1.5 text-[11px] text-workspace-text-secondary/50">
+                Ask anything — I'll materialize the right views for you.
+              </p>
+            </div>
+          )}
 
-        {/* Document context selector */}
+          {promptHistory.map((entry, i) => (
+            <div key={entry.timestamp} className="space-y-2">
+              {/* User message — right-aligned */}
+              <div className="flex justify-end">
+                <div className="max-w-[85%] rounded-2xl rounded-br-md bg-workspace-accent/10 border border-workspace-accent/15 px-3.5 py-2.5">
+                  <p className="text-sm text-workspace-text leading-relaxed">{entry.query}</p>
+                </div>
+              </div>
+              {/* Sherpa response — left-aligned */}
+              {entry.response && (
+                <div className="flex justify-start">
+                  <div className="max-w-[90%] rounded-2xl rounded-bl-md bg-white border border-workspace-border/40 px-3.5 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
+                    <p className="text-sm text-workspace-text leading-relaxed">{entry.response}</p>
+                  </div>
+                </div>
+              )}
+              {/* Show processing indicator after last message if no response yet */}
+              {i === promptHistory.length - 1 && !entry.response && isProcessing && (
+                <div className="flex justify-start">
+                  <div className="rounded-2xl rounded-bl-md bg-white border border-workspace-border/40 px-3.5 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
+                    <div className="flex items-center gap-2">
+                      <div className="flex gap-1">
+                        {[0, 1, 2].map(j => (
+                          <div key={j} className="h-1.5 w-1.5 rounded-full bg-workspace-accent/40 animate-pulse" style={{ animationDelay: `${j * 200}ms` }} />
+                        ))}
+                      </div>
+                      <span className="text-[10px] text-workspace-accent/60">Reasoning...</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+
+          <div ref={chatEndRef} />
+        </div>
+
+        {/* Proactive observations — compact, below chat */}
+        {observations.length > 0 && (
+          <div className="mt-4 space-y-1.5 border-t border-workspace-border/30 pt-3">
+            <span className="text-[9px] uppercase tracking-widest text-workspace-accent/50">Noticed</span>
+            {observations.slice(-2).map((obs, i) => (
+              <p key={i} className="text-[11px] text-workspace-text-secondary/60 leading-relaxed px-1">{obs}</p>
+            ))}
+          </div>
+        )}
+
+        {/* Suggestion chips — below observations */}
+        {suggestions.length > 0 && (
+          <div className="mt-4 space-y-2 border-t border-workspace-border/30 pt-3">
+            <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-workspace-accent/65">Next moves</span>
+            {suggestions.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => handleSuggestionClick(s.query)}
+                className="workspace-focus-ring block w-full rounded-xl border border-workspace-border/50 bg-white/70 px-3 py-2.5
+                  text-left text-xs text-workspace-text transition-all duration-200
+                  hover:border-workspace-accent/20 hover:bg-workspace-accent-subtle/20"
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Document context selector — compact */}
         <DocumentContextSelector
           selectedDocIds={selectedDocIds}
           onSelectionChange={setSelectedDocIds}
@@ -360,93 +432,6 @@ export function SherpaRail() {
           </div>
         )}
 
-        {/* Conversation history (optional) */}
-        {showHistory && promptHistory.length > 0 && (
-          <div className="workspace-card-surface mb-4 rounded-2xl border border-workspace-border/45 px-4 py-4 space-y-3">
-            <span className="text-[9px] uppercase tracking-widest text-workspace-text-secondary/40">
-              History
-            </span>
-            {promptHistory.map((entry, _i) => (
-              <div key={entry.timestamp} className="space-y-1.5">
-                <div className="flex items-start gap-2">
-                  <span className="text-[9px] text-workspace-accent/50 mt-0.5 shrink-0">→</span>
-                  <p className="text-[11px] text-workspace-text font-medium leading-relaxed">{entry.query}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-
-
-        {/* Response area */}
-        <div id="sherpa-response-region" aria-live="polite" className="space-y-4 pb-4">
-          {!lastResponse && !isProcessing && (
-            <div className="workspace-card-surface animate-[materialize_0.5s_cubic-bezier(0.16,1,0.3,1)_forwards] rounded-2xl border border-workspace-border/45 px-4 py-4">
-              <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.22em] text-workspace-accent/70">Conversation starter</div>
-              <p className="text-sm leading-relaxed text-workspace-text">
-                Good morning. What would you like to focus on?
-              </p>
-              <p className="mt-2 text-xs text-workspace-text-secondary">
-                I can surface metrics, compare entities, highlight risks, or prepare a brief. Hold the mic button to speak, or ⌘K for commands.
-              </p>
-            </div>
-          )}
-
-          {lastResponse && (
-            <div
-              key={lastResponse}
-              className="workspace-card-surface animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards] rounded-2xl border border-workspace-border/45 px-4 py-4"
-            >
-              <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.22em] text-workspace-accent/70">Verdict</div>
-              <p className="text-sm leading-relaxed text-workspace-text">{lastResponse}</p>
-            </div>
-          )}
-
-          {/* Proactive observations */}
-          {observations.length > 0 && (
-            <div className="space-y-2 border-t border-workspace-border/30 pt-3">
-              <span className="text-[9px] uppercase tracking-widest text-workspace-accent/50">
-                Noticed
-              </span>
-              {observations.slice(-3).map((obs, i) => (
-                <div
-                  key={i}
-                  className="animate-[materialize_0.4s_cubic-bezier(0.16,1,0.3,1)_forwards] rounded-lg bg-workspace-accent-subtle/20 px-3 py-2"
-                >
-                  <p className="text-[11px] text-workspace-text-secondary leading-relaxed">
-                    {obs}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Suggestion chips */}
-        <div className="space-y-2 pb-4">
-          {suggestions.length > 0 && (
-            <div className="flex items-center justify-between px-1 pb-1">
-              <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-workspace-accent/65">Next moves</span>
-              <span className="text-[10px] text-workspace-text-secondary/55 tabular-nums">{suggestions.length} queued</span>
-            </div>
-          )}
-          {suggestions.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => handleSuggestionClick(s.query)}
-              className="workspace-focus-ring block w-full rounded-2xl border border-workspace-border/60 bg-white/78 px-4 py-3.5
-                text-left text-xs text-workspace-text transition-all duration-200 workspace-spring
-                hover:-translate-y-0.5 hover:border-workspace-accent/20 hover:bg-workspace-accent-subtle/30 hover:shadow-[0_18px_38px_rgba(99,102,241,0.12)]"
-            >
-              <div className="mb-1 flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.2em] text-workspace-accent/65">
-                <span>Suggested next move</span>
-                <span aria-hidden="true">↗</span>
-              </div>
-              <span className="block leading-5">{s.label}</span>
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Input area */}
