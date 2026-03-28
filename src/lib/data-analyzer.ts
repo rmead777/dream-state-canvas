@@ -193,6 +193,9 @@ function buildFallbackProfile(columns: string[], rows: string[][]): DataProfile 
   const measureIdx = columns.indexOf(measureCol);
   const hasCurrency = rows.some(r => r[measureIdx]?.startsWith('$'));
 
+  // Build display columns — pick the most important ones heuristically
+  const displayColumns = buildFallbackDisplayColumns(columns, idCol, measureCol, groupCol, urgencyCol);
+
   return {
     domain: 'general',
     primaryIdColumn: idCol,
@@ -200,6 +203,7 @@ function buildFallbackProfile(columns: string[], rows: string[][]): DataProfile 
     measureFormat: hasCurrency ? 'currency' : 'number',
     sortDirection: 'desc',
     groupByColumn: groupCol,
+    displayColumns,
     ordinalPriorityColumn: ordinalPriority,
     urgencySignal: urgencyCol ? { column: urgencyCol, hotValues } : undefined,
     previewStrategy: ordinalPriority
@@ -212,6 +216,48 @@ function buildFallbackProfile(columns: string[], rows: string[][]): DataProfile 
       comparison: { contrastColumn: groupCol || columns[0] },
     },
   };
+}
+
+/**
+ * Pick 4-7 display columns heuristically for the fallback case.
+ */
+function buildFallbackDisplayColumns(
+  columns: string[],
+  idCol: string,
+  measureCol: string,
+  groupCol?: string,
+  urgencyCol?: string
+): string[] {
+  const picked = new Set<string>();
+  picked.add(idCol);
+  if (groupCol) picked.add(groupCol);
+  if (urgencyCol && urgencyCol !== groupCol) picked.add(urgencyCol);
+  picked.add(measureCol);
+
+  // Add a few more columns that seem high-signal, skip verbose ones
+  for (const col of columns) {
+    if (picked.size >= 7) break;
+    if (picked.has(col)) continue;
+    const lower = col.toLowerCase();
+    // Skip verbose/low-signal columns
+    if (/note|comment|detail|description|thread|reconcil|summary|narrative|history/i.test(lower)) continue;
+    // Prefer short-label columns
+    if (/contact|email|status|date|source|risk|type|category/i.test(lower)) {
+      picked.add(col);
+    }
+  }
+
+  // If still under 4, pad with remaining columns (skip verbose)
+  for (const col of columns) {
+    if (picked.size >= 5) break;
+    if (picked.has(col)) continue;
+    const lower = col.toLowerCase();
+    if (/note|comment|detail|description|thread|reconcil|summary|narrative|history/i.test(lower)) continue;
+    picked.add(col);
+  }
+
+  // Return in original column order
+  return columns.filter(c => picked.has(c));
 }
 
 /**
