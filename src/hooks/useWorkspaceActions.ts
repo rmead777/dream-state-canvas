@@ -84,6 +84,111 @@ export function useWorkspaceActions() {
           dispatch({ type: 'DISSOLVE_OBJECT', payload: { id: action.objectId } });
           break;
 
+        case 'update': {
+          const target = state.objects[action.objectId];
+          if (!target) {
+            dispatch({ type: 'SET_SHERPA_RESPONSE', payload: 'Could not find the specified object to update.' });
+            break;
+          }
+          // Run async update via AI
+          (async () => {
+            dispatch({ type: 'SET_SHERPA_PROCESSING', payload: true });
+            try {
+              const { columns, rows } = getActiveDataset();
+              const profile = await import('@/lib/data-analyzer').then(m => {
+                const p = m.getCurrentProfile(columns, rows);
+                return p;
+              });
+
+              // Apply the instruction to regenerate data for the object type
+              let newContext: Record<string, any> = target.context;
+              const instruction = action.instruction.toLowerCase();
+
+              // Parse limit/top N instructions
+              const limitMatch = instruction.match(/(?:top|first|limit(?:\s+to)?)\s+(\d+)/);
+              const limit = limitMatch ? parseInt(limitMatch[1]) : undefined;
+
+              // Parse tier/filter instructions
+              const tierMatch = instruction.match(/tier\s*(\d)/i);
+              const tierFilter = tierMatch ? `Tier ${tierMatch[1]}` : undefined;
+
+              switch (target.type) {
+                case 'inspector': {
+                  let filteredRows = rows;
+                  if (tierFilter && profile?.ordinalPriorityColumn) {
+                    const col = profile.ordinalPriorityColumn.column;
+                    const colIdx = columns.indexOf(col);
+                    if (colIdx >= 0) {
+                      filteredRows = rows.filter(r => String(r[colIdx]).includes(tierFilter));
+                    }
+                  }
+                  const preview = previewRows(columns, filteredRows, profile!, limit || 8);
+                  newContext = { columns: preview.columns, rows: preview.rows };
+                  break;
+                }
+                case 'dataset': {
+                  let filteredRows = rows;
+                  if (tierFilter && profile?.ordinalPriorityColumn) {
+                    const col = profile.ordinalPriorityColumn.column;
+                    const colIdx = columns.indexOf(col);
+                    if (colIdx >= 0) {
+                      filteredRows = rows.filter(r => String(r[colIdx]).includes(tierFilter));
+                    }
+                  }
+                  const sorted = previewRows(columns, filteredRows, profile!, limit || filteredRows.length);
+                  newContext = { columns: sorted.columns, rows: sorted.rows };
+                  break;
+                }
+                case 'alert': {
+                  let filteredRows = rows;
+                  if (tierFilter && profile?.ordinalPriorityColumn) {
+                    const col = profile.ordinalPriorityColumn.column;
+                    const colIdx = columns.indexOf(col);
+                    if (colIdx >= 0) {
+                      filteredRows = rows.filter(r => String(r[colIdx]).includes(tierFilter));
+                    }
+                  }
+                  const alerts = alertRows(columns, filteredRows, profile!);
+                  const limitedAlerts = limit ? alerts.slice(0, limit) : alerts;
+                  newContext = { alerts: limitedAlerts };
+                  break;
+                }
+                case 'comparison': {
+                  const comp = comparisonPairs(columns, rows, profile!);
+                  newContext = comp;
+                  break;
+                }
+                case 'brief': {
+                  // For briefs, use AI to regenerate with the instruction as context
+                  const briefResult = await callAI(
+                    [{ role: 'user', content: `Current brief context: ${JSON.stringify(target.context)}\n\nUser instruction: "${action.instruction}"\n\nRegenerate the brief content incorporating this change. Return ONLY markdown text, no JSON wrapper.` }],
+                    'brief',
+                    _documentIdsRef
+                  );
+                  if (briefResult) {
+                    newContext = { ...target.context, content: briefResult };
+                  }
+                  break;
+                }
+                case 'metric': {
+                  const agg = metricAggregate(columns, rows, profile!);
+                  newContext = { ...target.context, ...agg };
+                  break;
+                }
+              }
+
+              dispatch({ type: 'UPDATE_OBJECT_CONTEXT', payload: { id: target.id, context: newContext } });
+              dispatch({ type: 'TOUCH_OBJECT', payload: { id: target.id } });
+              dispatch({ type: 'FOCUS_OBJECT', payload: { id: target.id } });
+              dispatch({ type: 'SET_SHERPA_RESPONSE', payload: `Updated "${target.title}" — ${action.instruction}.` });
+            } catch (e) {
+              dispatch({ type: 'SET_SHERPA_RESPONSE', payload: `Could not update "${target.title}". Try a different instruction.` });
+            }
+            dispatch({ type: 'SET_SHERPA_PROCESSING', payload: false });
+          })();
+          break;
+        }
+
         case 'fuse': {
           const objA = state.objects[action.objectIdA];
           const objB = state.objects[action.objectIdB];
