@@ -15,7 +15,8 @@ export function RulesEditor({ onClose }: { onClose: () => void }) {
   const [customInstruction, setCustomInstruction] = useState('');
 
   useEffect(() => {
-    const p = getCurrentProfile(CANONICAL_DATASET.columns, CANONICAL_DATASET.rows);
+    const ds = getActiveDataset();
+    const p = getCurrentProfile(ds.columns, ds.rows);
     setProfile(p);
   }, []);
 
