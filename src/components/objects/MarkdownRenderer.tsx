@@ -53,7 +53,7 @@ function parseHeadingLevel(line: string): { level: number; text: string } | null
 }
 
 interface ParsedBlock {
-  type: "heading" | "paragraph" | "table" | "bullet-list" | "number-list" | "code-block" | "callout" | "empty";
+  type: "heading" | "paragraph" | "table" | "bullet-list" | "number-list" | "code-block" | "callout" | "collapsible" | "empty";
   content: string;
   level?: number;
   language?: string;
@@ -61,6 +61,7 @@ interface ParsedBlock {
   rows?: string[][];
   items?: string[];
   badges?: { label: string; value: string }[];
+  summary?: string;
 }
 
 function parseMarkdown(text: string): ParsedBlock[] {
@@ -92,8 +93,46 @@ function parseMarkdown(text: string): ParsedBlock[] {
     }
   };
 
+  let inDetails = false;
+  let detailsSummary = "";
+  let detailsContent: string[] = [];
+
+  const flushDetails = () => {
+    if (inDetails && detailsSummary) {
+      // Recursively parse inner content
+      const innerText = detailsContent.join("\n");
+      blocks.push({ type: "collapsible", content: innerText, summary: detailsSummary });
+      inDetails = false;
+      detailsSummary = "";
+      detailsContent = [];
+    }
+  };
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    const trimmed = line.trim();
+
+    // Handle <details>/<summary> HTML blocks
+    if (trimmed.match(/^<details\b/i)) {
+      flushList(); flushTable();
+      inDetails = true;
+      detailsSummary = "";
+      detailsContent = [];
+      continue;
+    }
+    if (inDetails && trimmed.match(/^<summary\b/i)) {
+      detailsSummary = trimmed.replace(/<\/?summary[^>]*>/gi, "").trim();
+      continue;
+    }
+    if (inDetails && trimmed.match(/^<\/details>/i)) {
+      flushDetails();
+      continue;
+    }
+    if (inDetails) {
+      detailsContent.push(line);
+      continue;
+    }
+
     if (line.trimStart().startsWith("```")) {
       if (!inCodeBlock) {
         flushList(); flushTable();
@@ -107,8 +146,6 @@ function parseMarkdown(text: string): ParsedBlock[] {
       continue;
     }
     if (inCodeBlock) { codeBlockContent.push(line); continue; }
-
-    const trimmed = line.trim();
 
     if (isCalloutLine(line)) {
       flushList(); flushTable();
@@ -130,6 +167,24 @@ function parseMarkdown(text: string): ParsedBlock[] {
 
     const heading = parseHeadingLevel(line);
     if (heading) { flushList(); flushTable(); blocks.push({ type: "heading", content: heading.text, level: heading.level }); continue; }
+
+    // Also detect "▼ Details" / "► Details" style collapsible markers the AI sometimes outputs
+    const disclosureMatch = trimmed.match(/^[▶►▼▾]\s+(.+)$/);
+    if (disclosureMatch) {
+      flushList(); flushTable();
+      // Collect following indented/content lines until next disclosure or heading
+      const summary = disclosureMatch[1];
+      const innerLines: string[] = [];
+      while (i + 1 < lines.length) {
+        const nextTrimmed = lines[i + 1].trim();
+        if (nextTrimmed.match(/^[▶►▼▾]\s+/) || parseHeadingLevel(lines[i + 1]) || nextTrimmed.match(/^#{1,3}\s+/)) break;
+        if (nextTrimmed === "" && i + 2 < lines.length && (lines[i + 2].trim().match(/^[▶►▼▾]\s+/) || parseHeadingLevel(lines[i + 2]))) break;
+        innerLines.push(lines[i + 1]);
+        i++;
+      }
+      blocks.push({ type: "collapsible", content: innerLines.join("\n"), summary });
+      continue;
+    }
 
     if (trimmed.endsWith(":") && trimmed.length < 80 && !trimmed.startsWith("-") && !trimmed.startsWith("*")) {
       flushList(); flushTable();
@@ -251,6 +306,19 @@ export default function MarkdownRenderer({ content, isStreaming }: MarkdownRende
                 {block.language && <div className="px-4 py-2 text-xs text-slate-400 border-b border-slate-800 font-mono">{block.language}</div>}
                 <pre className="p-4 overflow-x-auto"><code className="text-sm text-slate-100 font-mono">{block.content}</code></pre>
               </div>
+            );
+
+          case "collapsible":
+            return (
+              <details key={i} className="my-2 rounded-lg border border-workspace-border/50 overflow-hidden group">
+                <summary className="flex items-center gap-2 px-4 py-2.5 cursor-pointer select-none bg-workspace-surface/40 hover:bg-workspace-surface/60 transition-colors text-sm font-semibold text-workspace-text">
+                  <span className="text-workspace-accent text-xs transition-transform group-open:rotate-90">▶</span>
+                  <span dangerouslySetInnerHTML={{ __html: applyInlineFormatting(block.summary || "Details") }} />
+                </summary>
+                <div className="px-4 py-3 border-t border-workspace-border/30">
+                  <MarkdownRenderer content={block.content} />
+                </div>
+              </details>
             );
 
           default:
