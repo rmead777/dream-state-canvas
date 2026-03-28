@@ -19,6 +19,7 @@ export function SherpaRail() {
   const [input, setInput] = useState('');
   const [isExpanded, setIsExpanded] = useState(true);
   const [showCanvasMenu, setShowCanvasMenu] = useState(false);
+  const [showRules, setShowRules] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [promptHistory, setPromptHistory] = useState<Array<{ query: string; response: string | null; timestamp: number }>>([]);
   const inputRef = useRef<HTMLInputElement>(null);
