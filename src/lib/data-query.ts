@@ -83,7 +83,7 @@ export function executeDataQuery(query: DataQuery): QueryResult {
 function applyFilter(
   rows: (string | number | null)[][],
   columns: string[],
-  filter: { column: string; operator?: string; value: string | number }
+  filter: { column: string; operator?: string; value: string | number | (string | number)[] }
 ): (string | number | null)[][] {
   const colIdx = columns.indexOf(filter.column);
   if (colIdx < 0) return rows;
@@ -101,6 +101,13 @@ function applyFilter(
       case 'lt': return parseNumeric(cellStr) < Number(val);
       case 'gte': return parseNumeric(cellStr) >= Number(val);
       case 'lte': return parseNumeric(cellStr) <= Number(val);
+      case 'in': {
+        // value is an array — check if cell matches any entry (case-insensitive, partial match)
+        const values = Array.isArray(val) ? val : [val];
+        const cellLower = cellStr.toLowerCase();
+        return values.some(v => cellLower.includes(String(v).toLowerCase()));
+      }
+      case 'not': return !cellStr.toLowerCase().includes(String(val).toLowerCase());
       default: return true;
     }
   });

@@ -82,8 +82,8 @@ export type CardSectionType = z.infer<typeof CardSection>;
 
 const FilterSchema = z.object({
   column: z.string(),
-  operator: z.enum(['equals', 'contains', 'gt', 'lt', 'gte', 'lte']).default('contains'),
-  value: z.union([z.string(), z.number()]),
+  operator: z.enum(['equals', 'contains', 'gt', 'lt', 'gte', 'lte', 'in', 'not']).default('contains'),
+  value: z.union([z.string(), z.number(), z.array(z.union([z.string(), z.number()]))]),
 });
 
 export const DataQuerySchema = z.object({
