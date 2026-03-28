@@ -11,8 +11,8 @@ import {
   SEED_BRIEF_DATA,
   SEED_TIMELINE_DATA,
   SEED_DOCUMENT_DATA,
-  CANONICAL_DATASET,
 } from './seed-data';
+import { getActiveDataset } from './active-dataset';
 import { callAI } from '@/hooks/useAI';
 import { analyzeDataset, refineProfile, getCurrentProfile, DataProfile } from './data-analyzer';
 import { previewRows, alertRows, metricAggregate, comparisonPairs } from './data-slicer';
@@ -22,7 +22,8 @@ let profilePromise: Promise<DataProfile> | null = null;
 
 function getProfile(): Promise<DataProfile> {
   if (!profilePromise) {
-    profilePromise = analyzeDataset(CANONICAL_DATASET.columns, CANONICAL_DATASET.rows);
+    const ds = getActiveDataset();
+    profilePromise = analyzeDataset(ds.columns, ds.rows);
   }
   return profilePromise;
 }
