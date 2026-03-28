@@ -77,10 +77,107 @@ function splitDocumentParagraphs(text: string): string[] {
     .slice(0, 120);
 }
 
+function stripMarkdownCodeFence(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith('```')) return trimmed;
+
+  const withoutOpeningFence = trimmed.replace(/^```[a-zA-Z0-9_-]*\s*/u, '');
+  return withoutOpeningFence.replace(/\s*```$/u, '').trim();
+}
+
+function extractBalancedJsonObject(value: string): string | null {
+  const start = value.indexOf('{');
+  if (start === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < value.length; i += 1) {
+    const char = value[i];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (char === '{') depth += 1;
+    if (char === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return value.slice(start, i + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
+interface ParsedDocumentPayload {
+  summary?: string;
+  extractedText?: string;
+  structuredInsights?: {
+    sections?: string[];
+  };
+}
+
+function parseDocumentPayload(raw: string): ParsedDocumentPayload | null {
+  const candidates = [raw.trim(), stripMarkdownCodeFence(raw)];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+
+    try {
+      const parsed = JSON.parse(candidate) as unknown;
+      if (typeof parsed === 'string') {
+        const reparsed = JSON.parse(parsed) as ParsedDocumentPayload;
+        return reparsed;
+      }
+      return parsed as ParsedDocumentPayload;
+    } catch {
+      const extracted = extractBalancedJsonObject(candidate);
+      if (!extracted) continue;
+
+      try {
+        return JSON.parse(extracted) as ParsedDocumentPayload;
+      } catch {
+        continue;
+      }
+    }
+  }
+
+  return null;
+}
+
 export function buildDocumentObjectContext(doc: DocumentRecord): DocumentObjectContext {
-  const paragraphs = splitDocumentParagraphs(doc.extracted_text || '');
-  const metadata = (doc.metadata || {}) as { aiSummary?: string };
-  const summary = metadata.aiSummary?.trim() || paragraphs[0] || 'No summary available.';
+  const metadata = (doc.metadata || {}) as { aiSummary?: string; summary?: string };
+  const parsedPayload = parseDocumentPayload(doc.extracted_text || '');
+  const normalizedText =
+    parsedPayload?.extractedText?.trim() ||
+    parsedPayload?.structuredInsights?.sections?.join('\n\n')?.trim() ||
+    (parsedPayload ? '' : doc.extracted_text || '');
+  const paragraphs = splitDocumentParagraphs(normalizedText || metadata.summary || '');
+  const summary =
+    metadata.aiSummary?.trim() ||
+    metadata.summary?.trim() ||
+    parsedPayload?.summary?.trim() ||
+    paragraphs[0] ||
+    'No summary available.';
 
   return {
     sourceDocId: doc.id,
