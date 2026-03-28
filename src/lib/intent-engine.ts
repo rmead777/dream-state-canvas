@@ -70,7 +70,7 @@ const SEED_DATA_BY_TYPE: Record<string, { data: Record<string, any>; defaultTitl
   brief: { data: SEED_BRIEF_DATA, defaultTitle: 'AP Risk Assessment' },
   timeline: { data: SEED_TIMELINE_DATA, defaultTitle: 'Vendor Activity' },
   document: { data: SEED_DOCUMENT_DATA, defaultTitle: 'AP Vendor Tracker v14' },
-  dataset: { data: CANONICAL_DATASET, defaultTitle: 'Full Portfolio Dataset' },
+  dataset: { data: getActiveDataset(), defaultTitle: 'Full Portfolio Dataset' },
 };
 
 /**
