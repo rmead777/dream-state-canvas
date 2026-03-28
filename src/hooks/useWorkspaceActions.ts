@@ -31,10 +31,10 @@ export function useWorkspaceActions() {
 
       try {
         const result = await parseIntentAI(query, state.objects, _documentIdsRef);
-        applyResult(result, origin);
+        await applyResult(result, origin);
       } catch {
         const result = await parseIntent(query, state.objects);
-        applyResult(result, origin);
+        await applyResult(result, origin);
       }
 
       dispatch({ type: 'SET_SHERPA_PROCESSING', payload: false });
