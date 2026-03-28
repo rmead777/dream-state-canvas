@@ -3,14 +3,20 @@
  * Adapted for workspace design language.
  */
 import { useMemo } from "react";
+import DOMPurify from "dompurify";
 
+/**
+ * Sanitized inline formatting — converts markdown-like syntax to HTML,
+ * then sanitizes through DOMPurify to prevent XSS from AI-generated content.
+ */
 function applyInlineFormatting(text: string): string {
-  return text
+  const html = text
     .replace(/`([^`]+)`/g, '<code class="bg-workspace-surface px-1.5 py-0.5 rounded text-xs font-mono">$1</code>')
     .replace(/\*\*([^*]+)\*\*/g, '<strong class="text-workspace-text font-semibold">$1</strong>')
     .replace(/\*([^*]+)\*/g, '<em>$1</em>')
     .replace(/(~?\$[\d,]+\.?\d*[kKmMbB]?)/g, '<strong class="text-emerald-600 dark:text-emerald-400 font-semibold">$1</strong>')
     .replace(/([\d.]+%)/g, '<strong class="text-blue-600 dark:text-blue-400 font-semibold">$1</strong>');
+  return DOMPurify.sanitize(html, { ALLOWED_TAGS: ['code', 'strong', 'em'], ALLOWED_ATTR: ['class'] });
 }
 
 const KNOWN_VALUES = new Set([
