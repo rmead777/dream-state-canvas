@@ -6,6 +6,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useCrossObjectBehavior } from '@/hooks/useCrossObjectBehavior';
 import { useAmbientSherpa } from '@/hooks/useAmbientSherpa';
 import { AmbientHint } from '@/components/workspace/AmbientHint';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { MetricDetail } from '@/components/objects/MetricDetail';
 import { ComparisonPanel } from '@/components/objects/ComparisonPanel';
 import { AlertRiskPanel } from '@/components/objects/AlertRiskPanel';
@@ -176,7 +177,9 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
       <div className={`px-5 pb-4 ${size.height ? 'overflow-y-auto flex-1 min-h-0' : ''}`}
         style={size.height ? { maxHeight: `calc(100% - 100px)` } : {}}
       >
-        <ObjectContent object={object} />
+        <ErrorBoundary label={object.title}>
+          <ObjectContent object={object} />
+        </ErrorBoundary>
 
         {/* Ambient Sherpa hints — contextual, inline */}
         {objectHints.map((h) => (
