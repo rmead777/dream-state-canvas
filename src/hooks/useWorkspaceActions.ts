@@ -101,43 +101,69 @@ export function useWorkspaceActions() {
                 return p;
               });
 
-              // Apply the instruction to regenerate data for the object type
+              // Use AI to parse instruction into structured filter params
+              const parseResult = await callAI(
+                [{ role: 'user', content: `Parse this instruction into filter parameters. Instruction: "${action.instruction}"\n\nReturn ONLY JSON:\n{\n  "limit": <number or null>,\n  "tierFilter": "<e.g. 'Tier 1' or null>",\n  "sortBy": "<column name or null>",\n  "sortDirection": "<'asc' or 'desc' or null>",\n  "textFilter": "<keyword to filter rows by, or null>"\n}` }],
+                'intent'
+              );
+
+              let limit: number | undefined;
+              let tierFilter: string | undefined;
+              let textFilter: string | undefined;
+
+              if (parseResult) {
+                try {
+                  const jsonMatch = parseResult.match(/\{[\s\S]*\}/);
+                  if (jsonMatch) {
+                    const parsed = JSON.parse(jsonMatch[0]);
+                    if (parsed.limit) limit = parsed.limit;
+                    if (parsed.tierFilter) tierFilter = parsed.tierFilter;
+                    if (parsed.textFilter) textFilter = parsed.textFilter;
+                  }
+                } catch { /* fall through to regex */ }
+              }
+
+              // Regex fallback
+              if (!limit) {
+                const limitMatch = action.instruction.toLowerCase().match(/(?:top|first|limit(?:\s+to)?)\s+(\d+)/);
+                if (limitMatch) limit = parseInt(limitMatch[1]);
+              }
+              if (!tierFilter) {
+                const tierMatch = action.instruction.match(/tier\s*(\d)/i);
+                if (tierMatch) tierFilter = `Tier ${tierMatch[1]}`;
+              }
+
+              // Helper: filter rows by tier and/or text, then limit
+              function applyFilters(sourceRows: string[][]): string[][] {
+                let filtered = sourceRows;
+                if (tierFilter && profile?.ordinalPriorityColumn) {
+                  const col = profile.ordinalPriorityColumn.column;
+                  const colIdx = columns.indexOf(col);
+                  if (colIdx >= 0) {
+                    filtered = filtered.filter(r => String(r[colIdx]).includes(tierFilter!));
+                  }
+                }
+                if (textFilter) {
+                  const lower = textFilter.toLowerCase();
+                  filtered = filtered.filter(r => r.some(cell => String(cell).toLowerCase().includes(lower)));
+                }
+                // Sort by profile rules first
+                const sorted = previewRows(columns, filtered, profile!, filtered.length);
+                const result = limit ? sorted.rows.slice(0, limit) : sorted.rows;
+                return result;
+              }
+
               let newContext: Record<string, any> = target.context;
-              const instruction = action.instruction.toLowerCase();
-
-              // Parse limit/top N instructions
-              const limitMatch = instruction.match(/(?:top|first|limit(?:\s+to)?)\s+(\d+)/);
-              const limit = limitMatch ? parseInt(limitMatch[1]) : undefined;
-
-              // Parse tier/filter instructions
-              const tierMatch = instruction.match(/tier\s*(\d)/i);
-              const tierFilter = tierMatch ? `Tier ${tierMatch[1]}` : undefined;
 
               switch (target.type) {
                 case 'inspector': {
-                  let filteredRows = rows;
-                  if (tierFilter && profile?.ordinalPriorityColumn) {
-                    const col = profile.ordinalPriorityColumn.column;
-                    const colIdx = columns.indexOf(col);
-                    if (colIdx >= 0) {
-                      filteredRows = rows.filter(r => String(r[colIdx]).includes(tierFilter));
-                    }
-                  }
-                  const preview = previewRows(columns, filteredRows, profile!, limit || 8);
-                  newContext = { columns: preview.columns, rows: preview.rows };
+                  const filteredRows = applyFilters(rows);
+                  newContext = { columns, rows: filteredRows };
                   break;
                 }
                 case 'dataset': {
-                  let filteredRows = rows;
-                  if (tierFilter && profile?.ordinalPriorityColumn) {
-                    const col = profile.ordinalPriorityColumn.column;
-                    const colIdx = columns.indexOf(col);
-                    if (colIdx >= 0) {
-                      filteredRows = rows.filter(r => String(r[colIdx]).includes(tierFilter));
-                    }
-                  }
-                  const sorted = previewRows(columns, filteredRows, profile!, limit || filteredRows.length);
-                  newContext = { columns: sorted.columns, rows: sorted.rows };
+                  const filteredRows = applyFilters(rows);
+                  newContext = { columns, rows: filteredRows };
                   break;
                 }
                 case 'alert': {
@@ -146,7 +172,7 @@ export function useWorkspaceActions() {
                     const col = profile.ordinalPriorityColumn.column;
                     const colIdx = columns.indexOf(col);
                     if (colIdx >= 0) {
-                      filteredRows = rows.filter(r => String(r[colIdx]).includes(tierFilter));
+                      filteredRows = filteredRows.filter(r => String(r[colIdx]).includes(tierFilter!));
                     }
                   }
                   const alerts = alertRows(columns, filteredRows, profile!);
@@ -160,14 +186,20 @@ export function useWorkspaceActions() {
                   break;
                 }
                 case 'brief': {
-                  // For briefs, use AI to regenerate with the instruction as context
+                  // Update BOTH table data and text content
+                  // If the brief has embedded table data, filter it
+                  if (target.context.columns && target.context.rows) {
+                    const filteredRows = applyFilters(rows);
+                    newContext = { ...target.context, columns, rows: filteredRows };
+                  }
+                  // Regenerate text via AI with the instruction
                   const briefResult = await callAI(
-                    [{ role: 'user', content: `Current brief context: ${JSON.stringify(target.context)}\n\nUser instruction: "${action.instruction}"\n\nRegenerate the brief content incorporating this change. Return ONLY markdown text, no JSON wrapper.` }],
+                    [{ role: 'user', content: `Current brief context: ${JSON.stringify({ ...target.context, rows: target.context.rows?.slice(0, 10) })}\n\nUser instruction: "${action.instruction}"\n\nRegenerate the brief content incorporating this change. The data has been filtered to ${limit ? `top ${limit}` : 'match the criteria'}. Return ONLY markdown text, no JSON wrapper.` }],
                     'brief',
                     _documentIdsRef
                   );
                   if (briefResult) {
-                    newContext = { ...target.context, content: briefResult };
+                    newContext = { ...newContext, content: briefResult };
                   }
                   break;
                 }
