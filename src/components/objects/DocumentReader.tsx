@@ -11,6 +11,131 @@ interface DocumentReaderProps {
   isImmersive?: boolean;
 }
 
+interface LegacyDocumentPayload {
+  summary?: string;
+  extractedText?: string;
+  structuredInsights?: {
+    sections?: string[];
+  };
+}
+
+function splitIntoParagraphs(text: string): string[] {
+  const normalized = text.replace(/\r/g, '').trim();
+  if (!normalized) return [];
+
+  const paragraphSplit = normalized
+    .split(/\n\s*\n+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (paragraphSplit.length >= 2) return paragraphSplit.slice(0, 120);
+
+  return normalized
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 120);
+}
+
+function stripMarkdownCodeFence(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith('```')) return trimmed;
+
+  const withoutOpeningFence = trimmed.replace(/^```[a-zA-Z0-9_-]*\s*/u, '');
+  return withoutOpeningFence.replace(/\s*```$/u, '').trim();
+}
+
+function extractBalancedJsonObject(value: string): string | null {
+  const start = value.indexOf('{');
+  if (start === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < value.length; i += 1) {
+    const char = value[i];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (char === '{') depth += 1;
+    if (char === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return value.slice(start, i + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
+function parseLegacyDocumentPayload(value: string): LegacyDocumentPayload | null {
+  const candidates = [value.trim(), stripMarkdownCodeFence(value)];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+
+    try {
+      return JSON.parse(candidate) as LegacyDocumentPayload;
+    } catch {
+      const extracted = extractBalancedJsonObject(candidate);
+      if (!extracted) continue;
+
+      try {
+        return JSON.parse(extracted) as LegacyDocumentPayload;
+      } catch {
+        continue;
+      }
+    }
+  }
+
+  return null;
+}
+
+function normalizeLegacyDocumentContent(summary: string, paragraphs: string[]) {
+  const raw = paragraphs.join('\n\n').trim();
+  const parsed = parseLegacyDocumentPayload(raw);
+
+  if (!parsed) {
+    return {
+      summary,
+      paragraphs,
+      hadLegacyPayload: false,
+    };
+  }
+
+  const normalizedParagraphs = parsed.extractedText?.trim()
+    ? splitIntoParagraphs(parsed.extractedText)
+    : Array.isArray(parsed.structuredInsights?.sections)
+      ? parsed.structuredInsights.sections.filter(Boolean)
+      : [];
+
+  return {
+    summary: parsed.summary?.trim() || summary,
+    paragraphs: normalizedParagraphs.length > 0 ? normalizedParagraphs : paragraphs,
+    hadLegacyPayload: true,
+  };
+}
+
 export function DocumentReader({ object, isImmersive = false }: DocumentReaderProps) {
   const { dispatch } = useWorkspace();
   const { documents } = useDocuments();
@@ -20,8 +145,9 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
   const [aiResponse, setAiResponse] = useState<string | null>(null);
   const [highlights, setHighlights] = useState<number[]>([]);
 
-  const paragraphs: string[] = d.paragraphs || [];
-  const summary: string = d.summary || '';
+  const normalizedContent = normalizeLegacyDocumentContent(d.summary || '', d.paragraphs || []);
+  const paragraphs: string[] = normalizedContent.paragraphs;
+  const summary: string = normalizedContent.summary;
   const fileName: string = d.fileName || object.title || 'Untitled Document';
   const fileType: string = d.fileType || '';
 
@@ -42,8 +168,9 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
       const fileChanged = d.fileName !== nextContext.fileName;
       const typeChanged = d.fileType !== nextContext.fileType;
       const missingContent = !Array.isArray(d.paragraphs) || d.paragraphs.length === 0;
+      const malformedContent = normalizedContent.hadLegacyPayload;
 
-      if (sourceChanged || fileChanged || typeChanged || missingContent) {
+      if (sourceChanged || fileChanged || typeChanged || missingContent || malformedContent) {
         dispatch({
           type: 'UPDATE_OBJECT_CONTEXT',
           payload: {
@@ -59,7 +186,7 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
     return () => {
       cancelled = true;
     };
-  }, [dispatch, documents, d, object.id, object.origin.query, object.title]);
+  }, [dispatch, documents, d, normalizedContent.hadLegacyPayload, object.id, object.origin.query, object.title]);
 
   const handleAsk = useCallback(async () => {
     if (!askInput.trim() || isStreaming) return;
