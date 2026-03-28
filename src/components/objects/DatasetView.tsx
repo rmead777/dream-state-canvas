@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { Columns } from 'lucide-react';
 import { WorkspaceObject } from '@/lib/workspace-types';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
@@ -182,14 +183,53 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-xl border border-workspace-border bg-white">
+      <VirtualizedTable
+        columns={visibleCols}
+        rows={filteredAndSorted}
+        sortCol={sortCol}
+        sortDir={sortDir}
+        onSort={handleSort}
+        getVisibleRow={getVisibleRow}
+      />
+    </div>
+  );
+}
+
+const ROW_HEIGHT = 44; // px per row for virtualizer estimation
+
+function VirtualizedTable({
+  columns,
+  rows,
+  sortCol,
+  sortDir,
+  onSort,
+  getVisibleRow,
+}: {
+  columns: string[];
+  rows: string[][];
+  sortCol: number | null;
+  sortDir: SortDir;
+  onSort: (idx: number) => void;
+  getVisibleRow: (row: string[]) => string[];
+}) {
+  const parentRef = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 10,
+  });
+
+  return (
+    <div className="rounded-xl border border-workspace-border bg-white overflow-hidden">
+      <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-workspace-border bg-workspace-surface/30">
-              {visibleCols.map((col, idx) => (
+              {columns.map((col, idx) => (
                 <th
                   key={col}
-                  onClick={() => handleSort(idx)}
+                  onClick={() => onSort(idx)}
                   className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wider text-workspace-text-secondary cursor-pointer transition-colors hover:text-workspace-text select-none whitespace-nowrap"
                 >
                   <span className="inline-flex items-center gap-1">
@@ -204,29 +244,47 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
               ))}
             </tr>
           </thead>
-          <tbody>
-            {filteredAndSorted.map((row, i) => {
-              const cells = getVisibleRow(row);
-              return (
-                <tr
-                  key={i}
-                  className={`transition-colors hover:bg-workspace-surface/30 ${
-                    i < filteredAndSorted.length - 1 ? 'border-b border-workspace-border/20' : ''
-                  }`}
-                >
-                  {cells.map((cell, j) => (
-                    <td
-                      key={j}
-                      className={`px-5 py-3 whitespace-nowrap ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary'}`}
-                    >
-                      <FormattedCell value={cell} />
-                    </td>
-                  ))}
-                </tr>
-              );
-            })}
-          </tbody>
         </table>
+      </div>
+      <div
+        ref={parentRef}
+        className="overflow-auto"
+        style={{ maxHeight: '60vh' }}
+      >
+        <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
+          <table className="w-full text-sm" style={{ position: 'absolute', top: 0, left: 0, right: 0 }}>
+            <tbody>
+              {virtualizer.getVirtualItems().map((virtualRow) => {
+                const row = rows[virtualRow.index];
+                const cells = getVisibleRow(row);
+                return (
+                  <tr
+                    key={virtualRow.index}
+                    className="transition-colors hover:bg-workspace-surface/30 border-b border-workspace-border/20"
+                    style={{
+                      height: `${virtualRow.size}px`,
+                      transform: `translateY(${virtualRow.start}px)`,
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      display: 'table-row',
+                    }}
+                  >
+                    {cells.map((cell, j) => (
+                      <td
+                        key={j}
+                        className={`px-5 py-3 whitespace-nowrap ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary'}`}
+                      >
+                        <FormattedCell value={cell} />
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
