@@ -140,7 +140,7 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
 
         {aiResponse && (
           <div className="mt-4 animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards] rounded-xl bg-workspace-surface/60 px-5 py-4">
-            <p className="text-sm leading-relaxed text-workspace-text whitespace-pre-wrap">{aiResponse}</p>
+            <MarkdownRenderer content={aiResponse} isStreaming={isStreaming} />
           </div>
         )}
       </div>
