@@ -434,8 +434,8 @@ Return ONLY valid JSON:
       title: typeof parsed.title === 'string' && parsed.title.trim() ? parsed.title : undefined,
       highlights: Array.isArray(parsed.highlights)
         ? parsed.highlights
-          .map((item: unknown) => ({ insight: String((item as { insight?: string }).insight || '').trim() }))
-            .filter((item: { insight: string }) => item.insight.length > 0)
+          .map((item: unknown) => ({ metric: String((item as { metric?: string }).metric || ''), insight: String((item as { insight?: string }).insight || '').trim() }))
+            .filter((item: { metric: string; insight: string }) => item.insight.length > 0)
         : undefined,
     };
   } catch (error) {
