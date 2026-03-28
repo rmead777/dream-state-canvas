@@ -70,6 +70,7 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
       className={`
         group relative rounded-xl border bg-white
         transition-all duration-500
+        ${size.height ? 'flex flex-col' : ''}
         ${isMaterializing
           ? 'animate-[materialize_0.4s_cubic-bezier(0.16,1,0.3,1)_forwards] opacity-0'
           : 'opacity-100'
@@ -85,7 +86,7 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
       `}
       style={{
         ...(size.width ? { width: size.width } : {}),
-        ...(size.height ? { height: size.height, overflow: 'auto' } : {}),
+        ...(size.height ? { height: size.height } : {}),
       }}
       onClick={() => focusObject(object.id)}
     >
@@ -146,8 +147,10 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
         </div>
       </div>
 
-      {/* Content */}
-      <div className="px-5 pb-4">
+      {/* Content — scrollable when height is constrained */}
+      <div className={`px-5 pb-4 ${size.height ? 'overflow-y-auto flex-1 min-h-0' : ''}`}
+        style={size.height ? { maxHeight: `calc(100% - 100px)` } : {}}
+      >
         <ObjectContent object={object} />
 
         {/* Ambient Sherpa hints — contextual, inline */}
@@ -196,9 +199,36 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
         </div>
       )}
 
-      {/* Resize handle — diagonal (both width + height) */}
+      {/* Bottom edge — vertical resize only */}
       <div
-        className="absolute bottom-0 right-0 w-5 h-5 cursor-nwse-resize opacity-0 group-hover:opacity-40 transition-opacity flex items-end justify-end pr-1 pb-1"
+        className="absolute bottom-0 inset-x-4 h-2 cursor-ns-resize opacity-0 group-hover:opacity-100 transition-opacity z-10"
+        title="Drag to resize height"
+        onMouseDown={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          const startY = e.clientY;
+          const rect = e.currentTarget.parentElement?.getBoundingClientRect();
+          const startH = rect?.height ?? 200;
+          const onMove = (ev: MouseEvent) => {
+            setSize((prev) => ({
+              width: prev.width,
+              height: Math.max(100, startH + ev.clientY - startY),
+            }));
+          };
+          const onUp = () => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+          };
+          window.addEventListener('mousemove', onMove);
+          window.addEventListener('mouseup', onUp);
+        }}
+      >
+        <div className="mx-auto w-8 h-1 rounded-full bg-workspace-text-secondary/20 mt-0.5" />
+      </div>
+
+      {/* Corner — diagonal resize (width + height) */}
+      <div
+        className="absolute bottom-0 right-0 w-5 h-5 cursor-nwse-resize opacity-0 group-hover:opacity-40 transition-opacity flex items-end justify-end pr-1 pb-1 z-20"
         title="Drag to resize"
         onMouseDown={(e) => {
           e.stopPropagation();
@@ -211,7 +241,7 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
           const onMove = (ev: MouseEvent) => {
             setSize({
               width: Math.max(280, startW + ev.clientX - startX),
-              height: Math.max(120, startH + ev.clientY - startY),
+              height: Math.max(100, startH + ev.clientY - startY),
             });
           };
           const onUp = () => {
@@ -226,6 +256,15 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
           <path d="M7 1L1 7M7 4L4 7M7 7L7 7" stroke="currentColor" strokeWidth="1" fill="none" />
         </svg>
       </div>
+
+      {/* Double-click bottom edge to reset height */}
+      <div
+        className="absolute bottom-0 inset-x-0 h-1 z-[5]"
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          setSize((prev) => ({ width: prev.width, height: null }));
+        }}
+      />
     </div>
   );
 }

@@ -272,7 +272,9 @@ function DraggableFreeformObject({
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       const target = e.target as HTMLElement;
+      // Only start drag from the freeform handle area, but not from buttons/inputs
       if (!target.closest('[data-freeform-handle]')) return;
+      if (target.closest('button') || target.closest('input') || target.closest('a')) return;
 
       e.preventDefault();
       setDragging(true);
@@ -344,7 +346,8 @@ function DraggableFreeformObject({
           }}
         />
       )}
-      <div data-freeform-handle className="absolute inset-x-0 top-0 h-12 cursor-grab active:cursor-grabbing z-20" />
+      {/* Drag handle covers the entire header area — use data attribute for detection */}
+      <div data-freeform-handle className="absolute inset-x-0 top-0 h-14 cursor-grab active:cursor-grabbing z-20 rounded-t-xl" />
       <WorkspaceObjectWrapper object={object} />
     </div>
   );
