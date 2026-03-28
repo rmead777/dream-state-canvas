@@ -293,6 +293,13 @@ Generate a worst-case scenario.
 Return JSON matching the ProductionRiskData schema.`,
     };
 
+    // Admin: list all prompt modes and their content
+    if (mode === '__list-prompts') {
+      return new Response(JSON.stringify({ prompts: systemPrompts }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Use admin prompt override if provided, otherwise server default
     let systemPrompt = (promptOverride && typeof promptOverride === 'string')
       ? promptOverride

@@ -3,7 +3,10 @@
  * All operations are non-blocking and degrade gracefully on failure.
  */
 import { supabase } from '@/integrations/supabase/client';
-import { SherpaMemory, MemoryTrigger, MemoryType, MemorySource } from './memory-types';
+import type { SherpaMemory, MemoryTrigger, MemoryType, MemorySource } from './memory-types';
+
+// Use type assertion to work with the sherpa_memories table that isn't in generated types yet
+const db = supabase as any;
 
 // ─── Row ↔ Model Mapping ────────────────────────────────────────────────────
 
