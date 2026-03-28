@@ -44,6 +44,8 @@ interface UpdateParams {
   target: WorkspaceObject;
   instruction: string;
   documentIds: string[];
+  dataQuery?: any;
+  sections?: any[];
   sectionOperations?: { op: string; section?: CardSectionType; sectionIndex?: number; dataQuery?: any }[];
 }
 
@@ -79,7 +81,41 @@ type UpdatePlan = z.infer<typeof UpdatePlanSchema>;
 /**
  * Parse a user instruction into a structured update plan, then apply it.
  */
-export async function handleUpdate({ target, instruction, documentIds, sectionOperations }: UpdateParams): Promise<HandlerResult> {
+export async function handleUpdate({ target, instruction, documentIds, dataQuery, sections, sectionOperations }: UpdateParams): Promise<HandlerResult> {
+  // FAST PATH: If the AI already provided a dataQuery, apply it directly — no second AI call needed
+  if (dataQuery) {
+    const result = executeDataQuery(dataQuery);
+    const newContext = {
+      ...target.context,
+      columns: result.columns,
+      rows: result.rows,
+      dataQuery,
+      queryMeta: { totalMatched: result.totalMatched, truncated: result.truncated },
+    };
+    return {
+      dispatches: [
+        { type: 'UPDATE_OBJECT_CONTEXT', payload: { id: target.id, context: newContext } },
+        { type: 'TOUCH_OBJECT', payload: { id: target.id } },
+        { type: 'FOCUS_OBJECT', payload: { id: target.id } },
+        { type: 'SET_SHERPA_RESPONSE', payload: `Updated "${target.title}" — ${instruction}.` },
+      ],
+    };
+  }
+
+  // FAST PATH: If the AI provided replacement sections, apply directly
+  if (sections && sections.length > 0) {
+    const { validateSections } = await import('./card-schema');
+    const validSections = validateSections(sections);
+    return {
+      dispatches: [
+        { type: 'UPDATE_OBJECT_CONTEXT', payload: { id: target.id, context: { ...target.context, sections: validSections } } },
+        { type: 'TOUCH_OBJECT', payload: { id: target.id } },
+        { type: 'FOCUS_OBJECT', payload: { id: target.id } },
+        { type: 'SET_SHERPA_RESPONSE', payload: `Updated "${target.title}" — ${instruction}.` },
+      ],
+    };
+  }
+
   // Handle section-level operations on analysis cards
   if (sectionOperations && target.context?.sections) {
     const sections: CardSectionType[] = [...target.context.sections];

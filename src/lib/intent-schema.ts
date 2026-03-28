@@ -44,6 +44,8 @@ export const UpdateActionSchema = z.object({
   type: z.literal('update'),
   objectId: z.string().min(1),
   instruction: z.string().min(1),
+  dataQuery: DataQuerySchema.optional(),
+  sections: z.array(CardSection).optional(),
   sectionOperations: z.array(SectionOperationSchema).optional(),
 });
 
