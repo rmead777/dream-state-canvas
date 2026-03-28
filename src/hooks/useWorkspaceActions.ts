@@ -17,6 +17,10 @@ let objectCounter = 0;
 export function useWorkspaceActions() {
   const { state, dispatch } = useWorkspace();
 
+  const setDocumentIds = useCallback((ids: string[]) => {
+    _documentIdsRef = ids;
+  }, []);
+
   const processIntent = useCallback(
     async (query: string) => {
       dispatch({ type: 'SET_SHERPA_PROCESSING', payload: true });
@@ -25,11 +29,9 @@ export function useWorkspaceActions() {
       dispatch({ type: 'ADD_RECENT_INTENT', payload: origin });
 
       try {
-        // Try AI-powered intent parsing first
-        const result = await parseIntentAI(query, state.objects);
+        const result = await parseIntentAI(query, state.objects, _documentIdsRef);
         applyResult(result, origin);
       } catch {
-        // Fallback to keyword matching
         const result = await parseIntent(query, state.objects);
         applyResult(result, origin);
       }

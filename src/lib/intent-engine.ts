@@ -126,7 +126,8 @@ async function getDynamicData(objectType: string): Promise<Record<string, any>> 
  */
 export async function parseIntentAI(
   input: string,
-  existingObjects: Record<string, WorkspaceObject> = {}
+  existingObjects: Record<string, WorkspaceObject> = {},
+  documentIds?: string[]
 ): Promise<IntentResult> {
   try {
     const context = buildWorkspaceContext(existingObjects);
@@ -137,7 +138,8 @@ export async function parseIntentAI(
           content: `Workspace context:\n${context}\n\nUser query: "${input}"`,
         },
       ],
-      'intent'
+      'intent',
+      documentIds
     );
 
     if (!result) throw new Error('No AI response');
