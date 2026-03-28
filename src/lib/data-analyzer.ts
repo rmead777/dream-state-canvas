@@ -14,6 +14,13 @@ export interface DataProfile {
   groupByColumn?: string;            // categorical grouping (tier, team, region)
 
   /**
+   * AI-selected display columns — the most important/digestible columns to show
+   * by default in table views. Users can expand to see all columns.
+   * Should be 4-7 columns that tell the most important story.
+   */
+  displayColumns?: string[];
+
+  /**
    * Ordinal priority column — a column whose values represent an explicit
    * ranking hierarchy defined by the data itself (e.g. "Tier 1 — Act Now" > "Tier 2 — Unblock").
    * When present, rows are sorted by rankOrder FIRST, then by measure within each rank.
@@ -186,6 +193,9 @@ function buildFallbackProfile(columns: string[], rows: string[][]): DataProfile 
   const measureIdx = columns.indexOf(measureCol);
   const hasCurrency = rows.some(r => r[measureIdx]?.startsWith('$'));
 
+  // Build display columns — pick the most important ones heuristically
+  const displayColumns = buildFallbackDisplayColumns(columns, idCol, measureCol, groupCol, urgencyCol);
+
   return {
     domain: 'general',
     primaryIdColumn: idCol,
@@ -193,6 +203,7 @@ function buildFallbackProfile(columns: string[], rows: string[][]): DataProfile 
     measureFormat: hasCurrency ? 'currency' : 'number',
     sortDirection: 'desc',
     groupByColumn: groupCol,
+    displayColumns,
     ordinalPriorityColumn: ordinalPriority,
     urgencySignal: urgencyCol ? { column: urgencyCol, hotValues } : undefined,
     previewStrategy: ordinalPriority
@@ -205,6 +216,48 @@ function buildFallbackProfile(columns: string[], rows: string[][]): DataProfile 
       comparison: { contrastColumn: groupCol || columns[0] },
     },
   };
+}
+
+/**
+ * Pick 4-7 display columns heuristically for the fallback case.
+ */
+function buildFallbackDisplayColumns(
+  columns: string[],
+  idCol: string,
+  measureCol: string,
+  groupCol?: string,
+  urgencyCol?: string
+): string[] {
+  const picked = new Set<string>();
+  picked.add(idCol);
+  if (groupCol) picked.add(groupCol);
+  if (urgencyCol && urgencyCol !== groupCol) picked.add(urgencyCol);
+  picked.add(measureCol);
+
+  // Add a few more columns that seem high-signal, skip verbose ones
+  for (const col of columns) {
+    if (picked.size >= 7) break;
+    if (picked.has(col)) continue;
+    const lower = col.toLowerCase();
+    // Skip verbose/low-signal columns
+    if (/note|comment|detail|description|thread|reconcil|summary|narrative|history/i.test(lower)) continue;
+    // Prefer short-label columns
+    if (/contact|email|status|date|source|risk|type|category/i.test(lower)) {
+      picked.add(col);
+    }
+  }
+
+  // If still under 4, pad with remaining columns (skip verbose)
+  for (const col of columns) {
+    if (picked.size >= 5) break;
+    if (picked.has(col)) continue;
+    const lower = col.toLowerCase();
+    if (/note|comment|detail|description|thread|reconcil|summary|narrative|history/i.test(lower)) continue;
+    picked.add(col);
+  }
+
+  // Return in original column order
+  return columns.filter(c => picked.has(c));
 }
 
 /**
@@ -228,7 +281,7 @@ export async function analyzeDataset(
     const result = await callAI(
       [{
         role: 'user',
-        content: `Here is a dataset with ${rows.length} rows and ${columns.length} columns.\n\nColumns and sample rows:\n${tablePreview}\n\nAnalyze this dataset and return a JSON object with these fields:\n- "domain": string (what domain is this data about)\n- "primaryIdColumn": string (which column is the entity identifier)\n- "primaryMeasureColumn": string (the main numeric column to rank/sort by)\n- "measureFormat": "currency" | "number" | "percentage"\n- "sortDirection": "desc" | "asc"\n- "groupByColumn": string or null (categorical grouping column)\n- "ordinalPriorityColumn": { "column": string, "rankOrder": string[] } or null — CRITICAL: If any column represents an explicit priority/tier/rank hierarchy defined by the data (e.g. "Tier 1 — Act Now", "Priority: High"), you MUST identify it here. The rankOrder array must list values from HIGHEST priority to LOWEST. This column's rank order takes precedence over numeric sorting for previews.\n- "urgencySignal": { "column": string, "hotValues": string[] } or null (which column+values indicate urgency, hotValues ordered most to least urgent)\n- "previewStrategy": string (describe in one sentence how to pick the most important rows — if ordinalPriorityColumn exists, it must say rows are sorted by that column's rank first)\n- "cardRecommendations": { "metric": { "title": string, "aggregateColumn": string }, "alert": { "filterColumn": string, "filterValues": string[] }, "inspector": { "sortBy": string, "limit": number }, "comparison": { "contrastColumn": string } }\n\nReturn ONLY the JSON object, no markdown.`,
+        content: `Here is a dataset with ${rows.length} rows and ${columns.length} columns.\n\nColumns and sample rows:\n${tablePreview}\n\nAnalyze this dataset and return a JSON object with these fields:\n- "domain": string (what domain is this data about)\n- "primaryIdColumn": string (which column is the entity identifier)\n- "primaryMeasureColumn": string (the main numeric column to rank/sort by)\n- "measureFormat": "currency" | "number" | "percentage"\n- "sortDirection": "desc" | "asc"\n- "groupByColumn": string or null (categorical grouping column)\n- "displayColumns": string[] — CRITICAL: Select 4-7 of the most important columns that tell the clearest story at a glance. Include the entity name, priority/tier, main measure, and 2-3 other high-signal columns. Exclude verbose text columns (long notes, reconciliation details, email threads) and columns that are mostly empty or redundant. The goal is a scannable, digestible table — not a data dump.\n- "ordinalPriorityColumn": { "column": string, "rankOrder": string[] } or null — CRITICAL: If any column represents an explicit priority/tier/rank hierarchy defined by the data (e.g. "Tier 1 — Act Now", "Priority: High"), you MUST identify it here. The rankOrder array must list values from HIGHEST priority to LOWEST. This column's rank order takes precedence over numeric sorting for previews.\n- "urgencySignal": { "column": string, "hotValues": string[] } or null (which column+values indicate urgency, hotValues ordered most to least urgent)\n- "previewStrategy": string (describe in one sentence how to pick the most important rows — if ordinalPriorityColumn exists, it must say rows are sorted by that column's rank first)\n- "cardRecommendations": { "metric": { "title": string, "aggregateColumn": string }, "alert": { "filterColumn": string, "filterValues": string[] }, "inspector": { "sortBy": string, "limit": number }, "comparison": { "contrastColumn": string } }\n\nReturn ONLY the JSON object, no markdown.`,
       }],
       'analyze-schema'
     );
