@@ -1,5 +1,5 @@
 import { WorkspaceObject, Suggestion } from './workspace-types';
-import { CANONICAL_DATASET } from './seed-data';
+import { getActiveDataset } from './active-dataset';
 import { getCurrentProfile, DataProfile } from './data-analyzer';
 import { detectCrossTierAnomalies, describeRankingLogic } from './data-slicer';
 
