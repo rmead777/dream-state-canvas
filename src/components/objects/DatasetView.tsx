@@ -1,8 +1,10 @@
 import { useState, useMemo, useCallback } from 'react';
+import { Columns } from 'lucide-react';
 import { WorkspaceObject } from '@/lib/workspace-types';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useAI } from '@/hooks/useAI';
 import MarkdownRenderer from '@/components/objects/MarkdownRenderer';
+import { getDisplayColumns, filterRowToColumns } from '@/lib/smart-columns';
 
 interface DatasetViewProps {
   object: WorkspaceObject;
@@ -15,12 +17,17 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
   const { dispatch } = useWorkspace();
   const { streamChat, isStreaming } = useAI();
   const d = object.context;
-  const columns: string[] = d.columns || [];
+  const allColumns: string[] = d.columns || [];
   const rawRows: string[][] = d.rows || [];
   const [sortCol, setSortCol] = useState<number | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>(null);
   const [filterText, setFilterText] = useState('');
   const [aiInsight, setAiInsight] = useState<string | null>(null);
+  const [showAllCols, setShowAllCols] = useState(false);
+
+  const smartCols = useMemo(() => getDisplayColumns(allColumns, rawRows), [allColumns, rawRows]);
+  const needsExpand = allColumns.length > smartCols.length;
+  const visibleCols = showAllCols ? allColumns : smartCols;
 
   const handleSort = (colIdx: number) => {
     if (sortCol === colIdx) {
@@ -39,41 +46,47 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
       rows = rows.filter((r) => r.some((c) => c.toLowerCase().includes(lower)));
     }
     if (sortCol !== null && sortDir) {
-      rows = [...rows].sort((a, b) => {
-        const av = a[sortCol] ?? '';
-        const bv = b[sortCol] ?? '';
-        const cmp = av.localeCompare(bv, undefined, { numeric: true });
-        return sortDir === 'asc' ? cmp : -cmp;
-      });
+      // Sort is relative to visible columns
+      const realIdx = allColumns.indexOf(visibleCols[sortCol]);
+      if (realIdx >= 0) {
+        rows = [...rows].sort((a, b) => {
+          const av = a[realIdx] ?? '';
+          const bv = b[realIdx] ?? '';
+          const cmp = av.localeCompare(bv, undefined, { numeric: true });
+          return sortDir === 'asc' ? cmp : -cmp;
+        });
+      }
     }
     return rows;
-  }, [rawRows, sortCol, sortDir, filterText]);
+  }, [rawRows, sortCol, sortDir, filterText, allColumns, visibleCols]);
+
+  const getVisibleRow = useCallback(
+    (row: string[]) => (showAllCols ? row : filterRowToColumns(row, allColumns, smartCols)),
+    [showAllCols, allColumns, smartCols]
+  );
 
   const handleGenerateInsight = useCallback(async () => {
     if (isStreaming) return;
     setAiInsight('');
-
-    const tableStr = [columns.join(' | '), ...rawRows.map((r) => r.join(' | '))].join('\n');
-
+    const tableStr = [allColumns.join(' | '), ...rawRows.slice(0, 30).map((r) => r.join(' | '))].join('\n');
     await streamChat(
       [{ role: 'user', content: `Analyze this dataset and provide 2-3 key insights:\n\n${tableStr}` }],
-      {
-        mode: 'dataset',
-        onDelta: (text) => setAiInsight((prev) => (prev || '') + text),
-      }
+      { mode: 'dataset', onDelta: (text) => setAiInsight((prev) => (prev || '') + text) }
     );
-  }, [isStreaming, streamChat, columns, rawRows]);
+  }, [isStreaming, streamChat, allColumns, rawRows]);
 
   const handleEnterImmersive = () => {
     dispatch({ type: 'ENTER_IMMERSIVE', payload: { id: object.id } });
   };
 
+  /* ── Compact preview (non-immersive) ── */
   if (!isImmersive) {
+    const previewCols = smartCols.slice(0, 4);
     return (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-xs text-workspace-text-secondary">
-            {rawRows.length} rows · {columns.length} columns
+            {rawRows.length} rows · {allColumns.length} columns
           </span>
           <button
             onClick={handleEnterImmersive}
@@ -86,26 +99,29 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-workspace-border bg-workspace-surface/50">
-                {columns.slice(0, 4).map((col) => (
+                {previewCols.map((col) => (
                   <th key={col} className="px-3 py-2 text-left font-medium uppercase tracking-wider text-workspace-text-secondary">
                     {col}
                   </th>
                 ))}
-                {columns.length > 4 && (
-                  <th className="px-3 py-2 text-left text-workspace-text-secondary/40">+{columns.length - 4}</th>
+                {allColumns.length > 4 && (
+                  <th className="px-3 py-2 text-left text-workspace-text-secondary/40">+{allColumns.length - 4}</th>
                 )}
               </tr>
             </thead>
             <tbody>
-              {rawRows.slice(0, 3).map((row, i) => (
-                <tr key={i} className={i < 2 ? 'border-b border-workspace-border/30' : ''}>
-                  {row.slice(0, 4).map((cell, j) => (
-                    <td key={j} className={`px-3 py-2 ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary'}`}>
-                      {cell}
-                    </td>
-                  ))}
-                </tr>
-              ))}
+              {rawRows.slice(0, 3).map((row, i) => {
+                const cells = filterRowToColumns(row, allColumns, previewCols);
+                return (
+                  <tr key={i} className={i < 2 ? 'border-b border-workspace-border/30' : ''}>
+                    {cells.map((cell, j) => (
+                      <td key={j} className={`px-3 py-2 ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary'}`}>
+                        {cell}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -113,6 +129,7 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
     );
   }
 
+  /* ── Immersive full view ── */
   return (
     <div className="px-8 py-8">
       <div className="flex items-center justify-between mb-6">
@@ -128,11 +145,20 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
             />
           </div>
           <span className="text-xs text-workspace-text-secondary">
-            {filteredAndSorted.length} of {rawRows.length} rows
+            {filteredAndSorted.length} of {rawRows.length} rows · {visibleCols.length} of {allColumns.length} cols
           </span>
         </div>
 
         <div className="flex items-center gap-2">
+          {needsExpand && (
+            <button
+              onClick={() => setShowAllCols(!showAllCols)}
+              className="flex items-center gap-1.5 rounded-lg border border-workspace-border px-3 py-2 text-xs text-workspace-text-secondary transition-colors hover:bg-workspace-surface hover:text-workspace-text"
+            >
+              <Columns className="h-3.5 w-3.5" />
+              {showAllCols ? 'Smart columns' : `All ${allColumns.length} columns`}
+            </button>
+          )}
           <button
             onClick={handleGenerateInsight}
             disabled={isStreaming}
@@ -156,15 +182,15 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-xl border border-workspace-border bg-white">
+      <div className="overflow-x-auto rounded-xl border border-workspace-border bg-white">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-workspace-border bg-workspace-surface/30">
-              {columns.map((col, idx) => (
+              {visibleCols.map((col, idx) => (
                 <th
                   key={col}
                   onClick={() => handleSort(idx)}
-                  className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wider text-workspace-text-secondary cursor-pointer transition-colors hover:text-workspace-text select-none"
+                  className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wider text-workspace-text-secondary cursor-pointer transition-colors hover:text-workspace-text select-none whitespace-nowrap"
                 >
                   <span className="inline-flex items-center gap-1">
                     {col}
@@ -179,38 +205,49 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
             </tr>
           </thead>
           <tbody>
-            {filteredAndSorted.map((row, i) => (
-              <tr
-                key={i}
-                className={`transition-colors hover:bg-workspace-surface/30 ${
-                  i < filteredAndSorted.length - 1 ? 'border-b border-workspace-border/20' : ''
-                }`}
-              >
-                {row.map((cell, j) => (
-                  <td
-                    key={j}
-                    className={`px-5 py-3 ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary'}`}
-                  >
-                    {cell === 'Watch' ? (
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">{cell}</span>
-                    ) : cell === 'High' ? (
-                      <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-700">{cell}</span>
-                    ) : cell === 'Low' ? (
-                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">{cell}</span>
-                    ) : cell === 'Medium' ? (
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">{cell}</span>
-                    ) : cell === 'Active' ? (
-                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">{cell}</span>
-                    ) : (
-                      cell
-                    )}
-                  </td>
-                ))}
-              </tr>
-            ))}
+            {filteredAndSorted.map((row, i) => {
+              const cells = getVisibleRow(row);
+              return (
+                <tr
+                  key={i}
+                  className={`transition-colors hover:bg-workspace-surface/30 ${
+                    i < filteredAndSorted.length - 1 ? 'border-b border-workspace-border/20' : ''
+                  }`}
+                >
+                  {cells.map((cell, j) => (
+                    <td
+                      key={j}
+                      className={`px-5 py-3 whitespace-nowrap ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary'}`}
+                    >
+                      <FormattedCell value={cell} />
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
     </div>
   );
+}
+
+function FormattedCell({ value }: { value: string }) {
+  if (!value || typeof value !== 'string') return <span>{value}</span>;
+  const badges: Record<string, string> = {
+    'Watch': 'bg-amber-100 text-amber-700',
+    'High': 'bg-red-100 text-red-700',
+    'Critical': 'bg-red-100 text-red-700',
+    'Low': 'bg-emerald-100 text-emerald-700',
+    'Medium': 'bg-amber-100 text-amber-700',
+    'Active': 'bg-emerald-100 text-emerald-700',
+  };
+  if (badges[value]) {
+    return <span className={`rounded-full px-2 py-0.5 text-xs ${badges[value]}`}>{value}</span>;
+  }
+  // Truncate very long cells in table view
+  if (value.length > 60) {
+    return <span title={value}>{value.slice(0, 57)}…</span>;
+  }
+  return <span>{value}</span>;
 }
