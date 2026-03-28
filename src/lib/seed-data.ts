@@ -1,6 +1,6 @@
 // Real data extracted from INCOA AP Vendor Tracker v14 (March 27, 2026)
 
-export const MOCK_LEVERAGE_DATA = {
+export const SEED_LEVERAGE_DATA = {
   currentValue: 2770713,
   unit: '$',
   trend: 'increasing',
@@ -18,7 +18,7 @@ export const MOCK_LEVERAGE_DATA = {
   ],
 };
 
-export const MOCK_COMPARISON_DATA = {
+export const SEED_COMPARISON_DATA = {
   entities: [
     {
       name: 'Acme-Hardesty',
@@ -49,7 +49,7 @@ export const MOCK_COMPARISON_DATA = {
   ],
 };
 
-export const MOCK_ALERT_DATA = {
+export const SEED_ALERT_DATA = {
   alerts: [
     {
       id: 'a1',
@@ -142,7 +142,7 @@ export const MOCK_ALERT_DATA = {
   ],
 };
 
-export const MOCK_INSPECTOR_DATA = {
+export const SEED_INSPECTOR_DATA = {
   columns: ['Vendor', 'Balance', 'Tier', 'Last Contact', 'Category', 'Status'],
   rows: [
     ['CSX Transportation', '$523,216', 'Monitor', '217d', 'Logistics/Shipping (Rail Freig', 'Active'],
@@ -156,7 +156,7 @@ export const MOCK_INSPECTOR_DATA = {
   ],
 };
 
-export const MOCK_BRIEF_DATA = {
+export const SEED_BRIEF_DATA = {
   title: 'AP Risk Assessment — INCOA Performance Minerals',
   generatedAt: Date.now(),
   content: `Total accounts payable stands at $2.77M across 191 vendors. Five Tier 1 vendors ($158K) require immediate action:
@@ -176,7 +176,7 @@ Tier 3 contains the largest dollar exposure ($1.83M) led by CSX Transportation (
   sources: ['QuickBooks AP Aging (3/26/2026)', 'Vendor Email Analysis', 'Payment History Cross-Reference'],
 };
 
-export const MOCK_TIMELINE_DATA = {
+export const SEED_TIMELINE_DATA = {
   events: [
     { id: 't1', timestamp: Date.now() - 86400000, type: 'system', content: 'Coverall Service suspension deadline: March 27 — $3,912 payment required' },
     { id: 't2', timestamp: Date.now() - 864000000, type: 'user', content: 'CFO Holly Johnson contacted Vac2Go (Don Pulford) — first response in 426 days' },
@@ -187,7 +187,7 @@ export const MOCK_TIMELINE_DATA = {
   ],
 };
 
-export const MOCK_DOCUMENT_DATA = {
+export const SEED_DOCUMENT_DATA = {
   fileName: 'INCOA AP Vendor Tracker v14.xlsx',
   summary: 'Consolidated view of all outstanding vendor payables for INCOA Performance Minerals, reconciled against QuickBooks aging and vendor email communications. Total AP of $2.77M across 191 vendors with 5 Tier 1 urgent vendors requiring immediate action totaling $158K.',
   paragraphs: [
@@ -200,7 +200,7 @@ export const MOCK_DOCUMENT_DATA = {
   ],
 };
 
-export const MOCK_DATASET_DATA = {
+export const CANONICAL_DATASET = {
   columns: ['Vendor', 'Priority Tier', 'Balance', 'Days Silent', 'Emails', 'Risk Category', 'Contact'],
   rows: [
     ['CSX Transportation', 'Tier 3 — Monitor', '$523,216', '217', '14', 'Logistics/Shipping (Rail Freight) — Oper', 'CSXT_CashApp; Cabay, Brad; Daniell, Rachel'],

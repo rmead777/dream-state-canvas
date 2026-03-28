@@ -1,5 +1,5 @@
 import { WorkspaceObject, Suggestion } from './workspace-types';
-import { DEFAULT_SUGGESTIONS } from './mock-data';
+import { DEFAULT_SUGGESTIONS } from './seed-data';
 
 /**
  * System-level Sherpa intelligence — observes workspace state

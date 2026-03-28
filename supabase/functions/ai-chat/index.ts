@@ -66,6 +66,29 @@ RULES:
 predict what the user is likely to need next. Return JSON:
 { "predictions": [{ "objectType": "...", "title": "...", "reason": "..." }] }
 Return 1-2 predictions max.`,
+
+      'analyze-schema': `You are a data analyst. You receive column names and sample rows from a dataset.
+Your job: analyze the schema and values to determine how to prioritize rows for preview displays.
+You must be domain-agnostic — this could be financial data, sports stats, scientific measurements, etc.
+
+Return ONLY a JSON object with these fields:
+- "domain": string (what domain this data is about)
+- "primaryIdColumn": string (which column is the entity identifier)
+- "primaryMeasureColumn": string (the main numeric column to rank/sort by)
+- "measureFormat": "currency" | "number" | "percentage"
+- "sortDirection": "desc" | "asc"
+- "groupByColumn": string or null (categorical grouping column)
+- "urgencySignal": { "column": string, "hotValues": string[] } or null
+- "previewStrategy": string (one sentence: how to pick the most important rows)
+- "cardRecommendations": {
+    "metric": { "title": string, "aggregateColumn": string },
+    "alert": { "filterColumn": string, "filterValues": string[] },
+    "inspector": { "sortBy": string, "limit": number },
+    "comparison": { "contrastColumn": string }
+  }
+
+For urgencySignal.hotValues, order them from most urgent to least urgent.
+Return ONLY the JSON, no markdown fences.`,
     };
 
     const systemPrompt = systemPrompts[mode] || systemPrompts.intent;

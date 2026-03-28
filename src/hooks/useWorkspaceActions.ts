@@ -25,7 +25,7 @@ export function useWorkspaceActions() {
         applyResult(result, origin);
       } catch {
         // Fallback to keyword matching
-        const result = parseIntent(query, state.objects);
+        const result = await parseIntent(query, state.objects);
         applyResult(result, origin);
       }
 
