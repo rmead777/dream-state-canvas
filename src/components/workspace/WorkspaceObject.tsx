@@ -70,6 +70,7 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
       className={`
         group relative rounded-xl border bg-white
         transition-all duration-500
+        ${size.height ? 'flex flex-col' : ''}
         ${isMaterializing
           ? 'animate-[materialize_0.4s_cubic-bezier(0.16,1,0.3,1)_forwards] opacity-0'
           : 'opacity-100'
