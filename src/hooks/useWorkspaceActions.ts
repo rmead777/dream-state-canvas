@@ -135,7 +135,7 @@ export function useWorkspaceActions() {
               const updatedProfile = await refineDataRules(action.feedback);
               
               // Refresh all data-derived objects with new rules
-              const { columns, rows } = CANONICAL_DATASET;
+              const { columns, rows } = getActiveDataset();
               const dataObjects = Object.values(state.objects).filter(
                 o => ['metric', 'inspector', 'alert', 'comparison'].includes(o.type) && o.status !== 'dissolved'
               );
