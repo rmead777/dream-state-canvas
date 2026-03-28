@@ -49,7 +49,7 @@ const PROVIDERS: Record<Provider, ProviderConfig> = {
   },
 };
 
-const DEFAULT_MODEL = 'google/gemini-3-flash-preview';
+const DEFAULT_MODEL = 'google/gemini-2.5-flash';
 
 interface Message {
   role: string;
