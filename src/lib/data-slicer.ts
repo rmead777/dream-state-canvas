@@ -310,29 +310,92 @@ export function comparisonPairs(
   const measureIdx = getColumnIndex(columns, profile.primaryMeasureColumn);
   const idIdx = getColumnIndex(columns, profile.primaryIdColumn);
 
-  const sorted = sortRows(rows, columns, profile);
-  const nonZero = sorted.filter(r => parseNumeric(r[measureIdx]) > 0);
-
-  const top = nonZero[0];
-  const mid = nonZero[Math.floor(nonZero.length / 2)] || nonZero[1] || nonZero[0];
-
-  if (!top || !mid) {
-    return { entities: [], highlights: [] };
-  }
-
   const buildMetrics = (row: string[]): Record<string, string> => {
     const metrics: Record<string, string> = {};
     columns.forEach((col, i) => { metrics[col] = row[i]; });
     return metrics;
   };
 
+  // When ordinal priority exists, compare the TOP entity from two different tiers
+  // This ensures we contrast across risk categories, not pick arbitrary midpoints
+  if (profile.ordinalPriorityColumn) {
+    const prioIdx = getColumnIndex(columns, profile.ordinalPriorityColumn.column);
+    const rankOrder = profile.ordinalPriorityColumn.rankOrder;
+
+    // Group rows by tier, sorted within each tier
+    const tierBuckets = new Map<string, string[][]>();
+    for (const rank of rankOrder) {
+      tierBuckets.set(rank.toLowerCase(), []);
+    }
+    for (const row of rows) {
+      const tier = row[prioIdx]?.toLowerCase() || '';
+      const bucket = tierBuckets.get(tier);
+      if (bucket) bucket.push(row);
+    }
+
+    // Sort each bucket by measure (descending) to find the top entity per tier
+    for (const [, bucket] of tierBuckets) {
+      bucket.sort((a, b) => parseNumeric(b[measureIdx]) - parseNumeric(a[measureIdx]));
+    }
+
+    // Pick top entity from the two highest-priority tiers that have data
+    const pickedRows: string[][] = [];
+    for (const rank of rankOrder) {
+      const bucket = tierBuckets.get(rank.toLowerCase());
+      if (bucket && bucket.length > 0 && pickedRows.length < 2) {
+        pickedRows.push(bucket[0]);
+      }
+    }
+
+    // Fallback: if only one tier has data, pick top two from that tier
+    if (pickedRows.length < 2) {
+      for (const rank of rankOrder) {
+        const bucket = tierBuckets.get(rank.toLowerCase());
+        if (bucket && bucket.length >= 2 && pickedRows.length < 2) {
+          if (pickedRows.length === 0) pickedRows.push(bucket[0]);
+          pickedRows.push(bucket[1]);
+        }
+      }
+    }
+
+    if (pickedRows.length >= 2) {
+      const [a, b] = pickedRows;
+      return {
+        entities: [
+          { name: a[idIdx], metrics: buildMetrics(a) },
+          { name: b[idIdx], metrics: buildMetrics(b) },
+        ],
+        highlights: [
+          {
+            metric: profile.ordinalPriorityColumn.column,
+            insight: `${a[idIdx]} (${a[prioIdx]}) vs ${b[idIdx]} (${b[prioIdx]}) — contrasting across risk tiers`,
+          },
+          {
+            metric: profile.primaryMeasureColumn,
+            insight: `${a[idIdx]} at ${a[measureIdx]} vs ${b[idIdx]} at ${b[measureIdx]}`,
+          },
+        ],
+      };
+    }
+  }
+
+  // Fallback: no ordinal priority — pick highest vs second-highest by measure
+  const sorted = sortRows(rows, columns, profile);
+  const nonZero = sorted.filter(r => parseNumeric(r[measureIdx]) > 0);
+  const top = nonZero[0];
+  const second = nonZero[1] || nonZero[0];
+
+  if (!top || !second) {
+    return { entities: [], highlights: [] };
+  }
+
   return {
     entities: [
       { name: top[idIdx], metrics: buildMetrics(top) },
-      { name: mid[idIdx], metrics: buildMetrics(mid) },
+      { name: second[idIdx], metrics: buildMetrics(second) },
     ],
     highlights: [
-      { metric: profile.primaryMeasureColumn, insight: `${top[idIdx]} leads at ${top[measureIdx]} vs ${mid[idIdx]} at ${mid[measureIdx]}` },
+      { metric: profile.primaryMeasureColumn, insight: `${top[idIdx]} leads at ${top[measureIdx]} vs ${second[idIdx]} at ${second[measureIdx]}` },
     ],
   };
 }
