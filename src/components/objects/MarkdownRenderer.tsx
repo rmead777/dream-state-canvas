@@ -48,7 +48,7 @@ function getBadgeColor(_label: string, value: string): string {
 }
 
 function parseHeadingLevel(line: string): { level: number; text: string } | null {
-  const match = line.match(/^(#{1,3})\s+(.+)$/);
+  const match = line.match(/^(#{1,6})\s+(.+)$/);
   return match ? { level: match[1].length, text: match[2] } : null;
 }
 
