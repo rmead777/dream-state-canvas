@@ -200,6 +200,19 @@ export function SherpaRail() {
           </div>
         )}
 
+        {/* Upload panel */}
+        {showUpload && (
+          <div className="pb-4 border-b border-workspace-border/30 mb-4">
+            <span className="text-[9px] uppercase tracking-widest text-workspace-text-secondary/40 block mb-2">
+              Upload Documents
+            </span>
+            <DocumentUpload onDocumentIngested={handleDocumentIngested} />
+            <p className="text-[9px] text-workspace-text-secondary/40 mt-2">
+              XLSX, CSV, PDF, DOCX, TXT, MD, Images
+            </p>
+          </div>
+        )}
+
         {/* Conversation history (optional) */}
         {showHistory && promptHistory.length > 0 && (
           <div className="space-y-3 pb-4 border-b border-workspace-border/30 mb-4">
