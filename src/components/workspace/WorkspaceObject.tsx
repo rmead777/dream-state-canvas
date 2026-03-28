@@ -115,6 +115,11 @@ export function WorkspaceObjectWrapper({ object, dragListeners }: { object: WO; 
         <div className="absolute inset-0 rounded-xl bg-workspace-accent/[0.02] animate-pulse pointer-events-none" />
       )}
 
+      {/* Sherpa focus flash */}
+      {showFocusFlash && (
+        <div className="pointer-events-none absolute inset-0 rounded-xl border border-workspace-accent/30 bg-workspace-accent-subtle/40 animate-enter" />
+      )}
+
       {/* Header — actions appear on hover only (anti-drift: no always-visible action bars) */}
       <div className="flex items-center justify-between px-5 pt-4 pb-3">
         <div className="flex items-center gap-2.5">
