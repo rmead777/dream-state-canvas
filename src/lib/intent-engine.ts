@@ -157,17 +157,36 @@ export async function parseIntentAI(
 
     // Build conversation history for follow-up awareness
     const history = getConversationMessages(contextWindow);
+    // Build focused-card context so the AI knows EXACTLY what the user is looking at
+    const focusedId = activeContext?.focusedObjectId;
+    const focusedObject = focusedId ? existingObjects[focusedId] : null;
+    let focusedCardHint = '';
+    if (focusedObject) {
+      const rowCount = Array.isArray(focusedObject.context?.rows) ? focusedObject.context.rows.length : null;
+      const currentLimit = focusedObject.context?.dataQuery?.limit || focusedObject.context?.view?.limit || null;
+      focusedCardHint = [
+        `\nFOCUSED CARD (the user is looking at this right now):`,
+        `  ID: ${focusedObject.id}`,
+        `  Type: ${focusedObject.type}`,
+        `  Title: "${focusedObject.title}"`,
+        rowCount !== null ? `  Currently showing: ${rowCount} rows` : null,
+        currentLimit ? `  Current limit: ${currentLimit}` : null,
+        `  → If the user says "this", "it", "the card", "show more", "filter", "change" — they mean THIS card.`,
+        `  → Use "update" with objectId "${focusedObject.id}" — NEVER use "refine-rules" or "create".`,
+      ].filter(Boolean).join('\n');
+    }
+
     const messages = [
       ...history,
       {
         role: 'user' as const,
         content: [
           'Resolve the user intent against the current workspace snapshot.',
-          'If the user says "this", "that", "it", or "current view", target the focused object first.',
-          'Prefer update or focus over create when an existing object can satisfy the request.',
+          'CRITICAL: If ANY existing card could satisfy the request, use "update" or "focus" — NEVER "create" a duplicate and NEVER "refine-rules" for a card-specific request.',
+          focusedCardHint,
           `Workspace intent payload:\n${context}`,
           `User query: "${input}"`,
-        ].join('\n\n'),
+        ].filter(Boolean).join('\n\n'),
       },
     ];
 
