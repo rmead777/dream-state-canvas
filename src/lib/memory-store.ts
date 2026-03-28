@@ -126,7 +126,7 @@ export async function getPendingMemories(userId: string): Promise<SherpaMemory[]
     .limit(5);
 
   if (error) return [];
-  return ((data || []) as MemoryRow[]).map(rowToMemory);
+  return ((data || []) as unknown as MemoryRow[]).map(rowToMemory);
 }
 
 export async function confirmMemory(id: string): Promise<void> {
