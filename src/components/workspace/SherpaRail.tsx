@@ -53,6 +53,7 @@ export function SherpaRail() {
   }, [contextMode, selectedDocIds, documents, setDocumentIds]);
 
   // handleDocumentIngested, handleCollapseAll, handleDissolveAll moved to WorkspaceBar
+  const activeObjectCount = Object.values(state.objects).filter(o => o.status !== 'dissolved').length;
 
   const trackAndProcess = useCallback((text: string) => {
     setPromptHistory(prev => [...prev, { query: text, response: null, timestamp: Date.now() }]);
