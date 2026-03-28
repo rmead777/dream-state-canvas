@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { DataProfile, getCurrentProfile, clearProfileCache } from '@/lib/data-analyzer';
-import { CANONICAL_DATASET } from '@/lib/seed-data';
+import { getActiveDataset } from '@/lib/active-dataset';
 import { refineDataRules, invalidateProfileCache } from '@/lib/intent-engine';
 import { describeRankingLogic } from '@/lib/data-slicer';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
@@ -15,12 +15,13 @@ export function RulesEditor({ onClose }: { onClose: () => void }) {
   const [customInstruction, setCustomInstruction] = useState('');
 
   useEffect(() => {
-    const p = getCurrentProfile(CANONICAL_DATASET.columns, CANONICAL_DATASET.rows);
+    const ds = getActiveDataset();
+    const p = getCurrentProfile(ds.columns, ds.rows);
     setProfile(p);
   }, []);
 
   const refreshCards = (updated: DataProfile) => {
-    const { columns, rows } = CANONICAL_DATASET;
+    const { columns, rows } = getActiveDataset();
     const dataObjects = Object.values(state.objects).filter(
       o => ['metric', 'inspector', 'alert', 'comparison'].includes(o.type) && o.status !== 'dissolved'
     );

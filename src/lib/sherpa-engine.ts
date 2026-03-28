@@ -1,5 +1,5 @@
 import { WorkspaceObject, Suggestion } from './workspace-types';
-import { CANONICAL_DATASET } from './seed-data';
+import { getActiveDataset } from './active-dataset';
 import { getCurrentProfile, DataProfile } from './data-analyzer';
 import { detectCrossTierAnomalies, describeRankingLogic } from './data-slicer';
 
@@ -165,7 +165,8 @@ function buildContextualSuggestions(
 export function generateSuggestions(
   objects: Record<string, WorkspaceObject>
 ): Suggestion[] {
-  const profile = getCurrentProfile(CANONICAL_DATASET.columns, CANONICAL_DATASET.rows);
+  const ds = getActiveDataset();
+  const profile = getCurrentProfile(ds.columns, ds.rows);
 
   const openObjects = Object.values(objects).filter(
     (o) => o.status === 'open' || o.status === 'materializing'
@@ -207,11 +208,12 @@ export function generateObservations(
   }
 
   // Cross-tier anomaly detection — surface in observations, NEVER re-rank
-  const profile = getCurrentProfile(CANONICAL_DATASET.columns, CANONICAL_DATASET.rows);
+  const ds2 = getActiveDataset();
+  const profile = getCurrentProfile(ds2.columns, ds2.rows);
   if (profile) {
     const anomalies = detectCrossTierAnomalies(
-      CANONICAL_DATASET.columns,
-      CANONICAL_DATASET.rows,
+      ds2.columns,
+      ds2.rows,
       profile
     );
     observations.push(...anomalies);

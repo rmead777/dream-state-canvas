@@ -6,7 +6,7 @@ import { WorkspaceObject, IntentOrigin } from '@/lib/workspace-types';
 import { computeFreeformPosition } from '@/lib/freeform-placement';
 import { executeFusion } from '@/lib/fusion-executor';
 import { toast } from '@/hooks/use-toast';
-import { CANONICAL_DATASET } from '@/lib/seed-data';
+import { getActiveDataset } from '@/lib/active-dataset';
 import { previewRows, alertRows, metricAggregate, comparisonPairs } from '@/lib/data-slicer';
 
 let objectCounter = 0;
@@ -135,7 +135,7 @@ export function useWorkspaceActions() {
               const updatedProfile = await refineDataRules(action.feedback);
               
               // Refresh all data-derived objects with new rules
-              const { columns, rows } = CANONICAL_DATASET;
+              const { columns, rows } = getActiveDataset();
               const dataObjects = Object.values(state.objects).filter(
                 o => ['metric', 'inspector', 'alert', 'comparison'].includes(o.type) && o.status !== 'dissolved'
               );

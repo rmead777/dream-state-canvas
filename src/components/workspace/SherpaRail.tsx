@@ -8,6 +8,12 @@ import { useCognitiveMode } from '@/hooks/useCognitiveMode';
 import { MODE_LABELS } from '@/lib/cognitive-modes';
 import { VoiceIndicator } from './VoiceIndicator';
 import { RulesEditor } from './RulesEditor';
+import { DocumentUpload } from './DocumentUpload';
+import { useDocuments } from '@/contexts/DocumentContext';
+import { getDocument, extractDataset } from '@/lib/document-store';
+import { setActiveDataset } from '@/lib/active-dataset';
+import { invalidateProfileCache } from '@/lib/intent-engine';
+import { clearProfileCache } from '@/lib/data-analyzer';
 import { toast } from 'sonner';
 
 export function SherpaRail() {
@@ -21,8 +27,32 @@ export function SherpaRail() {
   const [showCanvasMenu, setShowCanvasMenu] = useState(false);
   const [showRules, setShowRules] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
   const [promptHistory, setPromptHistory] = useState<Array<{ query: string; response: string | null; timestamp: number }>>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { addDocument } = useDocuments();
+
+  const handleDocumentIngested = useCallback(async (docId: string) => {
+    const doc = await getDocument(docId);
+    if (!doc) return;
+    addDocument(doc);
+
+    // If it's a spreadsheet, set as active dataset
+    if (doc.file_type === 'xlsx' || doc.file_type === 'csv') {
+      const dataset = extractDataset(doc);
+      if (dataset && dataset.rows.length > 0) {
+        setActiveDataset({
+          columns: dataset.columns,
+          rows: dataset.rows,
+          sourceLabel: doc.filename,
+          sourceDocId: doc.id,
+        });
+        clearProfileCache();
+        invalidateProfileCache();
+        toast.success(`${doc.filename} is now the active dataset (${dataset.rows.length} rows)`);
+      }
+    }
+  }, [addDocument]);
 
   const activeObjectCount = Object.values(state.objects).filter(o => o.status !== 'dissolved').length;
 
@@ -107,6 +137,18 @@ export function SherpaRail() {
           )}
         </div>
         <div className="flex items-center gap-1">
+          {/* Upload toggle */}
+          <button
+            onClick={() => setShowUpload(!showUpload)}
+            className={`rounded-md p-1 transition-colors text-[10px] ${
+              showUpload
+                ? 'bg-workspace-accent/10 text-workspace-accent'
+                : 'text-workspace-text-secondary/40 hover:bg-workspace-surface hover:text-workspace-text-secondary'
+            }`}
+            title={showUpload ? 'Hide upload' : 'Upload documents'}
+          >
+            ↑
+          </button>
           {/* Rules toggle */}
           <button
             onClick={() => setShowRules(!showRules)}
@@ -155,6 +197,19 @@ export function SherpaRail() {
         {showRules && (
           <div className="pb-4 border-b border-workspace-border/30 mb-4">
             <RulesEditor onClose={() => setShowRules(false)} />
+          </div>
+        )}
+
+        {/* Upload panel */}
+        {showUpload && (
+          <div className="pb-4 border-b border-workspace-border/30 mb-4">
+            <span className="text-[9px] uppercase tracking-widest text-workspace-text-secondary/40 block mb-2">
+              Upload Documents
+            </span>
+            <DocumentUpload onDocumentIngested={handleDocumentIngested} />
+            <p className="text-[9px] text-workspace-text-secondary/40 mt-2">
+              XLSX, CSV, PDF, DOCX, TXT, MD, Images
+            </p>
           </div>
         )}
 

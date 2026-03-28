@@ -14,7 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      documents: {
+        Row: {
+          created_at: string
+          data_profile: Json | null
+          extracted_text: string | null
+          file_type: string
+          filename: string
+          fingerprint: string | null
+          id: string
+          metadata: Json | null
+          mime_type: string
+          storage_path: string
+          structured_data: Json | null
+        }
+        Insert: {
+          created_at?: string
+          data_profile?: Json | null
+          extracted_text?: string | null
+          file_type: string
+          filename: string
+          fingerprint?: string | null
+          id?: string
+          metadata?: Json | null
+          mime_type: string
+          storage_path: string
+          structured_data?: Json | null
+        }
+        Update: {
+          created_at?: string
+          data_profile?: Json | null
+          extracted_text?: string | null
+          file_type?: string
+          filename?: string
+          fingerprint?: string | null
+          id?: string
+          metadata?: Json | null
+          mime_type?: string
+          storage_path?: string
+          structured_data?: Json | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

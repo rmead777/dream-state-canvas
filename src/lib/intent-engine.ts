@@ -11,8 +11,8 @@ import {
   SEED_BRIEF_DATA,
   SEED_TIMELINE_DATA,
   SEED_DOCUMENT_DATA,
-  CANONICAL_DATASET,
 } from './seed-data';
+import { getActiveDataset } from './active-dataset';
 import { callAI } from '@/hooks/useAI';
 import { analyzeDataset, refineProfile, getCurrentProfile, DataProfile } from './data-analyzer';
 import { previewRows, alertRows, metricAggregate, comparisonPairs } from './data-slicer';
@@ -22,7 +22,8 @@ let profilePromise: Promise<DataProfile> | null = null;
 
 function getProfile(): Promise<DataProfile> {
   if (!profilePromise) {
-    profilePromise = analyzeDataset(CANONICAL_DATASET.columns, CANONICAL_DATASET.rows);
+    const ds = getActiveDataset();
+    profilePromise = analyzeDataset(ds.columns, ds.rows);
   }
   return profilePromise;
 }
@@ -38,9 +39,10 @@ export function invalidateProfileCache(): void {
  */
 export async function refineDataRules(userFeedback: string): Promise<DataProfile> {
   const current = await getProfile();
+  const ds = getActiveDataset();
   const updated = await refineProfile(
-    CANONICAL_DATASET.columns,
-    CANONICAL_DATASET.rows,
+    ds.columns,
+    ds.rows,
     current,
     userFeedback
   );
@@ -68,7 +70,7 @@ const SEED_DATA_BY_TYPE: Record<string, { data: Record<string, any>; defaultTitl
   brief: { data: SEED_BRIEF_DATA, defaultTitle: 'AP Risk Assessment' },
   timeline: { data: SEED_TIMELINE_DATA, defaultTitle: 'Vendor Activity' },
   document: { data: SEED_DOCUMENT_DATA, defaultTitle: 'AP Vendor Tracker v14' },
-  dataset: { data: CANONICAL_DATASET, defaultTitle: 'Full Portfolio Dataset' },
+  dataset: { data: getActiveDataset(), defaultTitle: 'Full Portfolio Dataset' },
 };
 
 /**
@@ -78,7 +80,7 @@ const SEED_DATA_BY_TYPE: Record<string, { data: Record<string, any>; defaultTitl
 async function getDynamicData(objectType: string): Promise<Record<string, any>> {
   try {
     const profile = await getProfile();
-    const { columns, rows } = CANONICAL_DATASET;
+    const { columns, rows } = getActiveDataset();
 
     switch (objectType) {
       case 'metric': {
@@ -255,7 +257,7 @@ const patterns: IntentPattern[] = [
       }
       const data = await getDynamicData('metric');
       return [
-        { type: 'respond', message: `Total AP is $${(data.currentValue / 1000000).toFixed(2)}M across ${CANONICAL_DATASET.rows.length} vendors.` },
+        { type: 'respond', message: `Total AP is $${(data.currentValue / 1000000).toFixed(2)}M across ${getActiveDataset().rows.length} vendors.` },
         { type: 'create', objectType: 'metric', title: 'AP Exposure', data: { ...data, label: 'ap-exposure' } },
       ];
     },
@@ -289,7 +291,7 @@ const patterns: IntentPattern[] = [
     generate: async () => {
       const data = await getDynamicData('inspector');
       return [
-        { type: 'respond', message: `Top vendors by priority. Showing ${data.rows?.length || 0} of ${CANONICAL_DATASET.rows.length}.` },
+        { type: 'respond', message: `Top vendors by priority. Showing ${data.rows?.length || 0} of ${getActiveDataset().rows.length}.` },
         { type: 'create', objectType: 'inspector', title: 'Top Vendors', data },
       ];
     },
@@ -320,7 +322,7 @@ const patterns: IntentPattern[] = [
     generate: async () => {
       const data = await getDynamicData('dataset');
       return [
-        { type: 'respond', message: `Full dataset ready — ${data.rows?.length || CANONICAL_DATASET.rows.length} items sorted by priority rules.` },
+        { type: 'respond', message: `Full dataset ready — ${data.rows?.length || getActiveDataset().rows.length} items sorted by priority rules.` },
         { type: 'create', objectType: 'dataset', title: 'Full Portfolio Dataset', data },
       ];
     },

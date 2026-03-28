@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.ai-image]
 verify_jwt = false
+
+[functions.ingest-document]
+verify_jwt = false
