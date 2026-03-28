@@ -25,6 +25,7 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
   const [filterText, setFilterText] = useState('');
   const [aiInsight, setAiInsight] = useState<string | null>(null);
   const [showAllCols, setShowAllCols] = useState(false);
+  const showInsightCard = isStreaming || Boolean(aiInsight);
 
   const smartCols = useMemo(() => getDisplayColumns(allColumns, rawRows), [allColumns, rawRows]);
   const needsExpand = allColumns.length > smartCols.length;
@@ -175,13 +176,23 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
         </div>
         </div>
 
-      {aiInsight && (
-        <div className="animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards] rounded-2xl bg-workspace-accent-subtle/15 border border-workspace-accent/10 px-5 py-4 shadow-[0_16px_36px_rgba(99,102,241,0.08)]">
+      {showInsightCard && (
+        <div role="status" aria-live="polite" className="animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards] rounded-2xl bg-workspace-accent-subtle/15 border border-workspace-accent/10 px-5 py-4 shadow-[0_16px_36px_rgba(99,102,241,0.08)]">
           <div className="flex items-center gap-2 mb-2">
             <span className="text-workspace-accent text-sm">✦</span>
-            <span className="text-[10px] font-medium uppercase tracking-widest text-workspace-accent">AI Insight</span>
+            <span className="text-[10px] font-medium uppercase tracking-widest text-workspace-accent">
+              {isStreaming && !aiInsight ? 'Reading dataset' : 'AI Insight'}
+            </span>
           </div>
-          <MarkdownRenderer content={aiInsight} isStreaming={isStreaming} />
+          {aiInsight ? (
+            <MarkdownRenderer content={aiInsight} isStreaming={isStreaming} />
+          ) : (
+            <div className="space-y-2" aria-hidden="true">
+              <div className="workspace-skeleton h-3 rounded-full" />
+              <div className="workspace-skeleton h-3 rounded-full" />
+              <div className="workspace-skeleton h-3 w-5/6 rounded-full" />
+            </div>
+          )}
         </div>
       )}
       </div>

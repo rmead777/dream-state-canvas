@@ -305,27 +305,39 @@ export function SherpaRail() {
               </button>
             </div>
 
-            {/* Model selector */}
+            {/* Model selector — grouped by provider */}
             <label className="block text-[10px] text-workspace-text-secondary/60 mb-1.5">AI Model</label>
-            <div className="space-y-1 mb-4">
-              {AVAILABLE_MODELS.map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => {
-                    setAdminModel(m.id);
-                    setAdminState(getAdminSettings());
-                    toast.success(`Model → ${m.label}`);
-                  }}
-                  className={`block w-full rounded-lg border px-3 py-2 text-left transition-all text-[11px] ${
-                    adminState.model === m.id
-                      ? 'border-workspace-accent/40 bg-workspace-accent/5 text-workspace-text'
-                      : 'border-workspace-border/40 bg-workspace-surface/20 text-workspace-text-secondary hover:border-workspace-accent/20'
-                  }`}
-                >
-                  <span className="font-medium">{m.label}</span>
-                  <span className="block text-[9px] text-workspace-text-secondary/50 mt-0.5">{m.description}</span>
-                </button>
-              ))}
+            <div className="space-y-3 mb-4 max-h-[300px] overflow-y-auto pr-1">
+              {(['google', 'anthropic', 'xai', 'openai'] as const).map((provider) => {
+                const providerModels = AVAILABLE_MODELS.filter(m => m.provider === provider);
+                if (providerModels.length === 0) return null;
+                const providerLabels: Record<string, string> = { google: 'Google', anthropic: 'Anthropic', xai: 'xAI (Grok)', openai: 'OpenAI' };
+                return (
+                  <div key={provider}>
+                    <div className="text-[9px] uppercase tracking-wider text-workspace-text-secondary/40 font-medium mb-1">{providerLabels[provider]}</div>
+                    <div className="space-y-1">
+                      {providerModels.map((m) => (
+                        <button
+                          key={m.id}
+                          onClick={() => {
+                            setAdminModel(m.id);
+                            setAdminState(getAdminSettings());
+                            toast.success(`Model → ${m.label}`);
+                          }}
+                          className={`block w-full rounded-lg border px-3 py-2 text-left transition-all text-[11px] ${
+                            adminState.model === m.id
+                              ? 'border-workspace-accent/40 bg-workspace-accent/5 text-workspace-text'
+                              : 'border-workspace-border/40 bg-workspace-surface/20 text-workspace-text-secondary hover:border-workspace-accent/20'
+                          }`}
+                        >
+                          <span className="font-medium">{m.label}</span>
+                          <span className="block text-[9px] text-workspace-text-secondary/50 mt-0.5">{m.description}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             {/* Token slider */}
@@ -441,7 +453,7 @@ export function SherpaRail() {
         )}
 
         {/* Response area */}
-        <div className="space-y-4 pb-4">
+        <div id="sherpa-response-region" aria-live="polite" className="space-y-4 pb-4">
           {!lastResponse && !isProcessing && (
             <div className="workspace-card-surface animate-[materialize_0.5s_cubic-bezier(0.16,1,0.3,1)_forwards] rounded-2xl border border-workspace-border/45 px-4 py-4">
               <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.22em] text-workspace-accent/70">Conversation starter</div>
@@ -490,7 +502,7 @@ export function SherpaRail() {
             <button
               key={s.id}
               onClick={() => handleSuggestionClick(s.query)}
-              className="block w-full rounded-2xl border border-workspace-border/60 bg-white/78 px-4 py-3.5
+              className="workspace-focus-ring block w-full rounded-2xl border border-workspace-border/60 bg-white/78 px-4 py-3.5
                 text-left text-xs text-workspace-text transition-all duration-200 workspace-spring
                 hover:-translate-y-0.5 hover:border-workspace-accent/20 hover:bg-workspace-accent-subtle/30 hover:shadow-[0_18px_38px_rgba(99,102,241,0.12)]"
             >
@@ -507,14 +519,23 @@ export function SherpaRail() {
         <VoiceIndicator volume={voice.volume} isListening={voice.isListening} />
 
         <div className="workspace-card-surface flex items-center gap-2 rounded-2xl border border-workspace-border/60 px-3.5 py-2.5
-          transition-all duration-200 workspace-spring focus-within:border-workspace-accent/30 focus-within:shadow-[0_16px_34px_rgba(99,102,241,0.12)]">
+          transition-all duration-200 workspace-spring focus-within:border-workspace-accent/30 focus-within:shadow-[0_16px_34px_rgba(99,102,241,0.12)]"
+          aria-busy={isProcessing}
+        >
           <span className="text-workspace-accent/40 text-sm">→</span>
           <input
             ref={inputRef}
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSubmit();
+              }
+            }}
+            aria-label="Ask Sherpa about your workspace"
+            aria-describedby="sherpa-composer-hint"
             placeholder="Ask anything..."
             className="flex-1 bg-transparent text-sm text-workspace-text placeholder:text-workspace-text-secondary/40
               outline-none"
@@ -526,7 +547,22 @@ export function SherpaRail() {
               onMouseDown={(e) => { e.preventDefault(); voice.startListening(); }}
               onMouseUp={() => voice.stopListening()}
               onMouseLeave={() => { if (voice.isListening) voice.stopListening(); }}
-              className={`rounded-full p-2 transition-all duration-200 workspace-spring ${
+              onKeyDown={(e) => {
+                if ((e.key === 'Enter' || e.key === ' ') && !voice.isListening) {
+                  e.preventDefault();
+                  voice.startListening();
+                }
+              }}
+              onKeyUp={(e) => {
+                if ((e.key === 'Enter' || e.key === ' ') && voice.isListening) {
+                  e.preventDefault();
+                  voice.stopListening();
+                }
+              }}
+              onBlur={() => { if (voice.isListening) voice.stopListening(); }}
+              aria-label={voice.isListening ? 'Stop voice dictation' : 'Hold to dictate to Sherpa'}
+              aria-pressed={voice.isListening}
+              className={`workspace-focus-ring rounded-full p-2 transition-all duration-200 workspace-spring ${
                 voice.isListening
                   ? 'bg-workspace-accent/15 text-workspace-accent scale-110 shadow-[0_10px_24px_rgba(99,102,241,0.14)]'
                   : 'text-workspace-text-secondary/40 hover:text-workspace-accent/60 hover:bg-workspace-accent/5'
@@ -541,10 +577,18 @@ export function SherpaRail() {
             </button>
           )}
 
-          {isProcessing && (
-            <div className="h-3 w-3 rounded-full border-2 border-workspace-accent/30 border-t-workspace-accent animate-spin" />
-          )}
+          <button
+            onClick={handleSubmit}
+            disabled={!input.trim() || isProcessing}
+            className="workspace-focus-ring rounded-full border border-workspace-accent/15 bg-workspace-accent/10 px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-workspace-accent transition-all duration-200 workspace-spring hover:-translate-y-0.5 hover:bg-workspace-accent/15 disabled:translate-y-0 disabled:opacity-45"
+          >
+            {isProcessing ? 'Working…' : 'Send'}
+          </button>
         </div>
+
+        <p id="sherpa-composer-hint" className="px-1 text-[10px] leading-5 text-workspace-text-secondary/55">
+          Press Enter to send, hold the mic to dictate, or use ⌘K for direct object commands.
+        </p>
 
         {/* Canvas controls + user */}
         <div className="flex items-center justify-between text-[9px] text-workspace-text-secondary/35">
@@ -553,7 +597,7 @@ export function SherpaRail() {
             {user && (
               <button
                 onClick={signOut}
-                className="rounded px-1.5 py-0.5 text-workspace-text-secondary/40 transition-colors hover:text-destructive hover:bg-destructive/5"
+                className="workspace-focus-ring rounded px-1.5 py-0.5 text-workspace-text-secondary/40 transition-colors hover:text-destructive hover:bg-destructive/5"
                 title={`Sign out (${user.email})`}
               >
                 Sign out
@@ -564,7 +608,7 @@ export function SherpaRail() {
             <div className="relative">
               <button
                 onClick={() => setShowCanvasMenu(!showCanvasMenu)}
-                className="workspace-pill rounded-full px-2 py-1 text-workspace-text-secondary/55 transition-colors hover:text-workspace-text-secondary"
+                className="workspace-focus-ring workspace-pill rounded-full px-2 py-1 text-workspace-text-secondary/55 transition-colors hover:text-workspace-text-secondary"
               >
                 Canvas ▾
               </button>
@@ -572,13 +616,13 @@ export function SherpaRail() {
                 <div className="workspace-card-surface absolute bottom-full right-0 mb-2 w-40 rounded-2xl border border-workspace-border/55 overflow-hidden animate-[materialize_0.2s_cubic-bezier(0.16,1,0.3,1)_forwards]">
                   <button
                     onClick={handleCollapseAll}
-                    className="block w-full px-3 py-2 text-left text-[11px] text-workspace-text transition-colors hover:bg-workspace-surface"
+                    className="workspace-focus-ring block w-full px-3 py-2 text-left text-[11px] text-workspace-text transition-colors hover:bg-workspace-surface"
                   >
                     Minimize all
                   </button>
                   <button
                     onClick={handleDissolveAll}
-                    className="block w-full px-3 py-2 text-left text-[11px] text-destructive transition-colors hover:bg-destructive/5"
+                    className="workspace-focus-ring block w-full px-3 py-2 text-left text-[11px] text-destructive transition-colors hover:bg-destructive/5"
                   >
                     Clear canvas
                   </button>

@@ -182,6 +182,15 @@
   50% { opacity: 0.6; transform: scaleY(2); background: hsl(var(--workspace-accent) / 0.5); }
 }
 
+@keyframes workspace-shimmer {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
 /* Cognitive mode transitions are handled via JS on :root */
 :root {
   transition: --workspace-bg 1.5s ease,
@@ -219,6 +228,18 @@
     letter-spacing: 0.22em;
     text-transform: uppercase;
     color: hsl(var(--workspace-text-secondary) / 0.6);
+  }
+
+  .workspace-skeleton {
+    background-color: rgba(148, 163, 184, 0.08);
+    background-image: linear-gradient(
+      105deg,
+      rgba(148, 163, 184, 0.08) 30%,
+      rgba(255, 255, 255, 0.82) 50%,
+      rgba(148, 163, 184, 0.08) 70%
+    );
+    background-size: 200% 100%;
+    animation: workspace-shimmer 1.6s linear infinite;
   }
 
   .workspace-focus-ring {

@@ -154,6 +154,7 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
   const summary: string = normalizedContent.summary;
   const fileName: string = d.fileName || object.title || 'Untitled Document';
   const fileType: string = d.fileType || '';
+  const showAiResponsePanel = isStreaming || Boolean(aiResponse);
 
   const isPdf = fileType === 'pdf' || fileName.toLowerCase().endsWith('.pdf');
 
@@ -265,7 +266,7 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
           </div>
           <button
             onClick={handleEnterImmersive}
-            className="rounded-md px-2.5 py-1 text-[10px] text-workspace-accent transition-colors hover:bg-workspace-accent-subtle/30"
+            className="workspace-focus-ring rounded-full px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-workspace-accent transition-colors hover:bg-workspace-accent-subtle/30"
           >
             Open immersive →
           </button>
@@ -280,9 +281,15 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
           </div>
         )}
 
-        <p className="text-xs text-workspace-text-secondary/50 leading-relaxed line-clamp-3">
-          {paragraphs[0] || 'No content available.'}
-        </p>
+        {paragraphs.length > 0 ? (
+          <p className="text-xs text-workspace-text-secondary/50 leading-relaxed line-clamp-3">
+            {paragraphs[0]}
+          </p>
+        ) : (
+          <div className="rounded-2xl border border-workspace-border/45 bg-workspace-surface/25 px-4 py-3 text-xs leading-6 text-workspace-text-secondary/70">
+            This document hasn’t produced readable excerpt text yet. Open immersive mode once processing is complete.
+          </div>
+        )}
       </div>
     );
   }
@@ -296,13 +303,21 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
             <PdfCanvasViewer fileBlob={pdfBlob} fileName={fileName} />
           ) : (
             <div className="flex h-full items-center justify-center px-6">
-              <div className="max-w-sm rounded-2xl border border-workspace-border bg-workspace-bg px-6 py-5 text-center shadow-sm">
-                <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.24em] text-workspace-accent">
-                  PDF Viewer
+              <div className="workspace-card-surface max-w-sm rounded-[28px] border border-workspace-border/45 bg-workspace-bg px-6 py-5 text-center shadow-sm">
+                <div className="mb-3 text-[10px] font-medium uppercase tracking-[0.24em] text-workspace-accent">
+                  {pdfError ? 'PDF unavailable' : 'Loading PDF'}
                 </div>
-                <p className="text-sm leading-relaxed text-workspace-text-secondary">
-                  {pdfError || 'Loading document…'}
-                </p>
+                {pdfError ? (
+                  <p className="text-sm leading-relaxed text-workspace-text-secondary">
+                    {pdfError}
+                  </p>
+                ) : (
+                  <div className="space-y-2" aria-hidden="true">
+                    <div className="workspace-skeleton h-3 rounded-full" />
+                    <div className="workspace-skeleton h-3 rounded-full" />
+                    <div className="workspace-skeleton h-3 w-4/5 rounded-full mx-auto" />
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -317,21 +332,33 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
                 <span className="workspace-pill rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-workspace-accent/75 tabular-nums">{highlights.length} highlighted</span>
               )}
             </div>
-            <div className="space-y-6">
-              {paragraphs.map((para, idx) => (
-                <p
-                  key={idx}
-                  onClick={() => toggleHighlight(idx)}
-                  className={`text-[15px] leading-[1.8] cursor-pointer transition-colors duration-200 rounded-md -mx-2 px-2 py-1 ${
-                    highlights.includes(idx)
-                      ? 'bg-workspace-accent/8 text-workspace-text'
-                      : 'text-workspace-text-secondary hover:text-workspace-text'
-                  }`}
-                >
-                  {para}
+            {paragraphs.length > 0 ? (
+              <div className="space-y-6">
+                {paragraphs.map((para, idx) => (
+                  <p
+                    key={idx}
+                    onClick={() => toggleHighlight(idx)}
+                    className={`text-[15px] leading-[1.8] cursor-pointer transition-colors duration-200 rounded-md -mx-2 px-2 py-1 ${
+                      highlights.includes(idx)
+                        ? 'bg-workspace-accent/8 text-workspace-text'
+                        : 'text-workspace-text-secondary hover:text-workspace-text'
+                    }`}
+                  >
+                    {para}
+                  </p>
+                ))}
+              </div>
+            ) : (
+              <div className="workspace-card-surface flex min-h-[280px] flex-col items-center justify-center gap-3 rounded-[28px] border border-workspace-border/45 px-6 py-8 text-center">
+                <span className="workspace-pill rounded-full px-3 py-1 text-[10px] font-medium uppercase tracking-[0.2em] text-workspace-accent/75">
+                  Document body
+                </span>
+                <p className="text-sm font-medium text-workspace-text">No readable excerpt text is available yet</p>
+                <p className="max-w-[34ch] text-xs leading-5 text-workspace-text-secondary/75">
+                  The document metadata is loaded, but extracted body text has not been materialized for this view.
                 </p>
-              ))}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -374,21 +401,38 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
                 value={askInput}
                 onChange={(e) => setAskInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAsk()}
+                aria-label="Ask a question about this document"
+                aria-describedby={`document-ask-hint-${object.id}`}
                 placeholder="What are the key risks mentioned?"
                 className="flex-1 bg-transparent text-sm text-workspace-text placeholder:text-workspace-text-secondary/40 outline-none"
               />
               <button
                 onClick={handleAsk}
                 disabled={isStreaming}
-                className="rounded-lg bg-workspace-accent/10 px-3 py-1.5 text-xs text-workspace-accent transition-colors hover:bg-workspace-accent/20 disabled:opacity-50"
+                className="workspace-focus-ring rounded-full bg-workspace-accent/10 px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-workspace-accent transition-colors hover:bg-workspace-accent/20 disabled:opacity-50"
               >
-                {isStreaming ? '...' : 'Ask'}
+                {isStreaming ? 'Reading…' : 'Ask'}
               </button>
             </div>
 
-            {aiResponse && (
-              <div className="mt-4 animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards] rounded-2xl bg-workspace-surface/60 px-5 py-4 border border-workspace-border/35">
-                <MarkdownRenderer content={aiResponse} isStreaming={isStreaming} />
+            <p id={`document-ask-hint-${object.id}`} className="mt-2 text-[11px] leading-5 text-workspace-text-secondary/60">
+              Ask for risks, commitments, names, or supporting evidence. Press Enter to send.
+            </p>
+
+            {showAiResponsePanel && (
+              <div role="status" aria-live="polite" className="mt-4 animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards] rounded-2xl bg-workspace-surface/60 px-5 py-4 border border-workspace-border/35">
+                <div className="mb-3 text-[10px] font-medium uppercase tracking-[0.22em] text-workspace-accent/70">
+                  {isStreaming && !aiResponse ? 'Preparing answer' : 'AI answer'}
+                </div>
+                {aiResponse ? (
+                  <MarkdownRenderer content={aiResponse} isStreaming={isStreaming} />
+                ) : (
+                  <div className="space-y-2" aria-hidden="true">
+                    <div className="workspace-skeleton h-3 rounded-full" />
+                    <div className="workspace-skeleton h-3 rounded-full" />
+                    <div className="workspace-skeleton h-3 w-4/5 rounded-full" />
+                  </div>
+                )}
               </div>
             )}
           </div>

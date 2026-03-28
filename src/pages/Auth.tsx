@@ -6,35 +6,51 @@ import { lovable } from '@/integrations/lovable/index';
 export default function Auth() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const productMoments = [
     'Materialize the right objects from a single prompt',
     'Cross-reference datasets, documents, and risk signals in one canvas',
     'Let Sherpa surface what matters before you ask for it',
   ];
+  const isBusy = loading || checkingSession;
+  const statusTitle = checkingSession ? 'Restoring workspace' : loading ? 'Redirecting' : 'Secure sign-in';
+  const statusDetail = checkingSession
+    ? 'Checking for an active session'
+    : loading
+      ? 'Handing off to Google OAuth'
+      : 'Google OAuth with Supabase';
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
         navigate('/', { replace: true });
+        return;
       }
+      setCheckingSession(false);
     });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) navigate('/', { replace: true });
+      else setCheckingSession(false);
     });
 
     return () => subscription.unsubscribe();
   }, [navigate]);
 
   const handleGoogleSignIn = async () => {
-    setLoading(true);
-    setError(null);
-    const result = await lovable.auth.signInWithOAuth('google', {
-      redirect_uri: window.location.origin,
-    });
-    if (result.error) {
-      setError(result.error.message || 'Sign-in failed');
+    try {
+      setLoading(true);
+      setError(null);
+      const result = await lovable.auth.signInWithOAuth('google', {
+        redirect_uri: window.location.origin,
+      });
+      if (result.error) {
+        setError(result.error.message || 'Sign-in failed');
+        setLoading(false);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Sign-in failed');
       setLoading(false);
     }
   };
@@ -96,12 +112,13 @@ export default function Auth() {
               </div>
               <div className="rounded-2xl border border-workspace-accent/10 bg-workspace-accent/5 px-3 py-2 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
                 <div className="text-[10px] uppercase tracking-[0.22em] text-workspace-accent/60">Status</div>
-                <div className="mt-1 text-sm font-medium text-workspace-text">Secure sign-in</div>
+                <div className="mt-1 text-sm font-medium text-workspace-text" aria-live="polite">{statusTitle}</div>
+                <div className="mt-0.5 text-[11px] text-workspace-text-secondary/65">{statusDetail}</div>
               </div>
             </div>
 
             {error && (
-              <div className="mb-5 rounded-2xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive shadow-[0_10px_24px_rgba(220,38,38,0.08)]">
+              <div role="alert" className="mb-5 rounded-2xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive shadow-[0_10px_24px_rgba(220,38,38,0.08)]">
                 {error}
               </div>
             )}
@@ -109,8 +126,10 @@ export default function Auth() {
             <div className="space-y-4">
               <button
                 onClick={handleGoogleSignIn}
-                disabled={loading}
-                className="group flex w-full items-center justify-center gap-3 rounded-2xl border border-workspace-border/70 bg-white px-4 py-4 text-sm font-medium text-workspace-text shadow-[0_14px_30px_rgba(15,23,42,0.08)] transition-all duration-200 hover:-translate-y-0.5 hover:border-workspace-accent/20 hover:shadow-[0_18px_40px_rgba(99,102,241,0.14)] disabled:translate-y-0 disabled:opacity-50"
+                disabled={isBusy}
+                aria-busy={isBusy}
+                aria-describedby="auth-feedback"
+                className="workspace-focus-ring group flex w-full items-center justify-center gap-3 rounded-2xl border border-workspace-border/70 bg-white px-4 py-4 text-sm font-medium text-workspace-text shadow-[0_14px_30px_rgba(15,23,42,0.08)] transition-all duration-200 hover:-translate-y-0.5 hover:border-workspace-accent/20 hover:shadow-[0_18px_40px_rgba(99,102,241,0.14)] disabled:translate-y-0 disabled:opacity-50"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" className="transition-transform duration-200 group-hover:scale-105">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
@@ -118,11 +137,30 @@ export default function Auth() {
                   <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
                   <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
                 </svg>
-                {loading ? 'Signing in…' : 'Continue with Google'}
+                {checkingSession ? 'Checking session…' : loading ? 'Signing in…' : 'Continue with Google'}
               </button>
 
+              <p id="auth-feedback" className="text-[11px] leading-5 text-workspace-text-secondary/60" aria-live="polite">
+                {checkingSession
+                  ? 'Looking for an existing workspace session before we offer a new sign-in.'
+                  : loading
+                    ? 'Opening Google sign-in in a secure redirect flow.'
+                    : 'Use your Google account to restore your analytical workspace and continue where you left off.'}
+              </p>
+
               <div className="rounded-2xl border border-workspace-border/50 bg-workspace-surface/35 px-4 py-3 text-xs leading-6 text-workspace-text-secondary">
-                Sherpa will observe workspace state, uploaded documents, and object relationships — but only after you invite it in.
+                {checkingSession ? (
+                  <div className="space-y-2.5" aria-hidden="true">
+                    <div className="workspace-skeleton h-2.5 w-24 rounded-full" />
+                    <div className="workspace-skeleton h-2.5 w-full rounded-full" />
+                    <div className="workspace-skeleton h-2.5 w-4/5 rounded-full" />
+                  </div>
+                ) : (
+                  <>
+                    <div className="mb-1 text-[10px] font-medium uppercase tracking-[0.2em] text-workspace-accent/70">What happens next</div>
+                    Sherpa will observe workspace state, uploaded documents, and object relationships — but only after you invite it in.
+                  </>
+                )}
               </div>
             </div>
 
