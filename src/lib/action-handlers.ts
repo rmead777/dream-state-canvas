@@ -93,8 +93,8 @@ export async function handleUpdate({ target, instruction, documentIds, dataQuery
       queryMeta: { totalMatched: result.totalMatched, truncated: result.truncated },
     };
     // If the card has sections with a table, update that table's rows too
-    if (Array.isArray(newContext.sections)) {
-      newContext.sections = newContext.sections.map((s: any) => {
+    if (Array.isArray((target.context as any)?.sections)) {
+      (newContext as any).sections = ((target.context as any).sections as any[]).map((s: any) => {
         if (s.type === 'table') {
           return { ...s, columns: result.columns, rows: result.rows };
         }
