@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { parseIntentAI } from '@/lib/intent-engine';
+import { agentLoop } from '@/lib/sherpa-agent';
 import { WorkspaceObject, IntentOrigin, WorkspaceAction, WorkspaceReducerAction } from '@/lib/workspace-types';
 import { computeFreeformPosition } from '@/lib/freeform-placement';
 import { handleUpdate, handleFuse, handleRefineRules, HandlerResult, DispatchInstruction } from '@/lib/action-handlers';
@@ -87,7 +88,26 @@ export function useWorkspaceActions() {
       }
 
       try {
-        const result = await parseIntentAI(query, state.objects, _documentIdsRef, state.activeContext, memoryBlock);
+        const agentResult = await agentLoop({
+          query,
+          workspaceState: state,
+          activeContext: state.activeContext,
+          documentIds: _documentIdsRef,
+          memories: memoryBlock,
+          onStatusUpdate: (status) => {
+            if (status) {
+              dispatch({ type: 'SET_SHERPA_RESPONSE', payload: `● ${status}` });
+            }
+          },
+        });
+
+        // Convert agent result to the format applyResult expects
+        const result = {
+          actions: [
+            ...(agentResult.response ? [{ type: 'respond' as const, message: agentResult.response }] : []),
+            ...agentResult.actions,
+          ],
+        };
         const outcome = await applyResult(result, origin);
 
         if (outcome.response) {

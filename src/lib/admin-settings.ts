@@ -9,6 +9,8 @@ export interface AdminSettings {
   maxTokens: number;
   /** Number of previous conversation turns to include in AI context */
   contextWindow: number;
+  /** Max tool-calling iterations in the agent loop */
+  agentMaxIterations: number;
 }
 
 const PASSPHRASE = 'protocol alpha';
@@ -51,6 +53,7 @@ const DEFAULT_SETTINGS: AdminSettings = {
   model: 'google/gemini-3-flash-preview',
   maxTokens: 8192,
   contextWindow: 10,
+  agentMaxIterations: 5,
 };
 
 let _settings: AdminSettings = { ...DEFAULT_SETTINGS };

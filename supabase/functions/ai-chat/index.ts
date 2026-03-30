@@ -11,7 +11,8 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { messages, mode, adminModel, adminMaxTokens, memories, promptOverride } = await req.json();
+    const { messages, mode, adminModel, adminMaxTokens, memories, promptOverride, tools, stream: streamRequested } = await req.json();
+    const shouldStream = streamRequested !== false; // default to streaming unless explicitly false
 
     // System prompts by mode
     const systemPrompts: Record<string, string> = {
@@ -314,7 +315,7 @@ Return JSON matching the ProductionRiskData schema.`,
     const modelId = adminModel || DEFAULT_MODEL;
     const maxTokens = adminMaxTokens || 16192;
 
-    const response = await routeToProvider(modelId, systemPrompt, messages, maxTokens, true);
+    const response = await routeToProvider(modelId, systemPrompt, messages, maxTokens, shouldStream, tools);
 
     if (!response.ok) {
       if (response.status === 429) {

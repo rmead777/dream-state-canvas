@@ -87,14 +87,14 @@ async function fallbackToDefault(
   messages: Message[],
   maxTokens: number,
   stream: boolean,
+  tools?: any[],
 ): Promise<Response> {
   const cfg = PROVIDERS['google'];
   const key = Deno.env.get(cfg.envKey);
   if (!key) {
     throw new Error(`No API keys configured — need at least ${cfg.envKey}`);
   }
-  // Lovable gateway requires full "provider/model" ID
-  return makeOpenAIRequest(cfg.endpoint, key, DEFAULT_MODEL, systemPrompt, messages, maxTokens, stream);
+  return makeOpenAIRequest(cfg.endpoint, key, DEFAULT_MODEL, systemPrompt, messages, maxTokens, stream, tools);
 }
 
 /**
@@ -108,6 +108,7 @@ export async function routeToProvider(
   messages: Message[],
   maxTokens: number,
   stream: boolean = true,
+  tools?: any[],
 ): Promise<Response> {
   const { provider, model } = parseModelId(modelId);
   const config = PROVIDERS[provider];
@@ -115,7 +116,7 @@ export async function routeToProvider(
 
   if (!apiKey) {
     console.warn(`[provider-router] ${config.envKey} not set, falling back to default model`);
-    return fallbackToDefault(systemPrompt, messages, maxTokens, stream);
+    return fallbackToDefault(systemPrompt, messages, maxTokens, stream, tools);
   }
 
   // Lovable gateway requires full "provider/model" format; others use bare model name
@@ -123,16 +124,16 @@ export async function routeToProvider(
 
   let response: Response;
   if (config.format === 'anthropic') {
-    response = await makeAnthropicRequest(config.endpoint, apiKey, modelForRequest, systemPrompt, messages, maxTokens, stream);
+    response = await makeAnthropicRequest(config.endpoint, apiKey, modelForRequest, systemPrompt, messages, maxTokens, stream, tools);
   } else {
-    response = await makeOpenAIRequest(config.endpoint, apiKey, modelForRequest, systemPrompt, messages, maxTokens, stream);
+    response = await makeOpenAIRequest(config.endpoint, apiKey, modelForRequest, systemPrompt, messages, maxTokens, stream, tools);
   }
 
   // If the provider returned an auth/client error, fall back to default gateway
   if (!response.ok && [400, 401, 403].includes(response.status) && provider !== 'google') {
     const errBody = await response.text();
     console.warn(`[provider-router] ${provider} returned ${response.status}: ${errBody}. Falling back to default.`);
-    return fallbackToDefault(systemPrompt, messages, maxTokens, stream);
+    return fallbackToDefault(systemPrompt, messages, maxTokens, stream, tools);
   }
 
   return response;
@@ -149,19 +150,25 @@ async function makeOpenAIRequest(
   messages: Message[],
   maxTokens: number,
   stream: boolean,
+  tools?: any[],
 ): Promise<Response> {
+  const body: Record<string, unknown> = {
+    model,
+    messages: [{ role: 'system', content: systemPrompt }, ...messages],
+    stream,
+    max_tokens: maxTokens,
+  };
+  // Include tools if provided (enables function calling)
+  if (tools && tools.length > 0) {
+    body.tools = tools;
+  }
   return fetch(endpoint, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: 'system', content: systemPrompt }, ...messages],
-      stream,
-      max_tokens: maxTokens,
-    }),
+    body: JSON.stringify(body),
   });
 }
 
@@ -179,11 +186,38 @@ async function makeAnthropicRequest(
   messages: Message[],
   maxTokens: number,
   stream: boolean,
+  tools?: any[],
 ): Promise<Response> {
   // Anthropic expects system prompt as a top-level field, not in messages
   const anthropicMessages = messages
     .filter(m => m.role !== 'system')
-    .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+    .map(m => {
+      // Map tool role to Anthropic's format
+      if ((m as any).role === 'tool') {
+        return {
+          role: 'user' as const,
+          content: [{ type: 'tool_result', tool_use_id: (m as any).tool_call_id, content: m.content }],
+        };
+      }
+      return { role: m.role as 'user' | 'assistant', content: m.content };
+    });
+
+  const body: Record<string, unknown> = {
+    model,
+    system: systemPrompt,
+    messages: anthropicMessages,
+    max_tokens: maxTokens,
+    stream,
+  };
+
+  // Convert OpenAI tool format to Anthropic tool format
+  if (tools && tools.length > 0) {
+    body.tools = tools.map(t => ({
+      name: t.function?.name || t.name,
+      description: t.function?.description || t.description,
+      input_schema: t.function?.parameters || t.parameters,
+    }));
+  }
 
   const response = await fetch(endpoint, {
     method: 'POST',
@@ -192,13 +226,7 @@ async function makeAnthropicRequest(
       'anthropic-version': '2023-06-01',
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      model,
-      system: systemPrompt,
-      messages: anthropicMessages,
-      max_tokens: maxTokens,
-      stream,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!stream || !response.ok) return response;
