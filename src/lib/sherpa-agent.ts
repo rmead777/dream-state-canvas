@@ -120,6 +120,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
 
     // Parse the response — check for tool calls
     const { text, toolCalls, rawActions } = parseAgentResponse(response);
+    console.log('[sherpa-agent] Iteration', iteration, '| text:', text?.slice(0, 80), '| toolCalls:', toolCalls?.length || 0, '| rawActions:', rawActions?.length || 0, '| raw response length:', response.length);
 
     // If AI returned actions directly (the normal intent-parsing path), return them
     if (rawActions && rawActions.length > 0) {
