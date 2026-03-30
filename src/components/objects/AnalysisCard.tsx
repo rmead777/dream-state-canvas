@@ -202,13 +202,23 @@ function MetricsRowRenderer({ section }: { section: { metrics: { label: string; 
   );
 }
 
-function ChartRenderer({ section }: { section: { chartType: string; xAxis: string; yAxis: string; data: Record<string, string | number>[]; caption?: string } }) {
+function ChartRenderer({ section }: { section: { chartType: string; xAxis: string; yAxis: string; data: Record<string, string | number>[]; caption?: string; color?: string; colors?: string[]; fillOpacity?: number; height?: number } }) {
   const ChartComponent = section.chartType === 'line' ? LineChart : section.chartType === 'area' ? AreaChart : BarChart;
   const DataComponent: React.ElementType = section.chartType === 'line' ? Line : section.chartType === 'area' ? Area : Bar;
 
+  // AI can specify colors — falls back to workspace accent
+  const primaryColor = section.color || 'hsl(var(--workspace-accent))';
+  const chartHeight = section.height || 192;
+
+  // If multiple y-axis columns exist in the data, use colors array
+  const yAxisKeys = section.colors
+    ? Object.keys(section.data[0] || {}).filter(k => k !== section.xAxis)
+    : [section.yAxis];
+  const colorPalette = section.colors || [primaryColor, '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+
   return (
     <div className="space-y-1">
-      <div className="h-48 w-full">
+      <div className="w-full" style={{ height: chartHeight }}>
         <ResponsiveContainer width="100%" height="100%">
           <ChartComponent data={section.data}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--workspace-border))" opacity={0.3} />
@@ -222,12 +232,15 @@ function ChartRenderer({ section }: { section: { chartType: string; xAxis: strin
                 fontSize: '11px',
               }}
             />
-            <DataComponent
-              dataKey={section.yAxis}
-              fill="hsl(var(--workspace-accent))"
-              stroke="hsl(var(--workspace-accent))"
-              fillOpacity={0.15}
-            />
+            {yAxisKeys.map((key, i) => (
+              <DataComponent
+                key={key}
+                dataKey={key}
+                fill={colorPalette[i % colorPalette.length]}
+                stroke={colorPalette[i % colorPalette.length]}
+                fillOpacity={section.fillOpacity ?? 0.15}
+              />
+            ))}
           </ChartComponent>
         </ResponsiveContainer>
       </div>
