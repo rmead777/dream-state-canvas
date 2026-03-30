@@ -114,16 +114,14 @@ export function SherpaRail() {
     }
   }, [lastResponse]);
 
-  // Scroll to top ONCE when user sends a message — not during streaming
+  // Scroll to BOTTOM so newest messages are always visible (standard chat behavior)
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const wasProcessingRef = useRef(false);
   useEffect(() => {
-    // Only scroll when isProcessing transitions from false → true (user just sent)
-    if (isProcessing && !wasProcessingRef.current) {
-      scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    const el = scrollContainerRef.current;
+    if (el) {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
     }
-    wasProcessingRef.current = isProcessing;
-  }, [isProcessing]);
+  }, [lastResponse, isProcessing]);
 
   const trackAndProcess = useCallback((text: string) => {
     setPromptHistory(prev => [...prev, { query: text, response: null, timestamp: Date.now() }]);
