@@ -293,9 +293,12 @@ async function callAIWithTools(
     // If the response is SSE format (edge function didn't respect stream:false),
     // extract the content from the SSE lines
     if (text.startsWith('data: ')) {
-      return extractFromSSE(text);
+      const extracted = extractFromSSE(text);
+      console.log('[callAIWithTools] SSE extracted, length:', extracted.length, 'starts:', extracted.slice(0, 60));
+      return extracted;
     }
 
+    console.log('[callAIWithTools] Non-SSE response, length:', text.length, 'starts:', text.slice(0, 60));
     return text;
   } catch (err) {
     console.error('[sherpa-agent] AI call failed:', err);
@@ -331,6 +334,7 @@ function extractFromSSE(sse: string): string {
 /**
  * Parse AI response — extract text, tool calls, and/or actions.
  * Handles: OpenAI JSON, Anthropic JSON, intent JSON, SSE-assembled text, plain text.
+ * MUST be extremely robust — any failure here means raw JSON shows in the chat.
  */
 function parseAgentResponse(response: string): {
   text: string;
@@ -343,20 +347,48 @@ function parseAgentResponse(response: string): {
   try {
     const parsed = JSON.parse(trimmed);
     const result = extractFromParsedJSON(parsed);
-    if (result) return result;
-  } catch {}
+    if (result) {
+      console.log('[parseAgentResponse] Parsed directly as JSON');
+      return result;
+    }
+  } catch (e) {
+    console.log('[parseAgentResponse] Direct JSON.parse failed:', (e as Error).message?.slice(0, 80));
+  }
 
-  // 2. Try extracting JSON from within the text (AI may wrap in markdown or text)
+  // 2. Try extracting JSON from within the text (AI may wrap in markdown or have prefix)
   const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
     try {
       const parsed = JSON.parse(jsonMatch[0]);
       const result = extractFromParsedJSON(parsed);
-      if (result) return result;
+      if (result) {
+        console.log('[parseAgentResponse] Parsed via regex extraction');
+        return result;
+      }
     } catch {}
   }
 
-  // 3. Plain text response — treat as conversational
+  // 3. Safety net — if the text contains "response" and "actions", it's almost certainly
+  // intent JSON that we failed to parse. Log it clearly so we can debug.
+  if (trimmed.includes('"response"') && trimmed.includes('"actions"')) {
+    console.error('[parseAgentResponse] LIKELY UNPARSED JSON — this should not reach the user as raw text:', trimmed.slice(0, 200));
+    // Last-ditch: try to extract just the response field with regex
+    const responseMatch = trimmed.match(/"response"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+    if (responseMatch) {
+      const extractedText = responseMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n');
+      // Try to find actions array
+      const actionsMatch = trimmed.match(/"actions"\s*:\s*(\[[\s\S]*\])/);
+      let actions: any[] | null = null;
+      if (actionsMatch) {
+        try { actions = JSON.parse(actionsMatch[1]); } catch {}
+      }
+      console.log('[parseAgentResponse] Regex-extracted response text + actions');
+      return { text: extractedText, toolCalls: null, rawActions: actions };
+    }
+  }
+
+  // 4. Plain text response — treat as conversational
+  console.log('[parseAgentResponse] Treating as plain text');
   return { text: trimmed, toolCalls: null, rawActions: null };
 }
 
