@@ -90,10 +90,12 @@ export type Database = {
           created_at: string
           hit_count: number
           id: string
+          is_active: boolean
           last_activated_at: string | null
           miss_count: number
           reasoning: string | null
           source: string
+          superseded_by: string | null
           tags: string[]
           tier: string
           trigger: Json
@@ -106,10 +108,12 @@ export type Database = {
           created_at?: string
           hit_count?: number
           id?: string
+          is_active?: boolean
           last_activated_at?: string | null
           miss_count?: number
           reasoning?: string | null
           source?: string
+          superseded_by?: string | null
           tags?: string[]
           tier?: string
           trigger?: Json
@@ -122,17 +126,27 @@ export type Database = {
           created_at?: string
           hit_count?: number
           id?: string
+          is_active?: boolean
           last_activated_at?: string | null
           miss_count?: number
           reasoning?: string | null
           source?: string
+          superseded_by?: string | null
           tags?: string[]
           tier?: string
           trigger?: Json
           type?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "sherpa_memories_superseded_by_fkey"
+            columns: ["superseded_by"]
+            isOneToOne: false
+            referencedRelation: "sherpa_memories"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -149,6 +163,10 @@ export type Database = {
       }
       increment_memory_hit: { Args: { memory_id: string }; Returns: undefined }
       increment_memory_miss: { Args: { memory_id: string }; Returns: undefined }
+      supersede_memory: {
+        Args: { new_memory_id: string; old_memory_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
