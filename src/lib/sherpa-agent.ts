@@ -162,7 +162,9 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
 
           // Apply to shadow state so subsequent read tools see the change
           if (parsed.action === 'create' && parsed.objectType && parsed.title) {
-            const id = `wo-${Date.now()}-shadow-${toolCallsUsed}`;
+            const id = `wo-${Date.now()}-${toolCallsUsed}`;
+            // Store the ID in the pending action so handleCreate uses it
+            parsed.id = id;
             shadowObjects[id] = {
               id,
               type: parsed.objectType,
