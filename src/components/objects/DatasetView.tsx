@@ -38,7 +38,7 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
   const [sortDir, setSortDir] = useState<SortDir>(null);
   const [filterText, setFilterText] = useState('');
   const [aiInsight, setAiInsight] = useState<string | null>(null);
-  const [showAllCols, setShowAllCols] = useState(false);
+  const [showAllCols, setShowAllCols] = useState(isImmersive);
   const showInsightCard = isStreaming || Boolean(aiInsight);
 
   const smartCols = useMemo(() => {
