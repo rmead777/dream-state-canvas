@@ -407,12 +407,27 @@ function extractFromParsedJSON(parsed: any): {
     // msg.content might be a JSON string (double-wrapped: the AI returns intent JSON as content)
     if (typeof text === 'string' && text.trim().startsWith('{')) {
       try {
-        const inner = JSON.parse(text);
+        const inner = JSON.parse(text.trim());
         if (inner.response !== undefined) {
           text = inner.response || '';
           rawActions = inner.actions || null;
+          console.log('[extractFromParsedJSON] Inner JSON parsed — text:', text.slice(0, 60), 'actions:', rawActions?.length || 0);
         }
-      } catch {}
+      } catch (e) {
+        console.warn('[extractFromParsedJSON] Inner JSON parse failed:', (e as Error).message?.slice(0, 80));
+        // Try regex extraction as fallback
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          try {
+            const inner = JSON.parse(jsonMatch[0]);
+            if (inner.response !== undefined) {
+              text = inner.response || '';
+              rawActions = inner.actions || null;
+              console.log('[extractFromParsedJSON] Inner JSON parsed via regex');
+            }
+          } catch {}
+        }
+      }
     }
 
     return {
