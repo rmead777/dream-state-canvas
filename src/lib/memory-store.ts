@@ -91,6 +91,7 @@ export async function getMemories(userId: string): Promise<SherpaMemory[]> {
     .from('sherpa_memories')
     .select('*')
     .eq('user_id', userId)
+    .eq('is_active', true)
     .gt('confidence', 0.3)
     .order('confidence', { ascending: false });
 
@@ -153,4 +154,9 @@ export async function recordMiss(id: string): Promise<void> {
 
 export async function decayStaleMemories(userId: string): Promise<void> {
   await db.rpc('decay_stale_memories', { target_user_id: userId });
+}
+
+/** Mark an old memory as superseded by a new one */
+export async function supersedeMemory(oldId: string, newId: string): Promise<void> {
+  await db.rpc('supersede_memory', { old_memory_id: oldId, new_memory_id: newId });
 }
