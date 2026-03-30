@@ -295,10 +295,15 @@ function VirtualizedTable({
 
   return (
     <div className="workspace-card-surface rounded-[28px] border border-workspace-border/45 bg-white overflow-hidden">
-      <div className="overflow-x-auto">
-        {/* Header */}
+      {/* Single scroll container for both header + body — keeps columns aligned */}
+      <div
+        ref={parentRef}
+        className="overflow-auto"
+        style={{ maxHeight: '70vh' }}
+      >
+        {/* Sticky header */}
         <div
-          className="grid border-b border-workspace-border bg-workspace-surface/30 text-[11px] font-medium uppercase tracking-[0.18em] text-workspace-text-secondary"
+          className="grid border-b border-workspace-border bg-workspace-surface/30 text-[11px] font-medium uppercase tracking-[0.18em] text-workspace-text-secondary sticky top-0 z-10"
           style={{ gridTemplateColumns: gridCols }}
         >
           {columns.map((col, idx) => (
@@ -323,11 +328,7 @@ function VirtualizedTable({
         </div>
 
         {/* Virtualized body */}
-        <div
-          ref={parentRef}
-          className="overflow-auto"
-          style={{ maxHeight: '60vh' }}
-        >
+        <div>
           <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
             {virtualizer.getVirtualItems().map((virtualRow) => {
               const row = rows[virtualRow.index];

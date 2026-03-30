@@ -63,9 +63,11 @@ export function ImmersiveOverlay() {
         </div>
       </div>
 
-      {/* Immersive content — renders ANY card type */}
-      <div className="relative z-10 flex-1 overflow-y-auto px-8 pt-6 pb-8">
-        <div className="mx-auto max-w-4xl">
+      {/* Immersive content — full width for data, constrained for reading */}
+      <div className={`relative z-10 flex-1 overflow-y-auto pt-6 pb-8 ${
+        object.type === 'dataset' || object.type === 'inspector' ? 'px-4' : 'px-8'
+      }`}>
+        <div className={object.type === 'dataset' || object.type === 'inspector' ? '' : 'mx-auto max-w-4xl'}>
           <ImmersiveContent object={object} />
         </div>
       </div>
