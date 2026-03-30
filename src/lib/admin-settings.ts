@@ -51,7 +51,7 @@ export { AVAILABLE_MODELS };
 const DEFAULT_SETTINGS: AdminSettings = {
   isUnlocked: false,
   model: 'google/gemini-3-flash-preview',
-  maxTokens: 8192,
+  maxTokens: 16192,
   contextWindow: 10,
   agentMaxIterations: 5,
 };

@@ -110,8 +110,26 @@ export function useWorkspaceActions() {
         };
         const outcome = await applyResult(result, origin);
 
+        // Progressive text reveal — simulated streaming for the response
         if (outcome.response) {
-          updateLastResponse(outcome.response);
+          // Stop the "Reasoning..." indicator before text starts appearing
+          dispatch({ type: 'SET_SHERPA_PROCESSING', payload: false });
+
+          const text = outcome.response;
+          if (text.length > 40) {
+            // Reveal word-by-word, targeting ~1.2s total
+            const words = text.split(/(\s+)/);
+            const delayMs = Math.max(8, Math.min(25, 1200 / words.length));
+            let revealed = '';
+            for (const word of words) {
+              revealed += word;
+              dispatch({ type: 'SET_SHERPA_RESPONSE', payload: revealed });
+              await new Promise(r => setTimeout(r, delayMs));
+            }
+          }
+          // Set final full text (covers both short and long responses)
+          dispatch({ type: 'SET_SHERPA_RESPONSE', payload: text });
+          updateLastResponse(text);
         }
 
         dispatch({
@@ -167,7 +185,7 @@ export function useWorkspaceActions() {
     for (const action of result.actions) {
       switch (action.type) {
         case 'respond':
-          dispatch({ type: 'SET_SHERPA_RESPONSE', payload: action.message });
+          // Don't dispatch here — processIntent handles progressive text reveal
           outcome.response = action.message;
           break;
 

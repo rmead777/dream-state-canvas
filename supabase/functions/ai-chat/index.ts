@@ -181,7 +181,7 @@ When creating analysis or CFO cards, populate sections:
 3. If the user corrects you, your PREVIOUS action was wrong. Do NOT repeat it. Try a different approach.
 4. If ambiguous which card the user means, ASK — do not guess.
 5. After creating a card, do NOT immediately create another unless asked. One card per turn is usually right.
-6. Be concise. 1-2 sentences in response. Let the cards speak for themselves.
+6. Keep the "response" field brief (1-2 sentences). But populate sections with thorough, detailed content — tables, metrics, charts, and narratives should be comprehensive and data-rich. Let the cards speak for themselves.
 7. Dollar amounts: use $X.XXM for millions, $X,XXX for thousands. Use actual figures from data.`,
 
       "update-plan": `You are a structured object-update planner for a cognitive workspace.
@@ -199,15 +199,17 @@ When creating analysis or CFO cards, populate sections:
     - Do not invent filters, titles, or chart settings that were not asked for.`,
 
       document: `You are an expert document analyst. The user is reading a document and has a question about it.
-Answer based on the document content provided. Be concise and precise. Reference specific parts of the document when possible.`,
+Answer based on the document content provided. Reference specific parts of the document when possible.
+Match your response length to the question: short answers for simple lookups, thorough analysis for complex questions. Do not artificially truncate your response.`,
 
       dataset: `You are a data analyst. The user is looking at a dataset and wants insights.
 Analyze the data provided and give specific, actionable insights. Reference specific values and trends.
-Be concise — 2-3 sentences max.`,
+Scale your depth to the question: quick answers for simple queries, thorough breakdowns for analytical requests.`,
 
       brief: `You are a senior analytical writer.
-    Synthesize the provided workspace context into a concise, decision-useful brief.
-    Cover: the main takeaway, why it matters, and recommended actions. Use concrete data points when available.`,
+    Synthesize the provided workspace context into a thorough, decision-useful brief.
+    Cover: the main takeaway, why it matters, supporting evidence, and recommended actions.
+    Use concrete data points, dollar amounts, and specific names throughout. Do not truncate — provide the complete analysis the user needs to make decisions.`,
 
       fusion: `You are a senior analyst performing deep synthesis of two workspace data objects.
 Your job: find NON-OBVIOUS connections, tensions, and implications between them.
@@ -216,8 +218,8 @@ RULES:
 - Do NOT write generic introductions. Start directly with the most important insight.
 - Reference specific numbers, names, and data points from BOTH objects.
 - Be analytical, not descriptive. Tell the user something they didn't already know.
-- The summary should be 2-4 sentences of genuine cross-cutting analysis.
-- Insights should be sharp, specific, and actionable.
+- The summary should provide genuine cross-cutting analysis — be thorough, not artificially brief.
+- Insights should be sharp, specific, and actionable. Include as many as the data supports.
 - Follow the JSON schema specified in the user message exactly.`,
 
       predict: `You are a workspace intelligence system. Given the current workspace state and recent user actions,
@@ -326,7 +328,7 @@ Return JSON matching the ProductionRiskData schema.`,
 
     // Use admin model override if provided, otherwise default
     const modelId = adminModel || DEFAULT_MODEL;
-    const maxTokens = adminMaxTokens || 16192;
+    const maxTokens = adminMaxTokens ?? 16192;
 
     const response = await routeToProvider(modelId, systemPrompt, messages, maxTokens, shouldStream, tools);
 
@@ -351,8 +353,21 @@ Return JSON matching the ProductionRiskData schema.`,
       });
     }
 
+    if (!shouldStream) {
+      // Non-streaming: return JSON response with proper content-type
+      const body = await response.text();
+      return new Response(body, {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     return new Response(response.body, {
-      headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "X-Accel-Buffering": "no",
+      },
     });
   } catch (e) {
     console.error("chat error:", e);
