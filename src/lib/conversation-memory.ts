@@ -46,16 +46,44 @@ export function updateLastResponse(response: string): void {
   }
 }
 
-/** Get the last N turns as AI message pairs (user + assistant) */
-export function getConversationMessages(n: number): { role: 'user' | 'assistant'; content: string }[] {
+/** Rough token estimate — ~4 chars per token for English text */
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+/** Get the last N turns as AI message pairs, capped by token budget.
+ *  Token budget prevents conversation history from crowding out workspace
+ *  context and memory in the AI's context window. Default: ~3000 tokens. */
+export function getConversationMessages(
+  n: number,
+  maxTokens: number = 3000
+): { role: 'user' | 'assistant'; content: string }[] {
   const recent = _turns.slice(-n);
   const messages: { role: 'user' | 'assistant'; content: string }[] = [];
 
-  for (const turn of recent) {
-    messages.push({ role: 'user', content: turn.query });
+  // Build from most recent backward, stop when budget is exhausted
+  let tokenBudget = maxTokens;
+  const pairs: { role: 'user' | 'assistant'; content: string }[][] = [];
+
+  for (let i = recent.length - 1; i >= 0; i--) {
+    const turn = recent[i];
+    const pair: { role: 'user' | 'assistant'; content: string }[] = [];
+    const queryTokens = estimateTokens(turn.query);
+    const responseTokens = turn.response ? estimateTokens(turn.response) : 0;
+    const pairCost = queryTokens + responseTokens;
+
+    if (pairCost > tokenBudget) break;
+    tokenBudget -= pairCost;
+
+    pair.push({ role: 'user', content: turn.query });
     if (turn.response) {
-      messages.push({ role: 'assistant', content: turn.response });
+      pair.push({ role: 'assistant', content: turn.response });
     }
+    pairs.unshift(pair);
+  }
+
+  for (const pair of pairs) {
+    messages.push(...pair);
   }
 
   return messages;

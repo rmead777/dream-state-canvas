@@ -1,6 +1,5 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { parseIntentAI } from '@/lib/intent-engine';
 import { agentLoop } from '@/lib/sherpa-agent';
 import { WorkspaceObject, IntentOrigin, WorkspaceAction, WorkspaceReducerAction } from '@/lib/workspace-types';
 import { computeFreeformPosition } from '@/lib/freeform-placement';
@@ -49,6 +48,12 @@ function mergeUnique(base: string[], incoming: string[]): string[] {
 export function useWorkspaceActions() {
   const { state, dispatch } = useWorkspace();
 
+  // Always-current state ref — prevents stale closures in async callbacks.
+  // applyResult and handleCreate run asynchronously and need the latest state,
+  // not the state captured when processIntent's useCallback was created.
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
   const setDocumentIds = useCallback((ids: string[]) => {
     _documentIdsRef = ids;
   }, []);
@@ -73,13 +78,13 @@ export function useWorkspaceActions() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          const objectTypes = Object.values(state.objects)
+          const objectTypes = Object.values(stateRef.current.objects)
             .filter(o => o.status !== 'dissolved')
             .map(o => o.type);
           const memories = await retrieveRelevantMemories(user.id, {
             query,
             objectTypes,
-            workspaceState: determineWorkspaceState(state),
+            workspaceState: determineWorkspaceState(stateRef.current),
           });
           memoryBlock = formatMemoriesForPrompt(memories);
         }
@@ -90,8 +95,8 @@ export function useWorkspaceActions() {
       try {
         const agentResult = await agentLoop({
           query,
-          workspaceState: state,
-          activeContext: state.activeContext,
+          workspaceState: stateRef.current,
+          activeContext: stateRef.current.activeContext,
           documentIds: _documentIdsRef,
           memories: memoryBlock,
           onStatusUpdate: (status) => {
@@ -157,7 +162,7 @@ export function useWorkspaceActions() {
             patch: {
               response: errorMsg,
               outcomeSummary: 'Intent execution failed before any workspace action was applied.',
-              resultingFocusObjectId: state.activeContext.focusedObjectId,
+              resultingFocusObjectId: stateRef.current.activeContext.focusedObjectId,
               affectedObjectIds: [],
               createdObjectIds: [],
             },
@@ -167,7 +172,7 @@ export function useWorkspaceActions() {
 
       dispatch({ type: 'SET_SHERPA_PROCESSING', payload: false });
     },
-    [state.objects, state.activeContext, dispatch, applyResult]
+    [dispatch]
   );
 
   // ─── Pipeline: parse → resolve → materialize → observe ─────────────────
@@ -178,7 +183,7 @@ export function useWorkspaceActions() {
       summary: '',
       affectedObjectIds: [],
       createdObjectIds: [],
-      focusedObjectId: state.activeContext.focusedObjectId,
+      focusedObjectId: stateRef.current.activeContext.focusedObjectId,
     };
     const summaryParts: string[] = [];
 
@@ -203,17 +208,17 @@ export function useWorkspaceActions() {
           dispatch({ type: 'TOUCH_OBJECT', payload: { id: action.objectId } });
           outcome.affectedObjectIds = mergeUnique(outcome.affectedObjectIds, [action.objectId]);
           outcome.focusedObjectId = action.objectId;
-          summaryParts.push(`Focused ${state.objects[action.objectId]?.title || action.objectId}.`);
+          summaryParts.push(`Focused ${stateRef.current.objects[action.objectId]?.title || action.objectId}.`);
           break;
 
         case 'dissolve':
           dispatch({ type: 'DISSOLVE_OBJECT', payload: { id: action.objectId } });
           outcome.affectedObjectIds = mergeUnique(outcome.affectedObjectIds, [action.objectId]);
-          summaryParts.push(`Dissolved ${state.objects[action.objectId]?.title || action.objectId}.`);
+          summaryParts.push(`Dissolved ${stateRef.current.objects[action.objectId]?.title || action.objectId}.`);
           break;
 
         case 'update': {
-          const target = state.objects[action.objectId];
+          const target = stateRef.current.objects[action.objectId];
           if (!target) {
             dispatch({ type: 'SET_SHERPA_RESPONSE', payload: 'Could not find the specified object to update.' });
             outcome.response = 'Could not find the specified object to update.';
@@ -243,8 +248,8 @@ export function useWorkspaceActions() {
         }
 
         case 'fuse': {
-          const objA = state.objects[action.objectIdA];
-          const objB = state.objects[action.objectIdB];
+          const objA = stateRef.current.objects[action.objectIdA];
+          const objB = stateRef.current.objects[action.objectIdB];
           if (!objA || !objB) {
             dispatch({ type: 'SET_SHERPA_RESPONSE', payload: 'Could not find the specified objects to fuse.' });
             break;
@@ -253,7 +258,7 @@ export function useWorkspaceActions() {
             const handlerResult = await handleFuse({
               objA,
               objB,
-              layoutMode: state.layoutMode,
+              layoutMode: stateRef.current.layoutMode,
             });
             const execution = executeResult(handlerResult);
             outcome.response = execution.response || outcome.response;
@@ -277,7 +282,7 @@ export function useWorkspaceActions() {
           try {
             const handlerResult = await handleRefineRules({
               feedback: action.feedback,
-              objects: state.objects,
+              objects: stateRef.current.objects,
             });
             const execution = executeResult(handlerResult);
             outcome.response = execution.response || outcome.response;
@@ -303,7 +308,7 @@ export function useWorkspaceActions() {
     }
     if (result.actions.length > 0) {
       const lastAction = result.actions[result.actions.length - 1];
-      detectLearningSignals(origin.query || '', lastAction, state.objects).catch(() => {});
+      detectLearningSignals(origin.query || '', lastAction, stateRef.current.objects).catch(() => {});
     }
 
     return outcome;
@@ -332,11 +337,11 @@ export function useWorkspaceActions() {
           break;
         case 'UPDATE_OBJECT_CONTEXT':
           execution.affectedObjectIds = mergeUnique(execution.affectedObjectIds, [d.payload.id]);
-          execution.summaryParts.push(`Updated ${state.objects[d.payload.id]?.title || d.payload.id}.`);
+          execution.summaryParts.push(`Updated ${stateRef.current.objects[d.payload.id]?.title || d.payload.id}.`);
           break;
         case 'UPDATE_OBJECT':
           execution.affectedObjectIds = mergeUnique(execution.affectedObjectIds, [d.payload.id]);
-          execution.summaryParts.push(`Updated ${d.payload.title || state.objects[d.payload.id]?.title || d.payload.id}.`);
+          execution.summaryParts.push(`Updated ${d.payload.title || stateRef.current.objects[d.payload.id]?.title || d.payload.id}.`);
           break;
         case 'MATERIALIZE_OBJECT':
           execution.createdObjectIds = mergeUnique(execution.createdObjectIds, [d.payload.id]);
@@ -361,8 +366,8 @@ export function useWorkspaceActions() {
     const id = (action as any).id || `wo-${Date.now()}-${objectCounter}`;
     const relationships = action.relatedTo ?? [];
     const freeformPosition =
-      state.layoutMode === 'freeform'
-        ? computeFreeformPosition(state.objects, { relationships }, window.innerWidth, window.innerHeight)
+      stateRef.current.layoutMode === 'freeform'
+        ? computeFreeformPosition(stateRef.current.objects, { relationships }, window.innerWidth, window.innerHeight)
         : undefined;
 
     const resolvedDocument = action.objectType === 'document'

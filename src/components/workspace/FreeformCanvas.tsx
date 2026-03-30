@@ -2,9 +2,8 @@ import { useRef, useCallback, useState, useEffect } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { WorkspaceObjectWrapper } from './WorkspaceObject';
 import { FusionZone } from './FusionZone';
-import { executeFusion } from '@/lib/fusion-executor';
-import { canFuse, getFusionOutputType } from '@/lib/fusion-rules';
-import { toast } from '@/hooks/use-toast';
+import { canFuse } from '@/lib/fusion-rules';
+import { useFusion } from '@/hooks/useFusion';
 
 const FUSION_THRESHOLD = 120;
 const FUSION_GLOW_THRESHOLD = 200;
@@ -17,6 +16,13 @@ export function FreeformCanvas() {
   const [fusionProcessing, setFusionProcessing] = useState(false);
   const [fusionProximity, setFusionProximity] = useState<{ sourceId: string; targetId: string; intensity: number } | null>(null);
   const [_activeDragId, setActiveDragId] = useState<string | null>(null);
+
+  const { handleFuse } = useFusion({
+    objects,
+    fusionTarget,
+    layoutMode: 'freeform',
+    onComplete: () => { setFusionProcessing(false); setFusionTarget(null); },
+  });
 
   const visibleObjects = Object.values(objects).filter(
     (o) => o.status !== 'dissolved' && o.status !== 'collapsed'
@@ -99,51 +105,6 @@ export function FreeformCanvas() {
     setActiveDragId(id);
   }, []);
 
-  const handleFuse = useCallback(async () => {
-    if (!fusionTarget) return;
-    setFusionProcessing(true);
-
-    const source = objects[fusionTarget.sourceId];
-    const target = objects[fusionTarget.targetId];
-
-    const result = await executeFusion(source, target);
-
-    if (!result.success) {
-      if (result.lowValue) {
-        toast({ title: 'Fusion not productive', description: result.errorMessage });
-      } else {
-        dispatch({ type: 'SET_SHERPA_RESPONSE', payload: result.errorMessage || 'Fusion failed.' });
-      }
-      setFusionProcessing(false);
-      setFusionTarget(null);
-      return;
-    }
-
-    dispatch({
-      type: 'MATERIALIZE_OBJECT',
-      payload: {
-        id: result.id!,
-        type: getFusionOutputType(source.type, target.type),
-        title: result.title!,
-        pinned: false,
-        origin: { type: 'cross-object', sourceObjectId: source.id, query: `Fusion of ${source.title} and ${target.title}` },
-        relationships: [source.id, target.id],
-        context: result.context!,
-        position: { zone: 'primary', order: 0 },
-        freeformPosition: {
-          x: ((source.freeformPosition?.x ?? 200) + (target.freeformPosition?.x ?? 400)) / 2,
-          y: Math.max(source.freeformPosition?.y ?? 100, target.freeformPosition?.y ?? 100) + 120,
-        },
-      },
-    });
-
-    dispatch({ type: 'SET_SHERPA_RESPONSE', payload: `Synthesized "${source.title}" and "${target.title}" into a new insight.` });
-    setTimeout(() => dispatch({ type: 'OPEN_OBJECT', payload: { id: result.id! } }), 400);
-
-    setFusionProcessing(false);
-    setFusionTarget(null);
-  }, [fusionTarget, objects, dispatch]);
-
   return (
     <div
       ref={canvasRef}
@@ -154,7 +115,7 @@ export function FreeformCanvas() {
         <FusionZone
           sourceTitle={objects[fusionTarget.sourceId]?.title || ''}
           targetTitle={objects[fusionTarget.targetId]?.title || ''}
-          onFuse={handleFuse}
+          onFuse={() => { setFusionProcessing(true); handleFuse(); }}
           onCancel={() => setFusionTarget(null)}
           isProcessing={fusionProcessing}
         />

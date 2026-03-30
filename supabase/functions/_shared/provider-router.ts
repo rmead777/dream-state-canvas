@@ -236,6 +236,10 @@ async function makeAnthropicRequest(
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
 
+  // Track tool_use blocks being streamed so we can emit complete tool calls
+  let activeToolBlock: { id: string; name: string; inputJson: string } | null = null;
+  const completedToolCalls: { id: string; type: 'function'; function: { name: string; arguments: string } }[] = [];
+
   const transformedStream = new ReadableStream({
     async pull(controller) {
       let buffer = '';
@@ -260,15 +264,57 @@ async function makeAnthropicRequest(
           try {
             const event = JSON.parse(json);
 
-            // Anthropic content_block_delta → OpenAI delta format
-            if (event.type === 'content_block_delta' && event.delta?.text) {
+            // Anthropic content_block_delta with text → OpenAI text delta
+            if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
               const openaiChunk = {
                 choices: [{ delta: { content: event.delta.text }, index: 0 }],
               };
               controller.enqueue(encoder.encode(`data: ${JSON.stringify(openaiChunk)}\n\n`));
             }
-            // Anthropic message_stop → OpenAI [DONE]
+
+            // Anthropic content_block_start with tool_use → begin accumulating tool call
+            if (event.type === 'content_block_start' && event.content_block?.type === 'tool_use') {
+              activeToolBlock = {
+                id: event.content_block.id,
+                name: event.content_block.name,
+                inputJson: '',
+              };
+            }
+
+            // Anthropic input_json_delta → accumulate tool arguments
+            if (event.type === 'content_block_delta' && event.delta?.type === 'input_json_delta' && activeToolBlock) {
+              activeToolBlock.inputJson += event.delta.partial_json;
+            }
+
+            // Anthropic content_block_stop → finalize tool call if one was active
+            if (event.type === 'content_block_stop' && activeToolBlock) {
+              completedToolCalls.push({
+                id: activeToolBlock.id,
+                type: 'function',
+                function: {
+                  name: activeToolBlock.name,
+                  arguments: activeToolBlock.inputJson,
+                },
+              });
+              activeToolBlock = null;
+            }
+
+            // Anthropic message_stop → emit any tool calls as a final OpenAI chunk, then [DONE]
             if (event.type === 'message_stop') {
+              if (completedToolCalls.length > 0) {
+                const toolCallChunk = {
+                  choices: [{
+                    message: {
+                      role: 'assistant',
+                      content: null,
+                      tool_calls: completedToolCalls,
+                    },
+                    index: 0,
+                    finish_reason: 'tool_calls',
+                  }],
+                };
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify(toolCallChunk)}\n\n`));
+              }
               controller.enqueue(encoder.encode('data: [DONE]\n\n'));
               controller.close();
               return;

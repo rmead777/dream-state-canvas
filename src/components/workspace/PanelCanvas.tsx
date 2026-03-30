@@ -21,9 +21,8 @@ import { SortableObject } from './SortableObject';
 import { RelationshipConnector } from './RelationshipConnector';
 import { FreeformCanvas } from './FreeformCanvas';
 import { FusionZone } from './FusionZone';
-import { canFuse, getFusionOutputType } from '@/lib/fusion-rules';
-import { executeFusion } from '@/lib/fusion-executor';
-import { toast } from '@/hooks/use-toast';
+import { canFuse } from '@/lib/fusion-rules';
+import { useFusion } from '@/hooks/useFusion';
 
 export function PanelCanvas() {
   const { state, dispatch } = useWorkspace();
@@ -32,6 +31,13 @@ export function PanelCanvas() {
   const [fusionProcessing, setFusionProcessing] = useState(false);
   const [fusionHoverId, setFusionHoverId] = useState<string | null>(null);
   const [_activeDragId, setActiveDragId] = useState<string | null>(null);
+
+  const { handleFuse } = useFusion({
+    objects,
+    fusionTarget,
+    layoutMode,
+    onComplete: () => { setFusionProcessing(false); setFusionTarget(null); },
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -106,52 +112,6 @@ export function PanelCanvas() {
     },
     [spatialLayout, objects, dispatch]
   );
-
-  const handleFuse = useCallback(async () => {
-    if (!fusionTarget) return;
-    setFusionProcessing(true);
-    dispatch({ type: 'SET_SHERPA_PROCESSING', payload: true });
-
-    const source = objects[fusionTarget.sourceId];
-    const target = objects[fusionTarget.targetId];
-
-    const result = await executeFusion(source, target);
-
-    if (!result.success) {
-      if (result.lowValue) {
-        toast({ title: 'Fusion not productive', description: result.errorMessage });
-      } else {
-        dispatch({ type: 'SET_SHERPA_RESPONSE', payload: result.errorMessage || 'Fusion failed.' });
-      }
-      setFusionProcessing(false);
-      setFusionTarget(null);
-      dispatch({ type: 'SET_SHERPA_PROCESSING', payload: false });
-      return;
-    }
-
-    dispatch({
-      type: 'MATERIALIZE_OBJECT',
-      payload: {
-        id: result.id!,
-        type: getFusionOutputType(source.type, target.type),
-        title: result.title!,
-        pinned: false,
-        origin: { type: 'cross-object', sourceObjectId: fusionTarget.sourceId },
-        relationships: [fusionTarget.sourceId, fusionTarget.targetId],
-        context: result.context!,
-        position: { zone: 'primary', order: 0 },
-      },
-    });
-    dispatch({
-      type: 'SET_SHERPA_RESPONSE',
-      payload: `Synthesized "${source.title}" and "${target.title}" into a new insight.`,
-    });
-    setTimeout(() => dispatch({ type: 'OPEN_OBJECT', payload: { id: result.id! } }), 400);
-
-    setFusionProcessing(false);
-    setFusionTarget(null);
-    dispatch({ type: 'SET_SHERPA_PROCESSING', payload: false });
-  }, [fusionTarget, objects, dispatch]);
 
   const handleCancelFusion = useCallback(() => {
     setFusionTarget(null);
@@ -254,7 +214,7 @@ export function PanelCanvas() {
             sourceTitle={objects[fusionTarget.sourceId]?.title || ''}
             targetTitle={objects[fusionTarget.targetId]?.title || ''}
             isProcessing={fusionProcessing}
-            onFuse={handleFuse}
+            onFuse={() => { setFusionProcessing(true); handleFuse(); }}
             onCancel={handleCancelFusion}
           />
         )}

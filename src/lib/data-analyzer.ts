@@ -62,8 +62,13 @@ function hashString(s: string): string {
 }
 
 function computeFingerprint(columns: string[], rows: string[][]): string {
+  // Sample first, middle, and last rows + row count + columns to avoid collisions
+  // when datasets differ only in middle rows (ME-013 fix)
+  const mid = Math.floor(rows.length / 2);
   const sig = columns.join('|') + '::' + rows.length + '::' +
-    (rows[0]?.join('|') || '') + '::' + (rows[rows.length - 1]?.join('|') || '');
+    (rows[0]?.join('|') || '') + '::' +
+    (rows[mid]?.join('|') || '') + '::' +
+    (rows[rows.length - 1]?.join('|') || '');
   return hashString(sig);
 }
 
@@ -311,6 +316,10 @@ export async function analyzeDataset(
  * Apply Tier 2 memory overrides to a DataProfile.
  * High-confidence memories directly modify the profile BEFORE the slicer runs.
  * This is deterministic — the AI never sees the un-overridden data.
+ *
+ * Override logic is MECHANICAL, not heuristic. Each override type makes a
+ * specific, testable change to the profile. The AI can't ignore these because
+ * they're applied before the AI runs.
  */
 async function applyTier2Overrides(profile: DataProfile): Promise<DataProfile> {
   try {
@@ -321,32 +330,80 @@ async function applyTier2Overrides(profile: DataProfile): Promise<DataProfile> {
     if (overrides.length === 0) return profile;
 
     const result = { ...profile };
+    const contentLower = (m: SherpaMemory) => m.content.toLowerCase();
 
     for (const m of overrides) {
-      // Sorting overrides — reinforce ordinal priority
-      if (m.tags.includes('sorting') && result.ordinalPriorityColumn) {
-        if (/tier|priority|rank/i.test(m.content)) {
-          result.previewStrategy = `LOCKED by user preference: ${result.previewStrategy}`;
+      const cl = contentLower(m);
+
+      // ── Ordinal priority lock ──────────────────────────────────────────
+      // If user confirmed that tier/priority sorting should be respected,
+      // ensure the ordinalPriorityColumn is never bypassed by numeric sorting.
+      if (result.ordinalPriorityColumn && (
+        m.tags.includes('sorting') ||
+        m.tags.includes('tier') ||
+        m.tags.includes('priority') ||
+        /tier.*first|priority.*first|sort.*tier|sort.*priority|rank.*order/i.test(cl)
+      )) {
+        // Mechanical lock: ensure previewStrategy references ordinal priority
+        if (!result.previewStrategy.includes(result.ordinalPriorityColumn.column)) {
+          result.previewStrategy = `Sort by ${result.ordinalPriorityColumn.column} rank order (${result.ordinalPriorityColumn.rankOrder[0]} first), then by ${result.primaryMeasureColumn} within each rank`;
         }
       }
 
-      // Display column preferences
-      if (m.tags.includes('columns') && m.type === 'preference' && m.confidence >= 0.8) {
-        // Extract column names from content if mentioned
-        const mentioned = (result.displayColumns || []).filter(col =>
-          m.content.toLowerCase().includes(col.toLowerCase())
-        );
-        if (mentioned.length > 0) {
-          result.displayColumns = mentioned;
-        }
-      }
-
-      // Sort direction override
-      if (m.tags.includes('sort-direction') && m.type === 'preference') {
-        if (/ascending|smallest first|lowest first/i.test(m.content)) {
+      // ── Sort direction override ────────────────────────────────────────
+      if (m.type === 'preference' || m.type === 'correction') {
+        if (/ascending|smallest.first|lowest.first|sort.*asc/i.test(cl)) {
           result.sortDirection = 'asc';
-        } else if (/descending|largest first|highest first/i.test(m.content)) {
+        } else if (/descending|largest.first|highest.first|sort.*desc/i.test(cl)) {
           result.sortDirection = 'desc';
+        }
+      }
+
+      // ── Display column preferences ─────────────────────────────────────
+      // Match actual column names from the profile against memory content.
+      if ((m.type === 'preference' || m.type === 'correction') && result.displayColumns) {
+        const allColumns = result.displayColumns;
+
+        // "hide [column]" or "don't show [column]" → remove from display
+        const hideMatch = cl.match(/(?:hide|remove|don't show|exclude)\s+(?:the\s+)?(.+?)(?:\s+column)?$/i);
+        if (hideMatch) {
+          const target = hideMatch[1].trim();
+          const matched = allColumns.find(c => c.toLowerCase().includes(target));
+          if (matched) {
+            result.displayColumns = allColumns.filter(c => c !== matched);
+          }
+        }
+
+        // "show [column]" or "add [column]" → add to display if it exists in dataset
+        const showMatch = cl.match(/(?:show|add|include)\s+(?:the\s+)?(.+?)(?:\s+column)?$/i);
+        if (showMatch) {
+          const target = showMatch[1].trim();
+          // We don't have all dataset columns here, but we can at least
+          // check if it's already in displayColumns and add it if not
+          const alreadyShown = allColumns.some(c => c.toLowerCase().includes(target));
+          if (!alreadyShown) {
+            // Can't validate against actual columns here, but the slicer
+            // will gracefully ignore columns that don't exist in the dataset
+            result.displayColumns = [...allColumns, showMatch[1].trim()];
+          }
+        }
+      }
+
+      // ── Primary measure override ───────────────────────────────────────
+      // "sort by [column]" or "rank by [column]" → change primary measure
+      if (m.type === 'preference' || m.type === 'correction') {
+        const sortByMatch = cl.match(/(?:sort|rank|order|prioritize)\s+(?:by\s+)?(.+?)$/i);
+        if (sortByMatch && !(/tier|priority|rank|asc|desc/i.test(sortByMatch[1]))) {
+          // Only apply if it looks like a column name, not a direction/tier keyword
+          const candidate = sortByMatch[1].trim();
+          if (candidate.length > 2 && candidate.length < 50) {
+            result.primaryMeasureColumn = candidate;
+            result.cardRecommendations = {
+              ...result.cardRecommendations,
+              inspector: { ...result.cardRecommendations.inspector, sortBy: candidate },
+              metric: { ...result.cardRecommendations.metric, aggregateColumn: candidate },
+            };
+          }
         }
       }
     }

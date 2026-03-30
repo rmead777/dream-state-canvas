@@ -1,16 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { parseIntent } from '../intent-engine';
-describe('parseIntent fallback', () => {
-  it('returns a safe response-only action', async () => {
-    const result = await parseIntent('hello world');
-    expect(result.actions).toHaveLength(1);
-    expect(result.actions[0].type).toBe('respond');
-  });
+import { invalidateProfileCache } from '../intent-engine';
 
-  it('does not create objects from keyword-only heuristics anymore', async () => {
-    const result = await parseIntent('show me total AP exposure');
-    expect(result.actions).toHaveLength(1);
-    expect(result.actions[0].type).toBe('respond');
-    expect(result.actions.some((action) => action.type === 'create')).toBe(false);
+describe('intent-engine', () => {
+  it('invalidateProfileCache does not throw', () => {
+    // Smoke test — invalidateProfileCache resets the cached profile promise.
+    // Full integration tests for refineDataRules require AI mocking.
+    expect(() => invalidateProfileCache()).not.toThrow();
   });
 });

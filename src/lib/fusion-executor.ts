@@ -1,6 +1,9 @@
 import { WorkspaceObject } from './workspace-types';
 import { canFuse, SynthesisType } from './fusion-rules';
 import { callAI } from '@/hooks/useAI';
+import { buildObjectPromptSummary } from './workspace-intelligence';
+import { getCurrentProfile } from './data-analyzer';
+import { getActiveDataset } from './active-dataset';
 
 export interface FusionResult {
   success: boolean;
@@ -24,6 +27,13 @@ export async function executeFusion(
   }
 
   try {
+    // Use structured summaries instead of raw truncated JSON — prevents
+    // broken JSON fragments from confusing the AI (ME-011 fix)
+    const ds = getActiveDataset();
+    const profile = getCurrentProfile(ds.columns, ds.rows);
+    const sourceSum = JSON.stringify(buildObjectPromptSummary(source, profile), null, 2);
+    const targetSum = JSON.stringify(buildObjectPromptSummary(target, profile), null, 2);
+
     const result = await callAI(
       [
         {
@@ -31,10 +41,10 @@ export async function executeFusion(
           content: `You are an analytical synthesis engine. You must produce NEW analysis that NEITHER input contains on its own.
 
 OBJECT A — [${source.type}] "${source.title}":
-${JSON.stringify(source.context).slice(0, 1200)}
+${sourceSum}
 
 OBJECT B — [${target.type}] "${target.title}":
-${JSON.stringify(target.context).slice(0, 1200)}
+${targetSum}
 
 CRITICAL RULES:
 1. Your output must be ORIGINAL — do NOT copy, paraphrase, or summarize either input. Instead, find the RELATIONSHIP between them.

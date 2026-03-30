@@ -99,6 +99,8 @@ export function useAI() {
         const reader = resp.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
+        let parseRetries = 0;
+        const MAX_PARSE_RETRIES = 3; // Prevent infinite retry on genuinely malformed JSON
 
         while (true) {
           const { done, value } = await reader.read();
@@ -126,9 +128,17 @@ export function useAI() {
                 deltaBufferRef.current += content;
                 scheduleDeltaFlush();
               }
+              parseRetries = 0; // Reset on successful parse
             } catch {
-              buffer = line + '\n' + buffer;
-              break;
+              parseRetries++;
+              if (parseRetries < MAX_PARSE_RETRIES) {
+                // Might be an incomplete JSON chunk split across reads — push back and wait for more data
+                buffer = line + '\n' + buffer;
+                break;
+              }
+              // Genuinely malformed — skip it and reset counter
+              console.warn('[useAI] Skipping malformed SSE line after retries:', jsonStr.slice(0, 80));
+              parseRetries = 0;
             }
           }
         }

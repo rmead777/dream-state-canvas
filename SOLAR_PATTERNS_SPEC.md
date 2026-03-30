@@ -564,9 +564,9 @@ const CANNED_PROMPTS = {
 | 5.3 Activity ticker | ✅ DONE | 3b8350e |
 | 4.2 Memory supersession | ✅ DONE | 73d1a50 |
 | 5.2 Workspace radar | ✅ DONE | f0cf53d |
-| 4.1 Agent loop | DEFERRED | Needs API keys + arch decision |
+| 4.1 Agent loop | ✅ DONE | Client-side via sherpa-agent.ts. parseIntentAI removed. |
 | 5.1 Intelligence feed | DEFERRED | Needs structured observation design |
-| 4.3 Living narratives | DEFERRED | Depends on agent loop |
+| 4.3 Living narratives | DEFERRED | Depends on structured narrative store |
 
 ## ⚠️ DEPLOYMENT ALERTS
 

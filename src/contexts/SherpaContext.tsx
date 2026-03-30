@@ -21,7 +21,10 @@ const SherpaCtx = createContext<SherpaContextValue | null>(null);
 
 export function SherpaProvider({ children }: { children: React.ReactNode }) {
   const { state, dispatch } = useWorkspace();
-  const observationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Stable ref for the scan function — prevents interval reset on every state change.
+  // The interval calls scanRef.current which always points to the latest closure.
+  const scanRef = useRef<() => void>(() => {});
 
   // Proactive observation scanning — runs periodically
   const triggerObservationScan = useCallback(() => {
@@ -35,18 +38,18 @@ export function SherpaProvider({ children }: { children: React.ReactNode }) {
     }
   }, [state.objects, state.sherpa.observations, dispatch]);
 
-  // Auto-scan for observations every 30 seconds
+  // Keep the ref pointing to the latest scan function
+  scanRef.current = triggerObservationScan;
+
+  // Auto-scan for observations every 30 seconds — interval is STABLE,
+  // never resets on state changes. Calls through scanRef to get latest state.
   useEffect(() => {
-    observationTimerRef.current = setInterval(() => {
-      triggerObservationScan();
+    const timer = setInterval(() => {
+      scanRef.current();
     }, 30000);
 
-    return () => {
-      if (observationTimerRef.current) {
-        clearInterval(observationTimerRef.current);
-      }
-    };
-  }, [triggerObservationScan]);
+    return () => clearInterval(timer);
+  }, []); // Empty deps = runs once, stable interval
 
   // Compute a lightweight fingerprint of object state for reactivity.
   // Captures count, types, statuses, and pinned flags — not just count.

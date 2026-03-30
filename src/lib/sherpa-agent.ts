@@ -18,6 +18,9 @@ import { WorkspaceState, WorkspaceAction, ActiveContext } from './workspace-type
 import { getConversationMessages } from './conversation-memory';
 import { getAdminSettings } from './admin-settings';
 import { listDocuments } from './document-store';
+import { buildWorkspaceIntentContext } from './workspace-intelligence';
+import { getCurrentProfile } from './data-analyzer';
+import { getActiveDataset } from './active-dataset';
 
 interface Message {
   role: 'user' | 'assistant' | 'system' | 'tool';
@@ -61,25 +64,26 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
   // Build conversation history
   const history = getConversationMessages(contextWindow);
 
-  // Build focused card context
+  // Build structured workspace context using the same pipeline as the old intent engine.
+  // This includes: DataProfile summary, focused object details, per-object summaries
+  // with view state, recent intent outcomes — all compressed for the context window.
+  const ds = getActiveDataset();
+  const profile = getCurrentProfile(ds.columns, ds.rows);
+  const structuredContext = buildWorkspaceIntentContext({
+    objects: workspaceState.objects,
+    activeContext,
+    profile,
+  });
+
+  // Focused card behavioral hint — tells the AI when to update vs create
   const focusedId = activeContext?.focusedObjectId;
   const focusedObj = focusedId ? workspaceState.objects[focusedId] : null;
   let focusedHint = '';
   if (focusedObj) {
-    const rowCount = Array.isArray(focusedObj.context?.rows) ? focusedObj.context.rows.length : null;
-    focusedHint = `\nFOCUSED CARD: "${focusedObj.title}" (${focusedObj.type}, ID: ${focusedObj.id}, ${rowCount !== null ? `${rowCount} rows` : 'no data'})\nNOTE: Only use "update" on this card if the user EXPLICITLY references it ("this card", "that table", "show 5 rows"). General questions like "help me visualize" or "what should I do" should CREATE a new card, not update the focused one.`;
+    focusedHint = `\nFOCUSED CARD: "${focusedObj.title}" (${focusedObj.type}, ID: ${focusedObj.id})\nNOTE: Only use "update" on this card if the user EXPLICITLY references it ("this card", "that table", "show 5 rows"). General questions like "help me visualize" or "what should I do" should CREATE a new card, not update the focused one.`;
   }
 
-  // Build workspace summary
-  const activeObjects = Object.values(workspaceState.objects)
-    .filter(o => o.status !== 'dissolved')
-    .sort((a, b) => b.lastInteractedAt - a.lastInteractedAt)
-    .slice(0, 8);
-  const workspaceSummary = activeObjects.length > 0
-    ? `\nWORKSPACE: ${activeObjects.map(o => `${o.id}|${o.type}|"${o.title}"${o.id === focusedId ? ' [FOCUSED]' : ''}`).join(', ')}`
-    : '\nWORKSPACE: empty';
-
-  // Build uploaded documents list so the AI knows what's available
+  // Uploaded documents list so the AI knows what's available for getDocumentContent tool
   let documentsHint = '';
   try {
     const docs = await listDocuments();
@@ -95,7 +99,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
       content: [
         `User query: "${query}"`,
         focusedHint,
-        workspaceSummary,
+        `\nWorkspace state:\n${structuredContext}`,
         documentsHint,
         memories ? `\n${memories}` : '',
       ].filter(Boolean).join('\n'),
