@@ -67,7 +67,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
   let focusedHint = '';
   if (focusedObj) {
     const rowCount = Array.isArray(focusedObj.context?.rows) ? focusedObj.context.rows.length : null;
-    focusedHint = `\nFOCUSED CARD: "${focusedObj.title}" (${focusedObj.type}, ID: ${focusedObj.id}, ${rowCount !== null ? `${rowCount} rows` : 'no data'})`;
+    focusedHint = `\nFOCUSED CARD: "${focusedObj.title}" (${focusedObj.type}, ID: ${focusedObj.id}, ${rowCount !== null ? `${rowCount} rows` : 'no data'})\nNOTE: Only use "update" on this card if the user EXPLICITLY references it ("this card", "that table", "show 5 rows"). General questions like "help me visualize" or "what should I do" should CREATE a new card, not update the focused one.`;
   }
 
   // Build workspace summary
