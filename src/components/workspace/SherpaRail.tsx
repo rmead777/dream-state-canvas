@@ -50,10 +50,12 @@ export function SherpaRail() {
     const startX = e.clientX;
     const startWidth = railWidth;
 
+    let currentWidth = startWidth;
+
     const onMouseMove = (e: MouseEvent) => {
       const delta = startX - e.clientX;
-      const newWidth = Math.max(RAIL_MIN_WIDTH, Math.min(RAIL_MAX_WIDTH, startWidth + delta));
-      setRailWidth(newWidth);
+      currentWidth = Math.max(RAIL_MIN_WIDTH, Math.min(RAIL_MAX_WIDTH, startWidth + delta));
+      setRailWidth(currentWidth);
     };
 
     const onMouseUp = () => {
@@ -62,7 +64,7 @@ export function SherpaRail() {
       document.removeEventListener('mouseup', onMouseUp);
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
-      try { localStorage.setItem(RAIL_WIDTH_KEY, String(railWidth)); } catch {}
+      try { localStorage.setItem(RAIL_WIDTH_KEY, String(currentWidth)); } catch {}
     };
 
     document.body.style.cursor = 'col-resize';

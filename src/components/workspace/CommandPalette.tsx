@@ -63,15 +63,33 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       }));
     }
 
-    return recentIntents
+    // Canned prompts + recent intents when palette is empty
+    const canned: PaletteItem[] = [
+      // Quick Actions
+      { id: 'q-action', kind: 'query', title: 'What should I do today?', meta: 'Quick Action', query: 'Show my action queue for today' },
+      { id: 'q-call', kind: 'query', title: 'Who needs a call first?', meta: 'Quick Action', query: 'Create a vendor dossier for the most urgent vendor' },
+      { id: 'q-cash', kind: 'query', title: 'How should I allocate $50K?', meta: 'Quick Action', query: 'Create a cash allocation plan for $50,000' },
+      // Analysis
+      { id: 'q-worse', kind: 'query', title: 'What\'s getting worse?', meta: 'Analysis', query: 'Show escalation tracker' },
+      { id: 'q-risk', kind: 'query', title: 'Map production risks', meta: 'Analysis', query: 'Map production risks and supply chain dependencies' },
+      { id: 'q-outreach', kind: 'query', title: 'Track my outreach', meta: 'Analysis', query: 'Show outreach tracker with communication gaps' },
+      { id: 'q-brief', kind: 'query', title: 'Give me a brief', meta: 'Analysis', query: 'Create a brief summarizing the current situation' },
+      // Data
+      { id: 'q-dataset', kind: 'query', title: 'Show full dataset', meta: 'Data', query: 'Show the full dataset' },
+      { id: 'q-tier1', kind: 'query', title: 'Show Tier 1 vendors', meta: 'Data', query: 'Show all Tier 1 vendors' },
+    ];
+
+    const recent: PaletteItem[] = recentIntents
       .filter((intent) => intent.query)
       .map((intent, idx) => ({
         id: `recent-${idx}`,
         kind: 'query',
         title: intent.query!,
-        meta: 'Recent query',
+        meta: 'Recent',
         query: intent.query!,
       }));
+
+    return [...recent, ...canned];
   }, [filteredObjects, input, isActionQuery, recentIntents]);
 
   useEffect(() => {
