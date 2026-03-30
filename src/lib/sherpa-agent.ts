@@ -17,6 +17,7 @@ import { SHERPA_TOOLS, executeTool, getToolStatus } from './sherpa-tools';
 import { WorkspaceState, WorkspaceAction, ActiveContext } from './workspace-types';
 import { getConversationMessages } from './conversation-memory';
 import { getAdminSettings } from './admin-settings';
+import { listDocuments } from './document-store';
 
 interface Message {
   role: 'user' | 'assistant' | 'system' | 'tool';
@@ -78,6 +79,15 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
     ? `\nWORKSPACE: ${activeObjects.map(o => `${o.id}|${o.type}|"${o.title}"${o.id === focusedId ? ' [FOCUSED]' : ''}`).join(', ')}`
     : '\nWORKSPACE: empty';
 
+  // Build uploaded documents list so the AI knows what's available
+  let documentsHint = '';
+  try {
+    const docs = await listDocuments();
+    if (docs.length > 0) {
+      documentsHint = `\nUPLOADED DOCUMENTS (use getDocumentContent tool to read any of these):\n${docs.map(d => `  - ID: ${d.id} | "${d.filename}" (${d.file_type}) | uploaded ${d.created_at}`).join('\n')}`;
+    }
+  } catch {}
+
   const messages: Message[] = [
     ...history,
     {
@@ -86,6 +96,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
         `User query: "${query}"`,
         focusedHint,
         workspaceSummary,
+        documentsHint,
         memories ? `\n${memories}` : '',
       ].filter(Boolean).join('\n'),
     },
