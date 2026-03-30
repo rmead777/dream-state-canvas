@@ -358,10 +358,24 @@ function extractFromParsedJSON(parsed: any): {
   // OpenAI format: choices[0].message
   if (parsed.choices?.[0]?.message) {
     const msg = parsed.choices[0].message;
+    let text = msg.content || '';
+    let rawActions: any[] | null = null;
+
+    // msg.content might be a JSON string (double-wrapped: the AI returns intent JSON as content)
+    if (typeof text === 'string' && text.trim().startsWith('{')) {
+      try {
+        const inner = JSON.parse(text);
+        if (inner.response !== undefined) {
+          text = inner.response || '';
+          rawActions = inner.actions || null;
+        }
+      } catch {}
+    }
+
     return {
-      text: msg.content || '',
+      text,
       toolCalls: msg.tool_calls || null,
-      rawActions: null,
+      rawActions,
     };
   }
 
