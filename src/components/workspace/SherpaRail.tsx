@@ -20,6 +20,11 @@ import {
 import { toast } from 'sonner';
 import { PromptEditor } from './PromptEditor';
 
+const RAIL_MIN_WIDTH = 320;
+const RAIL_MAX_WIDTH = 800;
+const RAIL_DEFAULT_WIDTH = 400;
+const RAIL_WIDTH_KEY = 'sherpa-rail-width';
+
 export function SherpaRail() {
   const { state, dispatch } = useWorkspace();
   const { processIntent, setDocumentIds } = useWorkspaceActions();
@@ -29,6 +34,42 @@ export function SherpaRail() {
   const { user, signOut } = useAuth();
   const [input, setInput] = useState('');
   const [isExpanded, setIsExpanded] = useState(true);
+
+  // Resizable width
+  const [railWidth, setRailWidth] = useState(() => {
+    try {
+      const stored = localStorage.getItem(RAIL_WIDTH_KEY);
+      return stored ? Math.max(RAIL_MIN_WIDTH, Math.min(RAIL_MAX_WIDTH, parseInt(stored))) : RAIL_DEFAULT_WIDTH;
+    } catch { return RAIL_DEFAULT_WIDTH; }
+  });
+  const isDraggingRef = useRef(false);
+
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDraggingRef.current = true;
+    const startX = e.clientX;
+    const startWidth = railWidth;
+
+    const onMouseMove = (e: MouseEvent) => {
+      const delta = startX - e.clientX;
+      const newWidth = Math.max(RAIL_MIN_WIDTH, Math.min(RAIL_MAX_WIDTH, startWidth + delta));
+      setRailWidth(newWidth);
+    };
+
+    const onMouseUp = () => {
+      isDraggingRef.current = false;
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      try { localStorage.setItem(RAIL_WIDTH_KEY, String(railWidth)); } catch {}
+    };
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, [railWidth]);
   const [showAdmin, setShowAdmin] = useState(false);
   const [adminUnlocked, setAdminUnlocked] = useState(isAdminUnlocked());
   const [adminState, setAdminState] = useState(getAdminSettings());
@@ -162,7 +203,16 @@ export function SherpaRail() {
   }
 
   return (
-    <div className="workspace-noise relative flex h-full w-[360px] flex-shrink-0 flex-col overflow-hidden border-l border-workspace-border/50 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.94),rgba(248,248,252,0.92))] backdrop-blur-xl lg:w-[420px]">
+    <div
+      className="workspace-noise relative flex h-full flex-shrink-0 flex-col overflow-hidden border-l border-workspace-border/50 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.94),rgba(248,248,252,0.92))] backdrop-blur-xl"
+      style={{ width: `${railWidth}px` }}
+    >
+      {/* Drag handle — left edge */}
+      <div
+        onMouseDown={handleResizeStart}
+        className="absolute left-0 top-0 bottom-0 w-1 z-30 cursor-col-resize hover:bg-workspace-accent/20 active:bg-workspace-accent/30 transition-colors"
+        title="Drag to resize"
+      />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[linear-gradient(to_bottom,rgba(99,102,241,0.08),transparent)]" />
 
       {/* Header */}
