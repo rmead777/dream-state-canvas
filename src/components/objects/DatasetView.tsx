@@ -303,7 +303,7 @@ function VirtualizedTable({
       >
         {/* Sticky header */}
         <div
-          className="grid border-b border-workspace-border bg-workspace-surface/30 text-[11px] font-medium uppercase tracking-[0.18em] text-workspace-text-secondary sticky top-0 z-10"
+          className="grid border-b border-workspace-border bg-white text-[11px] font-medium uppercase tracking-[0.18em] text-workspace-text-secondary sticky top-0 z-10"
           style={{ gridTemplateColumns: gridCols }}
         >
           {columns.map((col, idx) => (
