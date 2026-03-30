@@ -19,7 +19,7 @@ import {
 } from '@/lib/admin-settings';
 import { toast } from 'sonner';
 import { PromptEditor } from './PromptEditor';
-import { WorkspaceRadar } from './WorkspaceRadar';
+// WorkspaceRadar moved to WorkspaceBar — rail is conversation-only
 
 const RAIL_MIN_WIDTH = 320;
 const RAIL_MAX_WIDTH = 800;
@@ -388,11 +388,6 @@ export function SherpaRail() {
           contextMode={contextMode}
           onModeChange={setContextMode}
         />
-
-        {/* Workspace health radar */}
-        <div className="workspace-card-surface mb-4 rounded-2xl border border-workspace-border/45 px-4 py-3">
-          <WorkspaceRadar />
-        </div>
 
         {/* Admin panel */}
         {adminUnlocked && showAdmin && (

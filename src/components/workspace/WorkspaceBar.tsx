@@ -9,10 +9,11 @@ import { useDocumentUpload } from '@/hooks/useDocumentUpload';
 import { RulesEditor } from './RulesEditor';
 import { DocumentUpload } from './DocumentUpload';
 import { MemoryPanel } from './MemoryPanel';
+import { WorkspaceRadar } from './WorkspaceRadar';
 import { toast } from 'sonner';
 import { ActivityTicker } from './ActivityTicker';
 
-type UtilityPanel = 'upload' | 'rules' | 'memory' | null;
+type UtilityPanel = 'upload' | 'rules' | 'memory' | 'health' | null;
 
 const TYPE_ICONS: Record<string, string> = {
   metric: '◈', alert: '◆', comparison: '⇄', inspector: '▤',
@@ -113,6 +114,9 @@ export function WorkspaceBar() {
             {activePanel === 'memory' && (
               <MemoryPanel />
             )}
+            {activePanel === 'health' && (
+              <WorkspaceRadar />
+            )}
           </div>
         </div>
       )}
@@ -196,6 +200,12 @@ export function WorkspaceBar() {
             label="Memory"
             active={activePanel === 'memory'}
             onClick={() => togglePanel('memory')}
+          />
+          <UtilityButton
+            icon="♡"
+            label="Health"
+            active={activePanel === 'health'}
+            onClick={() => togglePanel('health')}
           />
           <UtilityButton
             icon="▾"
