@@ -10,6 +10,7 @@ import { RulesEditor } from './RulesEditor';
 import { DocumentUpload } from './DocumentUpload';
 import { MemoryPanel } from './MemoryPanel';
 import { toast } from 'sonner';
+import { ActivityTicker } from './ActivityTicker';
 
 type UtilityPanel = 'upload' | 'rules' | 'memory' | null;
 
@@ -169,9 +170,7 @@ export function WorkspaceBar() {
               ))}
             </>
           ) : (
-            <span className="text-[10px] text-workspace-text-secondary/30">
-              No collapsed objects
-            </span>
+            <ActivityTicker />
           )}
         </div>
 
