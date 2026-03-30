@@ -4,7 +4,7 @@
 
 export type ObjectType =
   | 'metric' | 'comparison' | 'alert' | 'inspector' | 'brief'
-  | 'timeline' | 'monitor' | 'document' | 'dataset' | 'analysis'
+  | 'timeline' | 'monitor' | 'document' | 'document-viewer' | 'dataset' | 'analysis'
   | 'action-queue' | 'vendor-dossier' | 'cash-planner'
   | 'escalation-tracker' | 'outreach-tracker' | 'production-risk';
 
