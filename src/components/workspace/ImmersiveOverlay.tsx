@@ -1,11 +1,20 @@
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { DocumentReader } from '@/components/objects/DocumentReader';
 import { DatasetView } from '@/components/objects/DatasetView';
+import { AnalysisCard } from '@/components/objects/AnalysisCard';
+import { MetricDetail } from '@/components/objects/MetricDetail';
+import { ComparisonPanel } from '@/components/objects/ComparisonPanel';
+import { AlertRiskPanel } from '@/components/objects/AlertRiskPanel';
+import { AIBrief } from '@/components/objects/AIBrief';
+import { Timeline } from '@/components/objects/Timeline';
+import { DataInspector } from '@/components/objects/DataInspector';
+import { getObjectTypeToken } from '@/lib/design-tokens';
+import MarkdownRenderer from '@/components/objects/MarkdownRenderer';
 
 /**
- * ImmersiveOverlay — a depth layer, not a page navigation.
- * When a user goes deep into a document or dataset, this overlay
- * expands to fill the workspace while other objects fade.
+ * ImmersiveOverlay — full-screen expanded view for ANY card type.
+ * Documents get the PDF viewer, datasets get the full table,
+ * everything else renders its content in a spacious layout.
  */
 export function ImmersiveOverlay() {
   const { state, dispatch } = useWorkspace();
@@ -19,6 +28,8 @@ export function ImmersiveOverlay() {
   const handleClose = () => {
     dispatch({ type: 'EXIT_IMMERSIVE' });
   };
+
+  const typeToken = getObjectTypeToken(object.type);
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col overflow-hidden bg-[linear-gradient(to_bottom,rgba(255,255,255,0.96),rgba(248,248,252,0.96))] backdrop-blur-md animate-[immersive-enter_0.4s_cubic-bezier(0.16,1,0.3,1)_forwards]">
@@ -35,11 +46,11 @@ export function ImmersiveOverlay() {
           </button>
           <div className="h-4 w-px bg-workspace-border/50" />
           <span className="workspace-pill rounded-full px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.2em] text-workspace-accent">
-            {object.type === 'document' ? 'Document' : 'Dataset'}
+            {typeToken.label}
           </span>
           <div>
             <h2 className="text-sm font-semibold text-workspace-text">{object.title}</h2>
-            <p className="text-[11px] text-workspace-text-secondary/60">Immersive mode</p>
+            <p className="text-[11px] text-workspace-text-secondary/60">Expanded view</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -52,14 +63,58 @@ export function ImmersiveOverlay() {
         </div>
       </div>
 
-      {/* Immersive content */}
-      <div className="relative z-10 flex-1 overflow-y-auto px-4 pt-3 pb-4">
-        {object.type === 'document' ? (
-          <DocumentReader object={object} isImmersive />
-        ) : object.type === 'dataset' ? (
-          <DatasetView object={object} isImmersive />
-        ) : null}
+      {/* Immersive content — renders ANY card type */}
+      <div className="relative z-10 flex-1 overflow-y-auto px-8 pt-6 pb-8">
+        <div className="mx-auto max-w-4xl">
+          <ImmersiveContent object={object} />
+        </div>
       </div>
     </div>
   );
+}
+
+/** Render the appropriate content for any card type in immersive mode */
+function ImmersiveContent({ object }: { object: any }) {
+  // Cards with AI-generated sections always use AnalysisCard
+  if (object.context?.sections?.length > 0) {
+    return <AnalysisCard object={object} />;
+  }
+
+  switch (object.type) {
+    case 'document':
+      return <DocumentReader object={object} isImmersive />;
+    case 'dataset':
+      return <DatasetView object={object} isImmersive />;
+    case 'metric':
+      return <MetricDetail object={object} />;
+    case 'comparison':
+      return <ComparisonPanel object={object} />;
+    case 'alert':
+      return <AlertRiskPanel object={object} />;
+    case 'brief':
+      // Briefs may have markdown content
+      if (object.context?.content) {
+        return <MarkdownRenderer content={object.context.content} />;
+      }
+      return <AIBrief object={object} />;
+    case 'timeline':
+      return <Timeline object={object} />;
+    case 'inspector':
+      return <DataInspector object={object} />;
+    case 'analysis':
+      return <AnalysisCard object={object} />;
+    default:
+      // Fallback: render context as markdown if it has content, otherwise show the object renderer
+      if (object.context?.content) {
+        return <MarkdownRenderer content={object.context.content} />;
+      }
+      return (
+        <div className="text-sm text-workspace-text-secondary">
+          <p>This card type doesn't have an expanded view yet.</p>
+          <pre className="mt-4 rounded-xl bg-workspace-surface/50 p-4 text-[11px] overflow-auto">
+            {JSON.stringify(object.context, null, 2)}
+          </pre>
+        </div>
+      );
+  }
 }
