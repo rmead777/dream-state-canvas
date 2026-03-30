@@ -339,7 +339,8 @@ export function useWorkspaceActions() {
   /** Resolve data and materialize a new workspace object */
   async function handleCreate(action: Extract<WorkspaceAction, { type: 'create' }>, origin: IntentOrigin) {
     objectCounter++;
-    const id = `wo-${Date.now()}-${objectCounter}`;
+    // Use pre-assigned ID from agent loop shadow state if available, otherwise generate
+    const id = (action as any).id || `wo-${Date.now()}-${objectCounter}`;
     const relationships = action.relatedTo ?? [];
     const freeformPosition =
       state.layoutMode === 'freeform'

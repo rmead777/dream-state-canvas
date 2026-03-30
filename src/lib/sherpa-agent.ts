@@ -94,6 +94,14 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
   let toolCallsUsed = 0;
   const pendingWriteActions: any[] = [];
 
+  /** Remap tool executor output to applyResult format: { action: 'create' } → { type: 'create' } */
+  function remapPendingActions(): any[] {
+    return pendingWriteActions.map(a => {
+      const { action, ...rest } = a;
+      return { type: action, ...rest };
+    });
+  }
+
   // Shadow state: mutable copy of workspace objects so write tools are
   // visible to subsequent read tools within the same loop iteration.
   // After the loop, pendingWriteActions are applied to real React state.
@@ -118,7 +126,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
       onStatusUpdate?.(null);
       return {
         response: text || 'Done.',
-        actions: [...rawActions, ...pendingWriteActions.map(a => a)],
+        actions: [...rawActions, ...remapPendingActions()],
         toolCallsUsed,
       };
     }
@@ -128,7 +136,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
       onStatusUpdate?.(null);
       return {
         response: text || 'I processed your request.',
-        actions: pendingWriteActions,
+        actions: remapPendingActions(),
         toolCallsUsed,
       };
     }
