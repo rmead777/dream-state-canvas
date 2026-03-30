@@ -185,19 +185,41 @@ function CalloutRenderer({ section }: { section: { severity: string; text: strin
   );
 }
 
+/** Split jammed text+number values like "Entities10" → "10" with "Entities" as label suffix */
+function cleanMetricValue(value: string | number, label: string): { display: string; labelSuffix: string } {
+  if (typeof value === 'number') return { display: String(value), labelSuffix: '' };
+  const str = String(value);
+  // Check for text jammed with number: "Entities10", "Critical3", "USD$165,348"
+  const match = str.match(/^([A-Za-z$]+)\s*(\d[\d,.$]*%?)$/);
+  if (match) {
+    const prefix = match[1];
+    const num = match[2];
+    // If prefix looks like a unit (USD, $), keep it with the number
+    if (prefix === '$' || prefix === 'USD' || prefix === 'USD$') {
+      return { display: `${prefix}${num}`, labelSuffix: '' };
+    }
+    // Otherwise the prefix is a misplaced label — show just the number
+    return { display: num, labelSuffix: '' };
+  }
+  return { display: str, labelSuffix: '' };
+}
+
 function MetricsRowRenderer({ section }: { section: { metrics: { label: string; value: string | number; unit?: string }[] } }) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-      {section.metrics.map((m, i) => (
-        <div key={i} className="rounded-lg border border-workspace-border/30 bg-workspace-surface/15 px-3 py-2.5">
-          <p className="text-[9px] font-medium uppercase tracking-[0.2em] text-workspace-text-secondary/50 mb-0.5">
-            {m.label}
-          </p>
-          <p className="text-lg font-bold text-workspace-text tabular-nums">
-            {m.unit && m.unit !== '%' ? m.unit : ''}{m.value}{m.unit === '%' ? '%' : ''}
-          </p>
-        </div>
-      ))}
+      {section.metrics.map((m, i) => {
+        const { display } = cleanMetricValue(m.value, m.label);
+        return (
+          <div key={i} className="rounded-lg border border-workspace-border/30 bg-workspace-surface/15 px-3 py-2.5">
+            <p className="text-[9px] font-medium uppercase tracking-[0.2em] text-workspace-text-secondary/50 mb-0.5">
+              {m.label}
+            </p>
+            <p className="text-lg font-bold text-workspace-text tabular-nums">
+              {m.unit && m.unit !== '%' ? `${m.unit} ` : ''}{display}{m.unit === '%' ? '%' : ''}
+            </p>
+          </div>
+        );
+      })}
     </div>
   );
 }
