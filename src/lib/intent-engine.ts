@@ -227,40 +227,42 @@ export async function parseIntentAI(
 
     if (parsed.actions) {
       for (const action of parsed.actions) {
-        if (action.type === 'create') {
-          const seedInfo = SEED_DATA_BY_TYPE[action.objectType];
+        // Cast passthrough fields from unknown to usable types
+        const a = action as Record<string, any>;
+        if (a.type === 'create') {
+          const seedInfo = SEED_DATA_BY_TYPE[a.objectType];
           const dynamicTypes = ['metric', 'inspector', 'alert', 'comparison', 'dataset'];
-          const data = dynamicTypes.includes(action.objectType)
-            ? await getDynamicData(action.objectType)
+          const data = dynamicTypes.includes(a.objectType)
+            ? await getDynamicData(a.objectType)
             : seedInfo?.data || {};
           actions.push({
             type: 'create',
-            objectType: action.objectType,
-            title: action.title || seedInfo?.defaultTitle || 'Untitled',
+            objectType: a.objectType as ObjectType,
+            title: a.title || seedInfo?.defaultTitle || 'Untitled',
             data,
-            relatedTo: action.relatedTo || [],
+            relatedTo: a.relatedTo || [] as string[],
             // Pass through AI-generated rich content — don't discard it
-            ...(action.sections ? { sections: action.sections } : {}),
-            ...(action.dataQuery ? { dataQuery: action.dataQuery } : {}),
+            ...(a.sections ? { sections: a.sections } : {}),
+            ...(a.dataQuery ? { dataQuery: a.dataQuery } : {}),
           });
-        } else if (action.type === 'focus') {
-          actions.push({ type: 'focus', objectId: action.objectId });
-        } else if (action.type === 'dissolve') {
-          actions.push({ type: 'dissolve', objectId: action.objectId });
-        } else if (action.type === 'update') {
+        } else if (a.type === 'focus') {
+          actions.push({ type: 'focus', objectId: a.objectId });
+        } else if (a.type === 'dissolve') {
+          actions.push({ type: 'dissolve', objectId: a.objectId });
+        } else if (a.type === 'update') {
           // Pass through ALL AI-provided fields — dataQuery, sections, sectionOperations
           actions.push({
             type: 'update',
-            objectId: action.objectId,
-            instruction: action.instruction,
-            ...(action.dataQuery ? { dataQuery: action.dataQuery } : {}),
-            ...(action.sections ? { sections: action.sections } : {}),
-            ...(action.sectionOperations ? { sectionOperations: action.sectionOperations } : {}),
+            objectId: a.objectId,
+            instruction: a.instruction,
+            ...(a.dataQuery ? { dataQuery: a.dataQuery } : {}),
+            ...(a.sections ? { sections: a.sections } : {}),
+            ...(a.sectionOperations ? { sectionOperations: a.sectionOperations } : {}),
           });
-        } else if (action.type === 'fuse') {
-          actions.push({ type: 'fuse', objectIdA: action.objectIdA, objectIdB: action.objectIdB });
-        } else if (action.type === 'refine-rules') {
-          actions.push({ type: 'refine-rules', feedback: action.feedback });
+        } else if (a.type === 'fuse') {
+          actions.push({ type: 'fuse', objectIdA: a.objectIdA, objectIdB: a.objectIdB });
+        } else if (a.type === 'refine-rules') {
+          actions.push({ type: 'refine-rules', feedback: a.feedback });
         }
       }
     }
