@@ -114,10 +114,11 @@ export function SherpaRail() {
     }
   }, [lastResponse]);
 
-  // Auto-scroll to latest message
+  // Auto-scroll to TOP when new response arrives so user sees it immediately
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [promptHistory, lastResponse, isProcessing]);
+    scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [lastResponse, isProcessing]);
 
   const trackAndProcess = useCallback((text: string) => {
     setPromptHistory(prev => [...prev, { query: text, response: null, timestamp: Date.now() }]);
@@ -293,7 +294,7 @@ export function SherpaRail() {
         </div>
       </div>
 
-      <div className="relative z-10 flex-1 overflow-y-auto px-4 py-3">
+      <div ref={scrollContainerRef} className="relative z-10 flex-1 overflow-y-auto px-4 py-3">
         {/* Compact session pulse */}
         <div className="mb-3 flex items-center gap-2 px-1">
           <span className={`inline-block h-1.5 w-1.5 rounded-full ${composerStateTone} ${voice.isListening || isProcessing ? 'animate-pulse' : ''}`} />
