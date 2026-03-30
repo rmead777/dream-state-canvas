@@ -60,7 +60,7 @@ export function useFusion({ objects, fusionTarget, layoutMode, onComplete }: Use
         type: getFusionOutputType(source.type, target.type),
         title: result.title!,
         pinned: false,
-        origin: { type: 'cross-object', sourceObjectId: source.id, query: \`Fusion of \${source.title} and \${target.title}\` },
+        origin: { type: 'cross-object', sourceObjectId: source.id, query: `Fusion of ${source.title} and ${target.title}` },
         relationships: [source.id, target.id],
         context: result.context!,
         position: { zone: 'primary', order: 0 },
@@ -70,7 +70,7 @@ export function useFusion({ objects, fusionTarget, layoutMode, onComplete }: Use
 
     dispatch({
       type: 'SET_SHERPA_RESPONSE',
-      payload: \`Synthesized "\${source.title}" and "\${target.title}" into a new insight.\`,
+      payload: `Synthesized "${source.title}" and "${target.title}" into a new insight.`,
     });
     setTimeout(() => dispatch({ type: 'OPEN_OBJECT', payload: { id: result.id! } }), 400);
     dispatch({ type: 'SET_SHERPA_PROCESSING', payload: false });
