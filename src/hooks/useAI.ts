@@ -27,6 +27,8 @@ interface UseAIOptions {
 export function useAI() {
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const deltaBufferRef = useRef('');
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const streamChat = useCallback(
     async (messages: Message[], options: UseAIOptions = {}) => {
@@ -38,6 +40,23 @@ export function useAI() {
 
       setIsStreaming(true);
       let fullText = '';
+      deltaBufferRef.current = '';
+
+      // Batched flush: accumulate tokens, flush every 80ms to avoid per-token re-renders
+      const flushDelta = () => {
+        if (deltaBufferRef.current && onDelta) {
+          onDelta(deltaBufferRef.current);
+          deltaBufferRef.current = '';
+        }
+      };
+      const scheduleDeltaFlush = () => {
+        if (!flushTimerRef.current) {
+          flushTimerRef.current = setTimeout(() => {
+            flushDelta();
+            flushTimerRef.current = null;
+          }, 80);
+        }
+      };
 
       try {
         const admin = getAdminSettings();
@@ -104,7 +123,8 @@ export function useAI() {
               const content = parsed.choices?.[0]?.delta?.content;
               if (content) {
                 fullText += content;
-                onDelta?.(content);
+                deltaBufferRef.current += content;
+                scheduleDeltaFlush();
               }
             } catch {
               buffer = line + '\n' + buffer;
@@ -126,16 +146,30 @@ export function useAI() {
               const content = parsed.choices?.[0]?.delta?.content;
               if (content) {
                 fullText += content;
-                onDelta?.(content);
+                deltaBufferRef.current += content;
               }
             } catch (e) { console.warn('[useAI] Failed to parse SSE flush line:', e); }
           }
         }
 
+        // Final flush — ensure last buffered tokens arrive
+        if (flushTimerRef.current) {
+          clearTimeout(flushTimerRef.current);
+          flushTimerRef.current = null;
+        }
+        flushDelta();
+
         onComplete?.(fullText);
         setIsStreaming(false);
         return fullText;
       } catch (e: any) {
+        // Clean up flush timer on error
+        if (flushTimerRef.current) {
+          clearTimeout(flushTimerRef.current);
+          flushTimerRef.current = null;
+        }
+        flushDelta();
+
         if (e.name === 'AbortError') {
           setIsStreaming(false);
           return null;
