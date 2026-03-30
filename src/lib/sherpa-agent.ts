@@ -216,7 +216,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
   onStatusUpdate?.(null);
   return {
     response: 'I\'ve gathered what I can. Here\'s what I found.',
-    actions: pendingWriteActions,
+    actions: remapPendingActions(),
     toolCallsUsed,
   };
 }
