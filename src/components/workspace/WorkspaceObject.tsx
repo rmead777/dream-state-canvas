@@ -70,7 +70,7 @@ function ObjectContent({ object }: { object: WO }) {
 
 export function WorkspaceObjectWrapper({ object, dragHandleProps }: { object: WO; dragHandleProps?: HTMLAttributes<HTMLSpanElement> | SyntheticListenerMap }) {
   const { collapseObject, dissolveObject, pinObject, unpinObject, focusObject, processIntent } = useWorkspaceActions();
-  const { state } = useWorkspace();
+  const { state, dispatch } = useWorkspace();
   const { shouldDim, shouldHighlight, getContextualActions, cascadeDissolve } = useCrossObjectBehavior();
   const ambientHints = useAmbientSherpa();
   const [size, setSize] = useState<{ width: number | null; height: number | null }>({ width: null, height: null });
@@ -190,6 +190,13 @@ export function WorkspaceObjectWrapper({ object, dragHandleProps }: { object: WO
 
         {/* Contextual actions — visible on hover */}
         <div className="flex items-center gap-1 opacity-0 translate-y-1 transition-all duration-200 workspace-spring group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:translate-y-0">
+          <button
+            onClick={(e) => { e.stopPropagation(); dispatch({ type: 'ENTER_IMMERSIVE', payload: { id: object.id } }); }}
+            className="workspace-focus-ring rounded-md px-2 py-1 text-[10px] text-workspace-text-secondary transition-colors hover:bg-workspace-accent/10 hover:text-workspace-accent"
+            title="Expand to full view"
+          >
+            ⤢ Expand
+          </button>
           <button
             onClick={(e) => { e.stopPropagation(); object.pinned ? unpinObject(object.id) : pinObject(object.id); }}
             className={`workspace-focus-ring rounded-md px-2 py-1 text-[10px] transition-colors ${
