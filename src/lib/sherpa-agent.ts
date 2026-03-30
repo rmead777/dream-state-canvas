@@ -319,49 +319,89 @@ function extractFromSSE(sse: string): string {
 
 /**
  * Parse AI response — extract text, tool calls, and/or actions.
+ * Handles: OpenAI JSON, Anthropic JSON, intent JSON, SSE-assembled text, plain text.
  */
 function parseAgentResponse(response: string): {
   text: string;
   toolCalls: ToolCall[] | null;
   rawActions: any[] | null;
 } {
-  // Try parsing as JSON first (non-streaming response or extracted from SSE)
+  const trimmed = response.trim();
+
+  // 1. Try direct JSON parse
   try {
-    const parsed = JSON.parse(response);
-
-    // OpenAI format: choices[0].message
-    if (parsed.choices?.[0]?.message) {
-      const msg = parsed.choices[0].message;
-      return {
-        text: msg.content || '',
-        toolCalls: msg.tool_calls || null,
-        rawActions: null,
-      };
-    }
-
-    // Direct JSON response from the AI (intent format: { response, actions })
-    if (parsed.response !== undefined || parsed.actions !== undefined) {
-      return {
-        text: parsed.response || '',
-        toolCalls: null,
-        rawActions: parsed.actions || null,
-      };
-    }
+    const parsed = JSON.parse(trimmed);
+    const result = extractFromParsedJSON(parsed);
+    if (result) return result;
   } catch {}
 
-  // Plain text — try to extract JSON from it (the current parseIntentAI pattern)
-  const jsonMatch = response.match(/\{[\s\S]*\}/);
+  // 2. Try extracting JSON from within the text (AI may wrap in markdown or text)
+  const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
     try {
       const parsed = JSON.parse(jsonMatch[0]);
-      return {
-        text: parsed.response || '',
-        toolCalls: null,
-        rawActions: parsed.actions || null,
-      };
+      const result = extractFromParsedJSON(parsed);
+      if (result) return result;
     } catch {}
   }
 
-  // Plain text response with no JSON — treat as conversational
-  return { text: response, toolCalls: null, rawActions: null };
+  // 3. Plain text response — treat as conversational
+  return { text: trimmed, toolCalls: null, rawActions: null };
+}
+
+/** Extract text/toolCalls/actions from a parsed JSON object */
+function extractFromParsedJSON(parsed: any): {
+  text: string;
+  toolCalls: ToolCall[] | null;
+  rawActions: any[] | null;
+} | null {
+  // OpenAI format: choices[0].message
+  if (parsed.choices?.[0]?.message) {
+    const msg = parsed.choices[0].message;
+    return {
+      text: msg.content || '',
+      toolCalls: msg.tool_calls || null,
+      rawActions: null,
+    };
+  }
+
+  // Anthropic format: content array with text and tool_use blocks
+  if (Array.isArray(parsed.content)) {
+    const textBlock = parsed.content.find((b: any) => b.type === 'text');
+    const toolBlocks = parsed.content.filter((b: any) => b.type === 'tool_use');
+
+    // Anthropic text might itself be JSON (the intent response)
+    let text = textBlock?.text || '';
+    let rawActions: any[] | null = null;
+    if (text.trim().startsWith('{')) {
+      try {
+        const innerParsed = JSON.parse(text);
+        if (innerParsed.response !== undefined) {
+          text = innerParsed.response || '';
+          rawActions = innerParsed.actions || null;
+        }
+      } catch {}
+    }
+
+    const toolCalls = toolBlocks.length > 0
+      ? toolBlocks.map((b: any) => ({
+          id: b.id,
+          type: 'function' as const,
+          function: { name: b.name, arguments: JSON.stringify(b.input) },
+        }))
+      : null;
+
+    return { text, toolCalls, rawActions };
+  }
+
+  // Direct intent format: { response, actions }
+  if (parsed.response !== undefined || parsed.actions !== undefined) {
+    return {
+      text: parsed.response || '',
+      toolCalls: null,
+      rawActions: parsed.actions || null,
+    };
+  }
+
+  return null;
 }
