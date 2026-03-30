@@ -99,7 +99,10 @@ export async function getMemories(userId: string): Promise<SherpaMemory[]> {
     console.warn('[memory-store] Failed to fetch memories:', error);
     return [];
   }
-  return ((data || []) as unknown as MemoryRow[]).map(rowToMemory);
+  const memories = ((data || []) as unknown as MemoryRow[]).map(rowToMemory);
+  // Update count for WorkspaceRadar health indicator
+  try { localStorage.setItem('sherpa-memory-count', String(memories.length)); } catch {}
+  return memories;
 }
 
 export async function getOverrideMemories(userId: string): Promise<SherpaMemory[]> {
@@ -107,6 +110,7 @@ export async function getOverrideMemories(userId: string): Promise<SherpaMemory[
     .from('sherpa_memories')
     .select('*')
     .eq('user_id', userId)
+    .eq('is_active', true)
     .eq('tier', 'override')
     .gte('confidence', 0.8)
     .order('confidence', { ascending: false });
@@ -120,6 +124,7 @@ export async function getPendingMemories(userId: string): Promise<SherpaMemory[]
     .from('sherpa_memories')
     .select('*')
     .eq('user_id', userId)
+    .eq('is_active', true)
     .eq('source', 'inferred')
     .gte('confidence', 0.5)
     .lte('confidence', 0.75)
