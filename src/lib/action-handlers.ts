@@ -92,12 +92,21 @@ export async function handleUpdate({ target, instruction, documentIds, dataQuery
       dataQuery,
       queryMeta: { totalMatched: result.totalMatched, truncated: result.truncated },
     };
+    // If the card has sections with a table, update that table's rows too
+    if (Array.isArray(newContext.sections)) {
+      newContext.sections = newContext.sections.map((s: any) => {
+        if (s.type === 'table') {
+          return { ...s, columns: result.columns, rows: result.rows };
+        }
+        return s;
+      });
+    }
     return {
       dispatches: [
         { type: 'UPDATE_OBJECT_CONTEXT', payload: { id: target.id, context: newContext } },
         { type: 'TOUCH_OBJECT', payload: { id: target.id } },
         { type: 'FOCUS_OBJECT', payload: { id: target.id } },
-        { type: 'SET_SHERPA_RESPONSE', payload: `Updated "${target.title}" — ${instruction}.` },
+        { type: 'SET_SHERPA_RESPONSE', payload: `Updated "${target.title}"${instruction ? ` — ${instruction}` : ''}.` },
       ],
     };
   }
@@ -111,7 +120,7 @@ export async function handleUpdate({ target, instruction, documentIds, dataQuery
         { type: 'UPDATE_OBJECT_CONTEXT', payload: { id: target.id, context: { ...target.context, sections: validSections } } },
         { type: 'TOUCH_OBJECT', payload: { id: target.id } },
         { type: 'FOCUS_OBJECT', payload: { id: target.id } },
-        { type: 'SET_SHERPA_RESPONSE', payload: `Updated "${target.title}" — ${instruction}.` },
+        { type: 'SET_SHERPA_RESPONSE', payload: `Updated "${target.title}"${instruction ? ` — ${instruction}` : ''}.` },
       ],
     };
   }
@@ -150,7 +159,7 @@ export async function handleUpdate({ target, instruction, documentIds, dataQuery
         { type: 'UPDATE_OBJECT', payload: { id: target.id, context: { ...target.context, sections } } },
         { type: 'TOUCH_OBJECT', payload: { id: target.id } },
         { type: 'FOCUS_OBJECT', payload: { id: target.id } },
-        { type: 'SET_SHERPA_RESPONSE', payload: `Updated "${target.title}" — ${instruction}.` },
+        { type: 'SET_SHERPA_RESPONSE', payload: `Updated "${target.title}"${instruction ? ` — ${instruction}` : ''}.` },
       ],
     };
   }
