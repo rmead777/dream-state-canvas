@@ -127,7 +127,13 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
       };
     }
 
-    // Execute tool calls
+    // Push ONE assistant message with the tool calls (before executing them)
+    messages.push({
+      role: 'assistant',
+      content: text || '',
+    });
+
+    // Execute tool calls and push results
     for (const tc of toolCalls) {
       toolCallsUsed++;
       const toolName = tc.function.name;
@@ -149,12 +155,6 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
           pendingWriteActions.push(parsed);
         }
       } catch {}
-
-      // Add assistant message with tool call
-      messages.push({
-        role: 'assistant',
-        content: text || '',
-      });
 
       // Add tool result
       messages.push({

@@ -8,7 +8,7 @@
 import { WorkspaceObject, WorkspaceState } from './workspace-types';
 import { executeDataQuery } from './data-query';
 import { getActiveDataset } from './active-dataset';
-import { getDocument, listDocuments } from './document-store';
+import { getDocument } from './document-store';
 import { createMemory } from './memory-store';
 import { retrieveRelevantMemories, formatMemoriesForPrompt, determineWorkspaceState } from './memory-retriever';
 import { supabase } from '@/integrations/supabase/client';
@@ -297,13 +297,22 @@ export async function executeTool(
         return JSON.stringify({ action: 'focus', objectId: args.objectId });
 
       case 'rememberFact': {
+        // Extract keywords from content for trigger matching
+        const keywords = args.content.toLowerCase()
+          .split(/\s+/)
+          .filter((w: string) => w.length > 3 && !['that', 'this', 'when', 'with', 'from', 'should', 'the', 'and'].includes(w))
+          .slice(0, 5);
         const memory = await createMemory({
           type: args.type as any,
-          trigger: { always: args.type === 'correction' },
+          trigger: {
+            always: args.type === 'correction',
+            onQueryContains: keywords.length > 0 ? keywords : undefined,
+          },
           content: args.content,
           reasoning: args.reasoning,
           confidence: args.type === 'correction' ? 0.7 : 0.5,
           source: 'inferred',
+          tags: keywords,
         });
         return JSON.stringify({ saved: !!memory, id: memory?.id });
       }
