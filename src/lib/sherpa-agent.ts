@@ -405,27 +405,32 @@ function extractFromParsedJSON(parsed: any): {
     let rawActions: any[] | null = null;
 
     // msg.content might be a JSON string (double-wrapped: the AI returns intent JSON as content)
-    if (typeof text === 'string' && text.trim().startsWith('{')) {
-      try {
-        const inner = JSON.parse(text.trim());
-        if (inner.response !== undefined) {
-          text = inner.response || '';
-          rawActions = inner.actions || null;
-          console.log('[extractFromParsedJSON] Inner JSON parsed — text:', text.slice(0, 60), 'actions:', rawActions?.length || 0);
-        }
-      } catch (e) {
-        console.warn('[extractFromParsedJSON] Inner JSON parse failed:', (e as Error).message?.slice(0, 80));
-        // Try regex extraction as fallback
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          try {
-            const inner = JSON.parse(jsonMatch[0]);
-            if (inner.response !== undefined) {
-              text = inner.response || '';
-              rawActions = inner.actions || null;
-              console.log('[extractFromParsedJSON] Inner JSON parsed via regex');
-            }
-          } catch {}
+    // It may also have a random prefix like "vitamins" before the JSON
+    if (typeof text === 'string') {
+      // Find the first { in the content
+      const jsonStart = text.indexOf('{');
+      if (jsonStart >= 0) {
+        const jsonCandidate = text.slice(jsonStart).trim();
+        try {
+          const inner = JSON.parse(jsonCandidate);
+          if (inner.response !== undefined) {
+            text = inner.response || '';
+            rawActions = inner.actions || null;
+            console.log('[extractFromParsedJSON] Inner JSON parsed — text:', text.slice(0, 60), 'actions:', rawActions?.length || 0);
+          }
+        } catch (e) {
+          console.warn('[extractFromParsedJSON] Inner JSON parse failed:', (e as Error).message?.slice(0, 80));
+          // Last resort: regex
+          const jsonMatch = text.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            try {
+              const inner = JSON.parse(jsonMatch[0]);
+              if (inner.response !== undefined) {
+                text = inner.response || '';
+                rawActions = inner.actions || null;
+              }
+            } catch {}
+          }
         }
       }
     }
@@ -442,12 +447,13 @@ function extractFromParsedJSON(parsed: any): {
     const textBlock = parsed.content.find((b: any) => b.type === 'text');
     const toolBlocks = parsed.content.filter((b: any) => b.type === 'tool_use');
 
-    // Anthropic text might itself be JSON (the intent response)
+    // Anthropic text might itself be JSON (the intent response), possibly with a prefix
     let text = textBlock?.text || '';
     let rawActions: any[] | null = null;
-    if (text.trim().startsWith('{')) {
+    const jsonIdx = text.indexOf('{');
+    if (jsonIdx >= 0) {
       try {
-        const innerParsed = JSON.parse(text);
+        const innerParsed = JSON.parse(text.slice(jsonIdx));
         if (innerParsed.response !== undefined) {
           text = innerParsed.response || '';
           rawActions = innerParsed.actions || null;
