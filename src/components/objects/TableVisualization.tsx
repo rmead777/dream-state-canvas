@@ -89,6 +89,9 @@ export function TableVisualization({ columns, rows, view, title }: TableVisualiz
     );
   }
 
+  const chartStroke = view.chartColor || 'rgba(99,102,241,0.92)';
+  const chartFill = view.chartColor || 'rgba(99,102,241,0.82)';
+
   const commonProps = {
     data: chart.data,
     margin: { top: 8, right: 8, left: -16, bottom: 0 },
@@ -111,7 +114,7 @@ export function TableVisualization({ columns, rows, view, title }: TableVisualiz
         </div>
       </div>
 
-      <div className="h-56 w-full">
+      <div style={{ height: view.chartHeight || 224 }} className="w-full">
         <ResponsiveContainer width="100%" height="100%">
           {chart.type === 'line' ? (
             <LineChart {...commonProps}>
@@ -119,21 +122,21 @@ export function TableVisualization({ columns, rows, view, title }: TableVisualiz
               <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: 'rgba(71, 85, 105, 0.8)', fontSize: 11 }} />
               <YAxis tickLine={false} axisLine={false} tick={{ fill: 'rgba(71, 85, 105, 0.8)', fontSize: 11 }} width={56} />
               <Tooltip contentStyle={{ borderRadius: 16, border: '1px solid rgba(99,102,241,0.12)', boxShadow: '0 18px 50px rgba(15,23,42,0.08)' }} />
-              <Line type="monotone" dataKey="value" stroke="rgba(99,102,241,0.92)" strokeWidth={3} dot={{ r: 3, fill: 'rgba(99,102,241,0.92)' }} activeDot={{ r: 5 }} />
+              <Line type="monotone" dataKey="value" stroke={chartStroke} strokeWidth={3} dot={{ r: 3, fill: chartStroke }} activeDot={{ r: 5 }} />
             </LineChart>
           ) : chart.type === 'area' ? (
             <AreaChart {...commonProps}>
               <defs>
                 <linearGradient id="workspaceArea" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="rgba(99,102,241,0.9)" stopOpacity={0.45} />
-                  <stop offset="95%" stopColor="rgba(99,102,241,0.12)" stopOpacity={0.05} />
+                  <stop offset="5%" stopColor={chartStroke} stopOpacity={0.45} />
+                  <stop offset="95%" stopColor={chartStroke} stopOpacity={0.05} />
                 </linearGradient>
               </defs>
               <CartesianGrid stroke="rgba(148, 163, 184, 0.18)" vertical={false} />
               <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: 'rgba(71, 85, 105, 0.8)', fontSize: 11 }} />
               <YAxis tickLine={false} axisLine={false} tick={{ fill: 'rgba(71, 85, 105, 0.8)', fontSize: 11 }} width={56} />
               <Tooltip contentStyle={{ borderRadius: 16, border: '1px solid rgba(99,102,241,0.12)', boxShadow: '0 18px 50px rgba(15,23,42,0.08)' }} />
-              <Area type="monotone" dataKey="value" stroke="rgba(99,102,241,0.92)" strokeWidth={3} fill="url(#workspaceArea)" />
+              <Area type="monotone" dataKey="value" stroke={chartStroke} strokeWidth={3} fill="url(#workspaceArea)" fillOpacity={view.chartFillOpacity ?? 1} />
             </AreaChart>
           ) : (
             <BarChart {...commonProps}>
@@ -141,7 +144,7 @@ export function TableVisualization({ columns, rows, view, title }: TableVisualiz
               <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: 'rgba(71, 85, 105, 0.8)', fontSize: 11 }} />
               <YAxis tickLine={false} axisLine={false} tick={{ fill: 'rgba(71, 85, 105, 0.8)', fontSize: 11 }} width={56} />
               <Tooltip contentStyle={{ borderRadius: 16, border: '1px solid rgba(99,102,241,0.12)', boxShadow: '0 18px 50px rgba(15,23,42,0.08)' }} />
-              <Bar dataKey="value" fill="rgba(99,102,241,0.82)" radius={[10, 10, 4, 4]} />
+              <Bar dataKey="value" fill={chartFill} radius={[10, 10, 4, 4]} />
             </BarChart>
           )}
         </ResponsiveContainer>

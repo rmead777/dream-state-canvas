@@ -61,6 +61,10 @@ const ViewUpdatePlanSchema = z.object({
   chartType: z.enum(['bar', 'line', 'area']).nullable().optional(),
   chartXAxis: z.string().min(1).nullable().optional(),
   chartYAxis: z.string().min(1).nullable().optional(),
+  chartColor: z.string().nullable().optional(),
+  chartColors: z.array(z.string()).nullable().optional(),
+  chartFillOpacity: z.number().min(0).max(1).nullable().optional(),
+  chartHeight: z.number().positive().nullable().optional(),
   resetFilters: z.boolean().optional(),
 }).partial();
 
@@ -220,6 +224,10 @@ Return ONLY valid JSON with this shape:
     "chartType": "bar" | "line" | "area" | null,
     "chartXAxis": string | null,
     "chartYAxis": string | null,
+    "chartColor": "#hex color" | null,
+    "chartColors": ["#hex1", "#hex2", ...] | null,
+    "chartFillOpacity": 0-1 | null,
+    "chartHeight": number | null,
     "resetFilters": boolean
   },
   "content": {
@@ -234,6 +242,8 @@ Rules:
 - Use content.regenerateNarrative when the user wants a brief/comparison/metric rewritten or reframed.
 - Use view.preferredColumns for changing visible columns.
 - Use displayMode/chartType/chartXAxis/chartYAxis for chart requests.
+- Use chartColor for single color, chartColors for multi-series. Common: #ef4444 (red), #f59e0b (amber), #10b981 (green), #6366f1 (indigo), #06b6d4 (cyan), #8b5cf6 (purple).
+- Use chartFillOpacity (0-1) and chartHeight (pixels) for chart styling.
 - If the instruction is purely a rename, do not invent filter changes.
 - If the instruction is purely a filter/sort/display change, do not invent a rename.` }],
     'update-plan'
@@ -319,6 +329,10 @@ function mergeViewState(current: ObjectViewState, next?: UpdatePlan['view']): Ob
   assign('chartType', next.chartType);
   assign('chartXAxis', next.chartXAxis);
   assign('chartYAxis', next.chartYAxis);
+  assign('chartColor', next.chartColor);
+  assign('chartColors', next.chartColors);
+  assign('chartFillOpacity', next.chartFillOpacity);
+  assign('chartHeight', next.chartHeight);
 
   return merged;
 }
@@ -578,14 +592,25 @@ async function applyUpdateToObject(params: {
         context,
       };
     }
-    default:
+    default: {
+      let context = { ...target.context, view: storedView };
+      // Apply chart styling from view state to chart sections
+      if (Array.isArray(context.sections) && (view.chartColor !== undefined || view.chartColors !== undefined || view.chartFillOpacity !== undefined || view.chartHeight !== undefined)) {
+        context.sections = (context.sections as any[]).map((s: any) => {
+          if (s.type !== 'chart') return s;
+          const updated = { ...s };
+          if (view.chartColor !== undefined) updated.color = view.chartColor;
+          if (view.chartColors !== undefined) updated.colors = view.chartColors;
+          if (view.chartFillOpacity !== undefined) updated.fillOpacity = view.chartFillOpacity;
+          if (view.chartHeight !== undefined) updated.height = view.chartHeight;
+          return updated;
+        });
+      }
       return {
         title: plan.renameTo || undefined,
-        context: {
-          ...target.context,
-          view: storedView,
-        },
+        context,
       };
+    }
   }
 }
 

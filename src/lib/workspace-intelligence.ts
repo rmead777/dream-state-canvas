@@ -16,6 +16,10 @@ export interface ObjectViewState {
   chartType?: TableChartType | null;
   chartXAxis?: string | null;
   chartYAxis?: string | null;
+  chartColor?: string | null;
+  chartColors?: string[] | null;
+  chartFillOpacity?: number | null;
+  chartHeight?: number | null;
 }
 
 function truncate(value: unknown, max = 140): string {
