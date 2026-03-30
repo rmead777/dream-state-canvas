@@ -82,6 +82,7 @@ function ImmersiveContent({ object }: { object: any }) {
 
   switch (object.type) {
     case 'document':
+    case 'document-viewer':
       return <DocumentReader object={object} isImmersive />;
     case 'dataset':
       return <DatasetView object={object} isImmersive />;
@@ -104,13 +105,17 @@ function ImmersiveContent({ object }: { object: any }) {
     case 'analysis':
       return <AnalysisCard object={object} />;
     default:
-      // Fallback: render context as markdown if it has content, otherwise show the object renderer
+      // Any unknown type: try AnalysisCard first (handles sections), then markdown, then raw
+      if (object.context?.sections?.length > 0) {
+        return <AnalysisCard object={object} />;
+      }
       if (object.context?.content) {
         return <MarkdownRenderer content={object.context.content} />;
       }
+      // Show whatever context exists in a readable format
       return (
         <div className="text-sm text-workspace-text-secondary">
-          <p>This card type doesn't have an expanded view yet.</p>
+          <AnalysisCard object={object} />
           <pre className="mt-4 rounded-xl bg-workspace-surface/50 p-4 text-[11px] overflow-auto">
             {JSON.stringify(object.context, null, 2)}
           </pre>

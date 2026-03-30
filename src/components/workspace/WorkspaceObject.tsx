@@ -55,7 +55,8 @@ function ObjectContent({ object }: { object: WO }) {
     case 'inspector': return <DataInspector object={object} />;
     case 'brief': return <AIBrief object={object} />;
     case 'timeline': return <Timeline object={object} />;
-    case 'document': return <DocumentReader object={object} />;
+    case 'document':
+    case 'document-viewer': return <DocumentReader object={object} />;
     case 'dataset': return <DatasetView object={object} />;
     case 'analysis': return <AnalysisCard object={object} />;
     case 'action-queue': return <ActionQueue object={object} />;
@@ -64,7 +65,12 @@ function ObjectContent({ object }: { object: WO }) {
     case 'escalation-tracker': return <EscalationTracker object={object} />;
     case 'outreach-tracker': return <OutreachTracker object={object} />;
     case 'production-risk': return <ProductionRiskMap object={object} />;
-    default: return <div className="text-sm text-workspace-text-secondary">Unknown object type</div>;
+    default:
+      // Unknown types: try AnalysisCard (handles sections + markdown), then show content
+      if (object.context?.content) {
+        return <AnalysisCard object={object} />;
+      }
+      return <AnalysisCard object={object} />;
   }
 }
 
