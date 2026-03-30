@@ -531,32 +531,43 @@ const CANNED_PROMPTS = {
 
 1. **No new Zod strictness.** Schemas validate structure (does this have a type field?), not content (is this operator in my enum?). The AI is smarter than our schemas.
 
-2. **All tools execute client-side.** The agent loop runs in the browser, tools read from React state and Supabase. The edge function just does AI inference. This means no edge function changes for the tool system.
+2. **80ms flush is the minimum viable streaming fix.** ✅ DONE (commit 5e2b513).
 
-3. **80ms flush is the minimum viable streaming fix.** Ship it before anything else.
+3. **useAIContext supplements buildIntentPayloadContext.** The existing context builder in `workspace-intelligence.ts` is already rich (focused card, recent intents, per-object summaries, DataProfile). The `useAIContext` hook adds: `datasetName`, `documentCount`, `userEmail`, `conversationTurnCount`. Both coexist — useAIContext is a React hook for components, buildIntentPayloadContext is an async function for the intent pipeline.
 
-4. **useAIContext replaces buildIntentPayloadContext.** Don't maintain two context builders.
-
-5. **Agent loop is optional per query.** Simple queries ("dissolve this card") don't need a tool loop. Complex queries ("why does this card show the wrong vendors?") do. The system should detect which path to take.
+4. **Agent loop architecture is TBD.** Two valid options:
+   - (a) Server-side: edge function runs the tool loop internally, streaming intermediate status. Lower latency (no per-iteration round-trips). Requires edge function changes.
+   - (b) Client-side: each tool call is a separate AI request with results injected client-side. More visible (user sees each step). More round-trips.
+   Decision deferred until provider API keys are configured. Both approaches use the same tool definitions and dispatch through `applyResult()` with existing reducer actions.
 
 ---
 
 ## What NOT to Change
 
 - **data-slicer.ts** — remains pure, untouched
-- **WorkspaceContext reducer** — no new action types
+- **WorkspaceContext reducer** — no new action types. Agent tools dispatch through `applyResult()` using existing reducer actions (MATERIALIZE_OBJECT, UPDATE_OBJECT_CONTEXT, DISSOLVE_OBJECT, FOCUS_OBJECT).
 - **Existing card renderers** — AnalysisCard handles everything
 - **Memory system** — extend, don't replace
-- **Edge function prompts** — already rewritten, don't touch
 
 ---
 
+## Implementation Status
+
+| Phase | Status | Commit |
+|-------|--------|--------|
+| 1.1 80ms streaming flush | ✅ DONE | 5e2b513 |
+| 3.2 Spring easing tokens | ✅ DONE | 5e2b513 |
+| 2.1 Resizable Sherpa rail | ✅ DONE | b10afe0 |
+| 1.2 useAIContext hook | ✅ DONE | c222397 |
+| 3.1 Design tokens | ✅ DONE | 6da25f2 |
+| 6.1 Canned prompts | ✅ DONE | 6da25f2 |
+| 5.3 Activity ticker | ✅ DONE | 3b8350e |
+| 4.2 Memory supersession | ✅ DONE | 73d1a50 |
+| 5.2 Workspace radar | ✅ DONE | f0cf53d |
+| 4.1 Agent loop | DEFERRED | Needs API keys + arch decision |
+| 5.1 Intelligence feed | DEFERRED | Needs structured observation design |
+| 4.3 Living narratives | DEFERRED | Depends on agent loop |
+
 ## ⚠️ DEPLOYMENT ALERTS
 
-Phase 4.2 and 4.3 require:
-- New Supabase migrations (SQL Editor)
-- Edge function redeployment IF memory queries change
-
-Phase 4.1 requires:
-- The Lovable AI gateway to support tool_calls/function_calling, OR
-- Direct provider API keys (Anthropic/OpenAI) configured in edge function secrets
+Phase 4.2 migration: `20260330010000_memory_supersession.sql` — ✅ APPLIED by user.
