@@ -114,11 +114,16 @@ export function SherpaRail() {
     }
   }, [lastResponse]);
 
-  // Auto-scroll to TOP when new response arrives so user sees it immediately
+  // Scroll to top ONCE when user sends a message — not during streaming
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const wasProcessingRef = useRef(false);
   useEffect(() => {
-    scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [lastResponse, isProcessing]);
+    // Only scroll when isProcessing transitions from false → true (user just sent)
+    if (isProcessing && !wasProcessingRef.current) {
+      scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    wasProcessingRef.current = isProcessing;
+  }, [isProcessing]);
 
   const trackAndProcess = useCallback((text: string) => {
     setPromptHistory(prev => [...prev, { query: text, response: null, timestamp: Date.now() }]);
