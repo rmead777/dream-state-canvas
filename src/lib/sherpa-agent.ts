@@ -94,6 +94,12 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
   let toolCallsUsed = 0;
   const pendingWriteActions: any[] = [];
 
+  // Shadow state: mutable copy of workspace objects so write tools are
+  // visible to subsequent read tools within the same loop iteration.
+  // After the loop, pendingWriteActions are applied to real React state.
+  const shadowObjects = { ...workspaceState.objects };
+  const shadowState: WorkspaceState = { ...workspaceState, objects: shadowObjects };
+
   for (let iteration = 0; iteration < maxIterations; iteration++) {
     onStatusUpdate?.(iteration > 0 ? 'Thinking...' : null);
 
@@ -146,13 +152,44 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
         args = {};
       }
 
-      const result = await executeTool(toolName, args, workspaceState);
+      const result = await executeTool(toolName, args, shadowState);
 
       // Check if the tool returned a write action to queue
       try {
         const parsed = JSON.parse(result);
         if (parsed.action) {
           pendingWriteActions.push(parsed);
+
+          // Apply to shadow state so subsequent read tools see the change
+          if (parsed.action === 'create' && parsed.objectType && parsed.title) {
+            const id = `wo-${Date.now()}-shadow-${toolCallsUsed}`;
+            shadowObjects[id] = {
+              id,
+              type: parsed.objectType,
+              title: parsed.title,
+              status: 'open',
+              pinned: false,
+              origin: { type: 'system' as any, query: '' },
+              relationships: [],
+              context: parsed.sections ? { sections: parsed.sections } : (parsed.dataQuery ? { dataQuery: parsed.dataQuery } : {}),
+              position: { zone: 'primary', order: 0 },
+              createdAt: Date.now(),
+              lastInteractedAt: Date.now(),
+            } as any;
+          } else if (parsed.action === 'dissolve' && parsed.objectId && shadowObjects[parsed.objectId]) {
+            shadowObjects[parsed.objectId] = { ...shadowObjects[parsed.objectId], status: 'dissolved' as any };
+          } else if (parsed.action === 'update' && parsed.objectId && shadowObjects[parsed.objectId]) {
+            const obj = shadowObjects[parsed.objectId];
+            shadowObjects[parsed.objectId] = {
+              ...obj,
+              context: {
+                ...obj.context,
+                ...(parsed.dataQuery ? { dataQuery: parsed.dataQuery } : {}),
+                ...(parsed.sections ? { sections: parsed.sections } : {}),
+              },
+              ...(parsed.title ? { title: parsed.title } : {}),
+            } as any;
+          }
         }
       } catch {}
 
