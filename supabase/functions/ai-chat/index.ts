@@ -159,7 +159,20 @@ When creating analysis or CFO cards, populate sections:
   table        → { type: "table", columns: [...], rows: [[...]], highlights: [{ column, condition, style }] }
   callout      → { type: "callout", severity: "warning|danger|info|success", text: "Alert message" }
   metrics-row  → { type: "metrics-row", metrics: [{ label, value, unit }] }
-  chart        → { type: "chart", chartType: "bar|line|area", xAxis: "col", yAxis: "col", data: [...] }
+  chart        → { type: "chart", chartType: "bar|line|area|pie", xAxis: "col", yAxis: "col", data: [...],
+                   color: "#hex or CSS color",           ← single color for all bars/lines
+                   colors: ["#ef4444", "#10b981", ...],  ← different color per data series or per bar
+                   fillOpacity: 0.7,                      ← 0-1, how solid the fill is (default 0.15)
+                   height: 300,                           ← chart height in pixels (default 192)
+                   caption: "Chart description" }
+
+  USE CHARTS PROACTIVELY. When showing data, prefer visual representations:
+  - Use bar charts for comparisons (vendor balances by tier, counts by category)
+  - Use line/area charts for trends over time
+  - Use different colors to distinguish categories (red for critical, amber for warning, green for stable)
+  - Make charts tall enough to read (height: 280-350 for main charts)
+  - Always include a caption explaining what the chart shows
+  - Color suggestions: #ef4444 (red/danger), #f59e0b (amber/warning), #10b981 (green/success), #6366f1 (indigo/accent), #06b6d4 (cyan), #8b5cf6 (purple)
 
 ═══ BEHAVIORAL RULES ═══
 
