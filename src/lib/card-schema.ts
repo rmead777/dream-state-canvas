@@ -64,7 +64,11 @@ export const ChartSection = z.object({
   yAxis: z.string(),
   data: z.array(z.record(z.union([z.string(), z.number()]))),
   caption: z.string().optional(),
-});
+  color: z.string().optional(),
+  colors: z.array(z.string()).optional(),
+  fillOpacity: z.number().optional(),
+  height: z.number().optional(),
+}).passthrough();
 
 export const CardSection = z.discriminatedUnion('type', [
   SummarySection,

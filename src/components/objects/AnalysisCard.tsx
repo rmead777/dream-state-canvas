@@ -10,7 +10,7 @@
 import { WorkspaceObject } from '@/lib/workspace-types';
 import { CardSectionType } from '@/lib/card-schema';
 import MarkdownRenderer from './MarkdownRenderer';
-import { BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
 
 interface AnalysisCardProps {
   object: WorkspaceObject;
@@ -232,11 +232,24 @@ function ChartRenderer({ section }: { section: { chartType: string; xAxis: strin
   const primaryColor = section.color || 'hsl(var(--workspace-accent))';
   const chartHeight = section.height || 192;
 
-  // If multiple y-axis columns exist in the data, use colors array
-  const yAxisKeys = section.colors
-    ? Object.keys(section.data[0] || {}).filter(k => k !== section.xAxis)
+  // Detect per-bar coloring: data items have a __color field, OR colors array matches data length
+  const hasPerBarColors = section.data.some(d => '__color' in d);
+  const colorsMatchDataLength = section.colors && section.colors.length === section.data.length;
+  const usePerBarColoring = (hasPerBarColors || colorsMatchDataLength) && section.chartType === 'bar';
+
+  // Multi-series: multiple y-axis columns with colors array (not matching data length = multi-series palette)
+  const isMultiSeries = section.colors && !colorsMatchDataLength;
+  const yAxisKeys = isMultiSeries
+    ? Object.keys(section.data[0] || {}).filter(k => k !== section.xAxis && k !== '__color')
     : [section.yAxis];
-  const colorPalette = section.colors || [primaryColor, '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+  const colorPalette = (isMultiSeries && section.colors) || [primaryColor, '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+
+  // Build per-bar color array
+  const barColors = usePerBarColoring
+    ? section.data.map((d, i) =>
+        String(d.__color || (section.colors ? section.colors[i] : primaryColor) || primaryColor)
+      )
+    : null;
 
   return (
     <div className="space-y-1">
@@ -254,15 +267,23 @@ function ChartRenderer({ section }: { section: { chartType: string; xAxis: strin
                 fontSize: '11px',
               }}
             />
-            {yAxisKeys.map((key, i) => (
-              <DataComponent
-                key={key}
-                dataKey={key}
-                fill={colorPalette[i % colorPalette.length]}
-                stroke={colorPalette[i % colorPalette.length]}
-                fillOpacity={section.fillOpacity ?? 0.15}
-              />
-            ))}
+            {usePerBarColoring && barColors ? (
+              <Bar dataKey={section.yAxis} fillOpacity={section.fillOpacity ?? 0.85}>
+                {barColors.map((color, i) => (
+                  <Cell key={i} fill={color} stroke={color} />
+                ))}
+              </Bar>
+            ) : (
+              yAxisKeys.map((key, i) => (
+                <DataComponent
+                  key={key}
+                  dataKey={key}
+                  fill={colorPalette[i % colorPalette.length]}
+                  stroke={colorPalette[i % colorPalette.length]}
+                  fillOpacity={section.fillOpacity ?? 0.15}
+                />
+              ))
+            )}
           </ChartComponent>
         </ResponsiveContainer>
       </div>
