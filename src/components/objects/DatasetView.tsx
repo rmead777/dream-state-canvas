@@ -653,7 +653,7 @@ function CellDetailBar({ value, columnName, entityName }: { value: string; colum
 
             {/* Right: cell content */}
             <div className="flex-1 min-w-0 py-0.5">
-              <p className="text-[15px] leading-[1.7] text-white/90 whitespace-pre-wrap break-words font-light tracking-[0.01em]">
+              <p className="text-lg leading-[1.7] text-white/95 whitespace-pre-wrap break-words font-bold tracking-[0.01em]">
                 {value}
               </p>
             </div>
