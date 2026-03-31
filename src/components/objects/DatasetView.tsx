@@ -632,17 +632,17 @@ function CellDetailBar({ value, columnName, entityName }: { value: string; colum
               {/* Entity badge */}
               <div className="flex items-center gap-2">
                 <div className="h-2 w-2 rounded-full bg-indigo-400/80 shadow-[0_0_8px_rgba(129,140,248,0.5)]" />
-                <span className="text-[11px] font-semibold text-white/90 tracking-wide truncate max-w-[200px]">
+                <span className="text-sm font-bold text-white tracking-wide truncate max-w-[240px]">
                   {entityName}
                 </span>
               </div>
 
               {/* Column label */}
               <div className="flex items-center gap-1.5 pl-4">
-                <svg className="h-3 w-3 text-indigo-400/50 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="h-3.5 w-3.5 text-indigo-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                 </svg>
-                <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-indigo-300/60">
+                <span className="text-xs font-bold uppercase tracking-[0.16em] text-indigo-200">
                   {columnName}
                 </span>
               </div>
