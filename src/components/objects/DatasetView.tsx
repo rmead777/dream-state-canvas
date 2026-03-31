@@ -26,15 +26,17 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
   const d = object.context;
   const persistedView = getObjectViewState(d);
 
-  // Use live active dataset for full column set
+  // Use live active dataset for full column set — prefer the live store
+  // whenever it has at least as many columns (covers edits + new uploads).
   const liveDs = getActiveDataset();
+  const preferLive = liveDs.columns.length >= (d.columns || []).length;
   const allColumns = useMemo<string[]>(
-    () => ((liveDs.columns.length > (d.columns || []).length) ? liveDs.columns : (d.columns || [])),
-    [d.columns, liveDs.columns]
+    () => (preferLive ? liveDs.columns : (d.columns || [])),
+    [preferLive, d.columns, liveDs.columns]
   );
   const sourceRows = useMemo<string[][]>(
-    () => ((liveDs.columns.length > (d.columns || []).length) ? liveDs.rows : (d.rows || [])),
-    [d.columns, d.rows, liveDs.columns.length, liveDs.rows]
+    () => (preferLive ? liveDs.rows : (d.rows || [])),
+    [preferLive, d.columns, d.rows, liveDs.rows]
   );
 
   // Editable state — only used in immersive mode
@@ -150,8 +152,13 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
     if (success) {
       setHasChanges(false);
       setSelectedRows(new Set());
+      // Also update the workspace object's context so it stays in sync
+      dispatch({
+        type: 'UPDATE_OBJECT_CONTEXT',
+        payload: { id: object.id, context: { ...d, columns: allColumns, rows: editableRows } },
+      });
     }
-  }, [allColumns, editableRows, updateActiveDataset]);
+  }, [allColumns, editableRows, updateActiveDataset, dispatch, object.id, d]);
 
   const handleDiscard = useCallback(() => {
     setEditableRows(sourceRows.map(r => [...r]));
