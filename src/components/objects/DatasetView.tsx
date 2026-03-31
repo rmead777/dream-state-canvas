@@ -533,7 +533,7 @@ function VirtualizedTable({
                             onCancel={() => onStartEdit?.(null)}
                           />
                         ) : (
-                          <HoverCell value={cell} columnName={columns[j]} />
+                          <HoverCell value={cell} columnName={columns[j]} entityName={cells[0]} />
                         )}
                       </div>
                     );
@@ -578,27 +578,21 @@ function EditableInput({ initialValue, onCommit, onCancel }: {
   );
 }
 
-function HoverCell({ value, columnName }: { value: string; columnName: string }) {
+function HoverCell({ value, columnName, entityName }: { value: string; columnName: string; entityName: string }) {
   const cellRef = useRef<HTMLSpanElement>(null);
-  const [memo, setMemo] = useState<{ x: number; y: number } | null>(null);
+  const [showMemo, setShowMemo] = useState(false);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Only show memo for cells with meaningful content (>20 chars or truncated)
   const shouldShowMemo = value && value.length > 20;
 
   const handleMouseEnter = useCallback(() => {
     if (!shouldShowMemo) return;
-    hoverTimer.current = setTimeout(() => {
-      const el = cellRef.current;
-      if (!el) return;
-      const rect = el.getBoundingClientRect();
-      setMemo({ x: rect.left + rect.width / 2, y: rect.top });
-    }, 400); // 400ms delay — deliberate, not accidental
+    hoverTimer.current = setTimeout(() => setShowMemo(true), 350);
   }, [shouldShowMemo]);
 
   const handleMouseLeave = useCallback(() => {
     if (hoverTimer.current) clearTimeout(hoverTimer.current);
-    setMemo(null);
+    setShowMemo(false);
   }, []);
 
   return (
@@ -609,57 +603,65 @@ function HoverCell({ value, columnName }: { value: string; columnName: string })
       className="overflow-hidden text-ellipsis"
     >
       <FormattedCell value={value} />
-      {memo && createPortal(
-        <CellMemo value={value} columnName={columnName} x={memo.x} y={memo.y} />,
+      {showMemo && createPortal(
+        <CellDetailBar value={value} columnName={columnName} entityName={entityName} />,
         document.body
       )}
     </span>
   );
 }
 
-function CellMemo({ value, columnName, x, y }: { value: string; columnName: string; x: number; y: number }) {
-  const memoRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ left: x, top: y });
-
-  // Reposition to stay within viewport
-  useEffect(() => {
-    const el = memoRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    let left = x - rect.width / 2;
-    let top = y - rect.height - 10; // above the cell
-
-    // Clamp to viewport
-    if (left < 12) left = 12;
-    if (left + rect.width > window.innerWidth - 12) left = window.innerWidth - rect.width - 12;
-    if (top < 12) {
-      top = y + 36; // flip below if no room above
-    }
-    setPos({ left, top });
-  }, [x, y]);
-
+function CellDetailBar({ value, columnName, entityName }: { value: string; columnName: string; entityName: string }) {
   return (
-    <div
-      ref={memoRef}
-      className="fixed z-[100] animate-[memo-enter_0.18s_cubic-bezier(0.16,1,0.3,1)_forwards]"
-      style={{ left: pos.left, top: pos.top, maxWidth: 380 }}
-    >
-      <div className="rounded-xl bg-white border border-workspace-border/50 shadow-[0_20px_48px_rgba(0,0,0,0.12),0_0_0_1px_rgba(0,0,0,0.03)] overflow-hidden">
-        {/* Memo header */}
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-workspace-border/30 bg-gradient-to-r from-slate-50 to-white">
-          <div className="h-1.5 w-1.5 rounded-full bg-workspace-accent/60" />
-          <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-workspace-text-secondary/70">
-            {columnName}
-          </span>
+    <div className="fixed inset-x-0 top-0 z-[200] pointer-events-none animate-[detail-bar-enter_0.28s_cubic-bezier(0.16,1,0.3,1)_forwards]">
+      {/* Full-width backdrop */}
+      <div className="pointer-events-auto mx-auto max-w-[1400px] px-6 pt-3 pb-0">
+        <div className="relative overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-br from-slate-900/[0.97] via-slate-800/[0.97] to-indigo-950/[0.97] backdrop-blur-2xl shadow-[0_32px_80px_rgba(0,0,0,0.35),0_0_0_1px_rgba(255,255,255,0.06),inset_0_1px_0_rgba(255,255,255,0.08)]">
+
+          {/* Ambient glow */}
+          <div className="absolute -top-20 -right-20 h-40 w-40 rounded-full bg-indigo-500/10 blur-3xl" />
+          <div className="absolute -bottom-10 -left-10 h-32 w-32 rounded-full bg-violet-500/8 blur-3xl" />
+
+          {/* Top edge accent line */}
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-indigo-400/40 to-transparent" />
+
+          <div className="relative flex items-start gap-6 px-7 py-5">
+
+            {/* Left: metadata column */}
+            <div className="flex-shrink-0 flex flex-col gap-2.5 min-w-[140px]">
+              {/* Entity badge */}
+              <div className="flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-indigo-400/80 shadow-[0_0_8px_rgba(129,140,248,0.5)]" />
+                <span className="text-[11px] font-semibold text-white/90 tracking-wide truncate max-w-[200px]">
+                  {entityName}
+                </span>
+              </div>
+
+              {/* Column label */}
+              <div className="flex items-center gap-1.5 pl-4">
+                <svg className="h-3 w-3 text-indigo-400/50 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+                <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-indigo-300/60">
+                  {columnName}
+                </span>
+              </div>
+            </div>
+
+            {/* Vertical divider */}
+            <div className="flex-shrink-0 w-px self-stretch bg-gradient-to-b from-transparent via-white/10 to-transparent" />
+
+            {/* Right: cell content */}
+            <div className="flex-1 min-w-0 py-0.5">
+              <p className="text-[15px] leading-[1.7] text-white/90 whitespace-pre-wrap break-words font-light tracking-[0.01em]">
+                {value}
+              </p>
+            </div>
+          </div>
+
+          {/* Bottom edge accent */}
+          <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/5 to-transparent" />
         </div>
-        {/* Memo body */}
-        <div className="px-4 py-3">
-          <p className="text-[13px] leading-relaxed text-workspace-text whitespace-pre-wrap break-words font-[Georgia,serif]">
-            {value}
-          </p>
-        </div>
-        {/* Memo footer rule */}
-        <div className="mx-4 mb-2 border-t border-dashed border-workspace-border/30" />
       </div>
     </div>
   );
