@@ -1,8 +1,9 @@
-import { useState, useMemo, useCallback, useRef } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Columns } from 'lucide-react';
+import { Columns, Plus, Trash2, Save, Undo2 } from 'lucide-react';
 import { WorkspaceObject } from '@/lib/workspace-types';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { useDocuments } from '@/contexts/DocumentContext';
 import { useAI } from '@/hooks/useAI';
 import MarkdownRenderer from '@/components/objects/MarkdownRenderer';
 import { getDisplayColumns, filterRowToColumns } from '@/lib/smart-columns';
@@ -16,24 +17,42 @@ interface DatasetViewProps {
 }
 
 type SortDir = 'asc' | 'desc' | null;
+type EditingCell = { rowIdx: number; colIdx: number } | null;
 
 export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
   const { dispatch } = useWorkspace();
+  const { updateActiveDataset } = useDocuments();
   const { streamChat, isStreaming } = useAI();
   const d = object.context;
   const persistedView = getObjectViewState(d);
 
-  // Use live active dataset for full column set — object context may have been
-  // captured from seed data before the real document loaded.
+  // Use live active dataset for full column set
   const liveDs = getActiveDataset();
   const allColumns = useMemo<string[]>(
     () => ((liveDs.columns.length > (d.columns || []).length) ? liveDs.columns : (d.columns || [])),
     [d.columns, liveDs.columns]
   );
-  const rawRows = useMemo<string[][]>(
+  const sourceRows = useMemo<string[][]>(
     () => ((liveDs.columns.length > (d.columns || []).length) ? liveDs.rows : (d.rows || [])),
     [d.columns, d.rows, liveDs.columns.length, liveDs.rows]
   );
+
+  // Editable state — only used in immersive mode
+  const [editableRows, setEditableRows] = useState<string[][]>(() => sourceRows.map(r => [...r]));
+  const [hasChanges, setHasChanges] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editingCell, setEditingCell] = useState<EditingCell>(null);
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
+
+  // Sync editable rows when source changes externally (new upload, AI update)
+  useEffect(() => {
+    if (!hasChanges) {
+      setEditableRows(sourceRows.map(r => [...r]));
+    }
+  }, [sourceRows, hasChanges]);
+
+  const rawRows = isImmersive ? editableRows : sourceRows;
+
   const [sortCol, setSortCol] = useState<number | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>(null);
   const [filterText, setFilterText] = useState('');
@@ -58,31 +77,97 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
     }
   };
 
-  const filteredAndSorted = useMemo(() => {
-    let rows = rawRows;
+  // Map from filtered/sorted index back to editable row index
+  const filteredAndSortedWithIndex = useMemo(() => {
+    let indexed = rawRows.map((row, originalIdx) => ({ row, originalIdx }));
     if (filterText) {
       const lower = filterText.toLowerCase();
-      rows = rows.filter((r) => r.some((c) => c.toLowerCase().includes(lower)));
+      indexed = indexed.filter(({ row }) => row.some((c) => c.toLowerCase().includes(lower)));
     }
     if (sortCol !== null && sortDir) {
-      // Sort is relative to visible columns
       const realIdx = allColumns.indexOf(visibleCols[sortCol]);
       if (realIdx >= 0) {
-        rows = [...rows].sort((a, b) => {
-          const av = a[realIdx] ?? '';
-          const bv = b[realIdx] ?? '';
+        indexed = [...indexed].sort((a, b) => {
+          const av = a.row[realIdx] ?? '';
+          const bv = b.row[realIdx] ?? '';
           const cmp = av.localeCompare(bv, undefined, { numeric: true });
           return sortDir === 'asc' ? cmp : -cmp;
         });
       }
     }
-    return rows;
+    return indexed;
   }, [rawRows, sortCol, sortDir, filterText, allColumns, visibleCols]);
+
+  const filteredAndSorted = useMemo(
+    () => filteredAndSortedWithIndex.map(({ row }) => row),
+    [filteredAndSortedWithIndex]
+  );
 
   const getVisibleRow = useCallback(
     (row: string[]) => (showAllCols ? row : filterRowToColumns(row, allColumns, smartCols)),
     [showAllCols, allColumns, smartCols]
   );
+
+  // ─── Edit handlers ──────────────────────────────────────────────────────────
+
+  const handleCellEdit = useCallback((displayRowIdx: number, visibleColIdx: number, value: string) => {
+    const originalRowIdx = filteredAndSortedWithIndex[displayRowIdx]?.originalIdx;
+    if (originalRowIdx == null) return;
+    const realColIdx = allColumns.indexOf(visibleCols[visibleColIdx]);
+    if (realColIdx < 0) return;
+
+    setEditableRows(prev => {
+      const next = prev.map(r => [...r]);
+      next[originalRowIdx][realColIdx] = value;
+      return next;
+    });
+    setHasChanges(true);
+    setEditingCell(null);
+  }, [filteredAndSortedWithIndex, allColumns, visibleCols]);
+
+  const handleAddRow = useCallback(() => {
+    setEditableRows(prev => [...prev, allColumns.map(() => '')]);
+    setHasChanges(true);
+  }, [allColumns]);
+
+  const handleDeleteRows = useCallback(() => {
+    if (selectedRows.size === 0) return;
+    // Convert display indices to original indices
+    const originalIndices = new Set<number>();
+    selectedRows.forEach(displayIdx => {
+      const orig = filteredAndSortedWithIndex[displayIdx]?.originalIdx;
+      if (orig != null) originalIndices.add(orig);
+    });
+    setEditableRows(prev => prev.filter((_, i) => !originalIndices.has(i)));
+    setSelectedRows(new Set());
+    setHasChanges(true);
+  }, [selectedRows, filteredAndSortedWithIndex]);
+
+  const handleSave = useCallback(async () => {
+    setIsSaving(true);
+    const success = await updateActiveDataset(allColumns, editableRows);
+    setIsSaving(false);
+    if (success) {
+      setHasChanges(false);
+      setSelectedRows(new Set());
+    }
+  }, [allColumns, editableRows, updateActiveDataset]);
+
+  const handleDiscard = useCallback(() => {
+    setEditableRows(sourceRows.map(r => [...r]));
+    setHasChanges(false);
+    setSelectedRows(new Set());
+    setEditingCell(null);
+  }, [sourceRows]);
+
+  const handleToggleRow = useCallback((displayIdx: number) => {
+    setSelectedRows(prev => {
+      const next = new Set(prev);
+      if (next.has(displayIdx)) next.delete(displayIdx);
+      else next.add(displayIdx);
+      return next;
+    });
+  }, []);
 
   const handleGenerateInsight = useCallback(async () => {
     if (isStreaming) return;
@@ -170,11 +255,46 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
             />
           </div>
           <span className="workspace-pill rounded-full px-3 py-1.5 text-xs text-workspace-text-secondary tabular-nums">
-            {filteredAndSorted.length} of {rawRows.length} rows · {visibleCols.length} of {allColumns.length} cols
+            {filteredAndSorted.length} of {editableRows.length} rows · {visibleCols.length} of {allColumns.length} cols
           </span>
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Edit toolbar */}
+          <button
+            onClick={handleAddRow}
+            className="workspace-focus-ring workspace-pill flex items-center gap-1.5 rounded-full px-3 py-2 text-xs text-workspace-text-secondary transition-colors hover:text-emerald-600 hover:bg-emerald-50"
+          >
+            <Plus className="h-3.5 w-3.5" /> Add row
+          </button>
+          {selectedRows.size > 0 && (
+            <button
+              onClick={handleDeleteRows}
+              className="workspace-focus-ring flex items-center gap-1.5 rounded-full px-3 py-2 text-xs text-red-500 bg-red-50 transition-colors hover:bg-red-100"
+            >
+              <Trash2 className="h-3.5 w-3.5" /> Delete {selectedRows.size} row{selectedRows.size > 1 ? 's' : ''}
+            </button>
+          )}
+          {hasChanges && (
+            <>
+              <button
+                onClick={handleDiscard}
+                className="workspace-focus-ring workspace-pill flex items-center gap-1.5 rounded-full px-3 py-2 text-xs text-workspace-text-secondary transition-colors hover:text-workspace-text"
+              >
+                <Undo2 className="h-3.5 w-3.5" /> Discard
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="workspace-focus-ring flex items-center gap-1.5 rounded-full bg-workspace-accent px-4 py-2 text-xs text-white font-medium transition-all duration-200 workspace-spring hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(99,102,241,0.25)] disabled:translate-y-0 disabled:opacity-50"
+              >
+                <Save className="h-3.5 w-3.5" /> {isSaving ? 'Saving...' : 'Save changes'}
+              </button>
+            </>
+          )}
+
+          <div className="h-4 w-px bg-workspace-border/40 mx-1" />
+
           {needsExpand && (
             <button
               onClick={() => setShowAllCols(!showAllCols)}
@@ -190,9 +310,6 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
             className="workspace-focus-ring flex items-center gap-1.5 rounded-full bg-workspace-accent/8 px-3.5 py-2 text-xs text-workspace-accent transition-all duration-200 workspace-spring hover:-translate-y-0.5 hover:bg-workspace-accent/15 hover:shadow-[0_14px_28px_rgba(99,102,241,0.12)] disabled:translate-y-0 disabled:opacity-50"
           >
             <span>✦</span> {isStreaming ? 'Analyzing...' : 'Generate insight'}
-          </button>
-          <button className="workspace-focus-ring workspace-pill flex items-center gap-1.5 rounded-full px-3 py-2 text-xs text-workspace-text-secondary transition-colors hover:text-workspace-text">
-            📊 Generate chart
           </button>
         </div>
         </div>
@@ -224,21 +341,53 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
       )}
       </div>
 
+      {hasChanges && (
+        <div className="flex items-center gap-2 px-2">
+          <div className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+          <span className="text-xs text-amber-600 font-medium">
+            Unsaved changes — {editableRows.length} rows
+          </span>
+        </div>
+      )}
+
       <VirtualizedTable
         columns={visibleCols}
         rows={filteredAndSorted}
-        totalRows={rawRows.length}
+        totalRows={editableRows.length}
         filterText={filterText}
         sortCol={sortCol}
         sortDir={sortDir}
         onSort={handleSort}
         getVisibleRow={getVisibleRow}
+        isEditable
+        editingCell={editingCell}
+        selectedRows={selectedRows}
+        onStartEdit={setEditingCell}
+        onCellEdit={handleCellEdit}
+        onToggleRow={handleToggleRow}
       />
     </div>
   );
 }
 
-const ROW_HEIGHT = 44; // px per row for virtualizer estimation
+const ROW_HEIGHT = 44;
+
+interface VirtualizedTableProps {
+  columns: string[];
+  rows: string[][];
+  totalRows: number;
+  filterText: string;
+  sortCol: number | null;
+  sortDir: SortDir;
+  onSort: (idx: number) => void;
+  getVisibleRow: (row: string[]) => string[];
+  isEditable?: boolean;
+  editingCell?: EditingCell;
+  selectedRows?: Set<number>;
+  onStartEdit?: (cell: EditingCell) => void;
+  onCellEdit?: (rowIdx: number, colIdx: number, value: string) => void;
+  onToggleRow?: (rowIdx: number) => void;
+}
 
 function VirtualizedTable({
   columns,
@@ -249,16 +398,13 @@ function VirtualizedTable({
   sortDir,
   onSort,
   getVisibleRow,
-}: {
-  columns: string[];
-  rows: string[][];
-  totalRows: number;
-  filterText: string;
-  sortCol: number | null;
-  sortDir: SortDir;
-  onSort: (idx: number) => void;
-  getVisibleRow: (row: string[]) => string[];
-}) {
+  isEditable = false,
+  editingCell,
+  selectedRows,
+  onStartEdit,
+  onCellEdit,
+  onToggleRow,
+}: VirtualizedTableProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -280,7 +426,7 @@ function VirtualizedTable({
           <p className="text-sm font-medium text-workspace-text">No rows match the current view</p>
           <p className="max-w-[34ch] text-xs leading-5 text-workspace-text-secondary/75">
             {filterText
-              ? `Nothing in ${totalRows} rows matches “${filterText}”. Try a broader filter or switch back to smart columns.`
+              ? `Nothing in ${totalRows} rows matches "${filterText}". Try a broader filter or switch back to smart columns.`
               : 'There are no rows available in this dataset view yet.'}
           </p>
         </div>
@@ -289,13 +435,14 @@ function VirtualizedTable({
   }
 
   const colCount = columns.length;
-  // Wider minimums for many-column datasets to prevent header overlap
   const minColWidth = colCount > 10 ? '160px' : '120px';
-  const gridCols = `minmax(200px, 2fr) ${Array(colCount - 1).fill(`minmax(${minColWidth}, 1fr)`).join(' ')}`;
+  // Add checkbox column if editable
+  const gridCols = isEditable
+    ? `36px minmax(200px, 2fr) ${Array(colCount - 1).fill(`minmax(${minColWidth}, 1fr)`).join(' ')}`
+    : `minmax(200px, 2fr) ${Array(colCount - 1).fill(`minmax(${minColWidth}, 1fr)`).join(' ')}`;
 
   return (
     <div className="workspace-card-surface rounded-[28px] border border-workspace-border/45 bg-white overflow-hidden">
-      {/* Single scroll container for both header + body — keeps columns aligned */}
       <div
         ref={parentRef}
         className="overflow-auto"
@@ -306,11 +453,13 @@ function VirtualizedTable({
           className="grid border-b border-workspace-border bg-white text-[11px] font-medium uppercase tracking-[0.18em] text-workspace-text-secondary sticky top-0 z-10"
           style={{ gridTemplateColumns: gridCols }}
         >
+          {isEditable && (
+            <div className="px-2 py-2.5 flex items-center justify-center">
+              {/* Header checkbox placeholder */}
+            </div>
+          )}
           {columns.map((col, idx) => (
-            <div
-              key={col}
-              className="px-4 py-2.5"
-            >
+            <div key={col} className="px-4 py-2.5">
               <button
                 onClick={() => onSort(idx)}
                 aria-sort={sortCol === idx ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
@@ -333,10 +482,11 @@ function VirtualizedTable({
             {virtualizer.getVirtualItems().map((virtualRow) => {
               const row = rows[virtualRow.index];
               const cells = getVisibleRow(row);
+              const isSelected = selectedRows?.has(virtualRow.index) ?? false;
               return (
                 <div
                   key={virtualRow.index}
-                  className="grid border-b border-workspace-border/20 text-[13px] transition-colors hover:bg-workspace-accent/[0.04]"
+                  className={`grid border-b border-workspace-border/20 text-[13px] transition-colors ${isSelected ? 'bg-workspace-accent/[0.08]' : 'hover:bg-workspace-accent/[0.04]'}`}
                   style={{
                     gridTemplateColumns: gridCols,
                     height: `${virtualRow.size}px`,
@@ -345,17 +495,41 @@ function VirtualizedTable({
                     top: 0,
                     left: 0,
                     right: 0,
-                    backgroundColor: virtualRow.index % 2 === 0 ? 'white' : 'rgba(var(--workspace-surface-rgb, 245 245 250) / 0.16)',
+                    backgroundColor: isSelected
+                      ? undefined // Let className handle it
+                      : virtualRow.index % 2 === 0 ? 'white' : 'rgba(var(--workspace-surface-rgb, 245 245 250) / 0.16)',
                   }}
                 >
-                  {cells.map((cell, j) => (
-                    <div
-                      key={j}
-                      className={`px-4 py-2.5 whitespace-nowrap overflow-hidden text-ellipsis flex items-center ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary tabular-nums'}`}
-                    >
-                      <FormattedCell value={cell} />
+                  {isEditable && (
+                    <div className="px-2 py-2.5 flex items-center justify-center">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => onToggleRow?.(virtualRow.index)}
+                        className="h-3.5 w-3.5 rounded border-workspace-border/60 text-workspace-accent focus:ring-workspace-accent/30 cursor-pointer"
+                      />
                     </div>
-                  ))}
+                  )}
+                  {cells.map((cell, j) => {
+                    const isEditing = editingCell?.rowIdx === virtualRow.index && editingCell?.colIdx === j;
+                    return (
+                      <div
+                        key={j}
+                        className={`px-4 py-2.5 whitespace-nowrap overflow-hidden text-ellipsis flex items-center ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary tabular-nums'} ${isEditable ? 'cursor-text' : ''}`}
+                        onDoubleClick={() => isEditable && onStartEdit?.({ rowIdx: virtualRow.index, colIdx: j })}
+                      >
+                        {isEditing ? (
+                          <EditableInput
+                            initialValue={cell}
+                            onCommit={(value) => onCellEdit?.(virtualRow.index, j, value)}
+                            onCancel={() => onStartEdit?.(null)}
+                          />
+                        ) : (
+                          <FormattedCell value={cell} />
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}
@@ -363,6 +537,36 @@ function VirtualizedTable({
         </div>
       </div>
     </div>
+  );
+}
+
+function EditableInput({ initialValue, onCommit, onCancel }: {
+  initialValue: string;
+  onCommit: (value: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(initialValue);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+
+  return (
+    <input
+      ref={inputRef}
+      type="text"
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') onCommit(value);
+        if (e.key === 'Escape') onCancel();
+        e.stopPropagation();
+      }}
+      onBlur={() => onCommit(value)}
+      className="w-full bg-white border border-workspace-accent/40 rounded px-1.5 py-0.5 text-[13px] text-workspace-text outline-none ring-2 ring-workspace-accent/20"
+    />
   );
 }
 
@@ -379,7 +583,6 @@ function FormattedCell({ value }: { value: string }) {
   if (badges[value]) {
     return <span className={`rounded-full px-2 py-0.5 text-xs ${badges[value]}`}>{value}</span>;
   }
-  // Truncate very long cells in table view
   if (value.length > 60) {
     return <span title={value}>{value.slice(0, 57)}…</span>;
   }

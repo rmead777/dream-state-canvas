@@ -453,6 +453,41 @@ export function extractDataset(doc: DocumentRecord): { columns: string[]; rows: 
 }
 
 /**
+ * Update a document's structured data (e.g., after the user edits cells).
+ * Patches the specific sheet's rows/headers inside structured_data.
+ */
+export async function updateDocumentData(
+  docId: string,
+  columns: string[],
+  rows: string[][],
+): Promise<boolean> {
+  const doc = await getDocument(docId);
+  if (!doc) return false;
+
+  const sd = (doc.structured_data || {}) as { sheets?: Record<string, { headers: string[]; rows: string[][] }> };
+  const primarySheet = (doc.metadata as { primarySheet?: string })?.primarySheet;
+  const sheetNames = Object.keys(sd.sheets || {});
+  const targetName = primarySheet && sd.sheets?.[primarySheet] ? primarySheet : sheetNames[0];
+
+  if (!targetName) return false;
+
+  const updatedStructuredData = {
+    ...sd,
+    sheets: {
+      ...sd.sheets,
+      [targetName]: { headers: columns, rows },
+    },
+  };
+
+  const { error } = await supabase
+    .from('documents')
+    .update({ structured_data: updatedStructuredData })
+    .eq('id', docId);
+
+  return !error;
+}
+
+/**
  * Delete a document.
  */
 export async function deleteDocument(id: string): Promise<boolean> {
