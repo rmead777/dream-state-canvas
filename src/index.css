@@ -200,6 +200,17 @@
   }
 }
 
+@keyframes memo-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 /* Cognitive mode transitions are handled via JS on :root */
 :root {
   transition: --workspace-bg 1.5s ease,

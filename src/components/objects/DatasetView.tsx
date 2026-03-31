@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Columns, Plus, Trash2, Save, Undo2 } from 'lucide-react';
 import { WorkspaceObject } from '@/lib/workspace-types';
@@ -532,7 +533,7 @@ function VirtualizedTable({
                             onCancel={() => onStartEdit?.(null)}
                           />
                         ) : (
-                          <FormattedCell value={cell} />
+                          <HoverCell value={cell} columnName={columns[j]} />
                         )}
                       </div>
                     );
@@ -577,6 +578,93 @@ function EditableInput({ initialValue, onCommit, onCancel }: {
   );
 }
 
+function HoverCell({ value, columnName }: { value: string; columnName: string }) {
+  const cellRef = useRef<HTMLSpanElement>(null);
+  const [memo, setMemo] = useState<{ x: number; y: number } | null>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Only show memo for cells with meaningful content (>20 chars or truncated)
+  const shouldShowMemo = value && value.length > 20;
+
+  const handleMouseEnter = useCallback(() => {
+    if (!shouldShowMemo) return;
+    hoverTimer.current = setTimeout(() => {
+      const el = cellRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      setMemo({ x: rect.left + rect.width / 2, y: rect.top });
+    }, 400); // 400ms delay — deliberate, not accidental
+  }, [shouldShowMemo]);
+
+  const handleMouseLeave = useCallback(() => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    setMemo(null);
+  }, []);
+
+  return (
+    <span
+      ref={cellRef}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      className="overflow-hidden text-ellipsis"
+    >
+      <FormattedCell value={value} />
+      {memo && createPortal(
+        <CellMemo value={value} columnName={columnName} x={memo.x} y={memo.y} />,
+        document.body
+      )}
+    </span>
+  );
+}
+
+function CellMemo({ value, columnName, x, y }: { value: string; columnName: string; x: number; y: number }) {
+  const memoRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ left: x, top: y });
+
+  // Reposition to stay within viewport
+  useEffect(() => {
+    const el = memoRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    let left = x - rect.width / 2;
+    let top = y - rect.height - 10; // above the cell
+
+    // Clamp to viewport
+    if (left < 12) left = 12;
+    if (left + rect.width > window.innerWidth - 12) left = window.innerWidth - rect.width - 12;
+    if (top < 12) {
+      top = y + 36; // flip below if no room above
+    }
+    setPos({ left, top });
+  }, [x, y]);
+
+  return (
+    <div
+      ref={memoRef}
+      className="fixed z-[100] animate-[memo-enter_0.18s_cubic-bezier(0.16,1,0.3,1)_forwards]"
+      style={{ left: pos.left, top: pos.top, maxWidth: 380 }}
+    >
+      <div className="rounded-xl bg-white border border-workspace-border/50 shadow-[0_20px_48px_rgba(0,0,0,0.12),0_0_0_1px_rgba(0,0,0,0.03)] overflow-hidden">
+        {/* Memo header */}
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-workspace-border/30 bg-gradient-to-r from-slate-50 to-white">
+          <div className="h-1.5 w-1.5 rounded-full bg-workspace-accent/60" />
+          <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-workspace-text-secondary/70">
+            {columnName}
+          </span>
+        </div>
+        {/* Memo body */}
+        <div className="px-4 py-3">
+          <p className="text-[13px] leading-relaxed text-workspace-text whitespace-pre-wrap break-words font-[Georgia,serif]">
+            {value}
+          </p>
+        </div>
+        {/* Memo footer rule */}
+        <div className="mx-4 mb-2 border-t border-dashed border-workspace-border/30" />
+      </div>
+    </div>
+  );
+}
+
 function FormattedCell({ value }: { value: string }) {
   if (!value || typeof value !== 'string') return <span>{value}</span>;
   const badges: Record<string, string> = {
@@ -591,7 +679,7 @@ function FormattedCell({ value }: { value: string }) {
     return <span className={`rounded-full px-2 py-0.5 text-xs ${badges[value]}`}>{value}</span>;
   }
   if (value.length > 60) {
-    return <span title={value}>{value.slice(0, 57)}…</span>;
+    return <span>{value.slice(0, 57)}…</span>;
   }
   return <span>{value}</span>;
 }
