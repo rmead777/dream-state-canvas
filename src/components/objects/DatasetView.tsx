@@ -587,7 +587,7 @@ function HoverCell({ value, columnName, entityName }: { value: string; columnNam
 
   const handleMouseEnter = useCallback(() => {
     if (!shouldShowMemo) return;
-    hoverTimer.current = setTimeout(() => setShowMemo(true), 350);
+    hoverTimer.current = setTimeout(() => setShowMemo(true), 100);
   }, [shouldShowMemo]);
 
   const handleMouseLeave = useCallback(() => {
