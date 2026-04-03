@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      automation_triggers: {
+        Row: {
+          action: Json
+          condition: Json
+          created_at: string
+          enabled: boolean
+          fire_count: number
+          id: string
+          label: string
+          last_fired_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          action?: Json
+          condition: Json
+          created_at?: string
+          enabled?: boolean
+          fire_count?: number
+          id?: string
+          label: string
+          last_fired_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          action?: Json
+          condition?: Json
+          created_at?: string
+          enabled?: boolean
+          fire_count?: number
+          id?: string
+          label?: string
+          last_fired_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       documents: {
         Row: {
           created_at: string
@@ -163,6 +202,10 @@ export type Database = {
       }
       increment_memory_hit: { Args: { memory_id: string }; Returns: undefined }
       increment_memory_miss: { Args: { memory_id: string }; Returns: undefined }
+      increment_trigger_fire_count: {
+        Args: { trigger_id: string }
+        Returns: undefined
+      }
       supersede_memory: {
         Args: { new_memory_id: string; old_memory_id: string }
         Returns: undefined
