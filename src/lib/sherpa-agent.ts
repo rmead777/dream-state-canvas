@@ -25,8 +25,9 @@ import { recordAICall, defaultRouteMeta, parseRouteMeta } from './ai-telemetry';
 
 interface Message {
   role: 'user' | 'assistant' | 'system' | 'tool';
-  content: string;
+  content: string | null;
   tool_call_id?: string;
+  tool_calls?: ToolCall[];
 }
 
 interface ToolCall {
@@ -136,8 +137,8 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
       onStatusUpdate?.(bestText ? `● ${bestText.slice(0, 100)}...` : 'Thinking...');
     }
 
-    // Call AI with tools
-    const response = await callAIWithTools(messages, documentIds, memories);
+    // Call AI with tools — only inject docs/memories on first iteration
+    const response = await callAIWithTools(messages, documentIds, memories, iteration === 0);
 
     if (!response) {
       return { response: bestText || 'Sherpa could not reach the AI service. Please try again.', actions: remapPendingActions(), toolCallsUsed };
@@ -224,10 +225,13 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
       };
     }
 
-    // Push ONE assistant message with the tool calls (before executing them)
+    // Push assistant message WITH the tool_calls field — required by the API spec.
+    // Without tool_calls here, subsequent tool result messages are orphaned and the
+    // AI cannot match them to a call, causing it to re-call the same tool every iteration.
     messages.push({
       role: 'assistant',
-      content: text || '',
+      content: text || null,
+      tool_calls: toolCalls,
     });
 
     // Execute tool calls and push results
@@ -316,6 +320,7 @@ async function callAIWithTools(
   messages: Message[],
   documentIds: string[],
   memories: string,
+  isFirstIteration: boolean = true,
 ): Promise<string | null> {
   // We need a non-streaming call that returns the full response including tool_calls.
   // The current callAI streams SSE. For tool calling, we need the full JSON response.
@@ -334,8 +339,12 @@ async function callAIWithTools(
     stream: false, // Non-streaming for tool calling
     tools: SHERPA_TOOLS,
   };
-  if (documentIds.length > 0) body.documentIds = documentIds;
-  if (memories) body.memories = memories;
+  // Only inject documents and memories on the first iteration.
+  // Subsequent iterations already have document context from the initial system prompt
+  // carried in the messages array — re-sending documentIds causes the edge function to
+  // re-fetch and re-inject full document content every call, inflating request size.
+  if (isFirstIteration && documentIds.length > 0) body.documentIds = documentIds;
+  if (isFirstIteration && memories) body.memories = memories;
   if (admin.isUnlocked) {
     body.adminModel = admin.model;
     body.adminMaxTokens = admin.maxTokens;
