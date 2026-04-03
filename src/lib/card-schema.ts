@@ -85,6 +85,7 @@ export const ChartGridSection = z.object({
   charts: z.array(z.union([
     z.object({ type: z.literal('chart') }).passthrough(),
     z.object({ type: z.literal('vegalite') }).passthrough(),
+    z.object({ type: z.literal('embed') }).passthrough(),
   ])),
   caption: z.string().optional(),
 });
@@ -164,6 +165,18 @@ function normalizeSection(item: unknown): unknown {
   // 'header' → 'summary'
   if (s.type === 'header') {
     return { ...s, type: 'summary', text: s.content ?? s.text ?? '' };
+  }
+  // vegalite aliases — AI commonly uses 'vega', 'vega-lite', 'vegaLite'
+  if (s.type === 'vega' || s.type === 'vega-lite' || s.type === 'vegaLite') {
+    return { ...s, type: 'vegalite' };
+  }
+  // embed aliases — AI may say 'svg', 'html', 'html-embed'
+  if (s.type === 'svg' || s.type === 'html' || s.type === 'html-embed') {
+    return { ...s, type: 'embed' };
+  }
+  // chart-grid aliases
+  if (s.type === 'grid' || s.type === 'chartgrid' || s.type === 'chart_grid') {
+    return { ...s, type: 'chart-grid' };
   }
   return item;
 }
