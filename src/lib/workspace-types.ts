@@ -6,7 +6,8 @@ export type ObjectType =
   | 'metric' | 'comparison' | 'alert' | 'inspector' | 'brief'
   | 'timeline' | 'monitor' | 'document' | 'document-viewer' | 'dataset' | 'analysis'
   | 'action-queue' | 'vendor-dossier' | 'cash-planner'
-  | 'escalation-tracker' | 'outreach-tracker' | 'production-risk';
+  | 'escalation-tracker' | 'outreach-tracker' | 'production-risk'
+  | 'email-draft' | 'simulation';
 
 export type ObjectStatus = 'materializing' | 'open' | 'collapsed' | 'dissolved';
 

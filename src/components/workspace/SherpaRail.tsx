@@ -197,8 +197,50 @@ export function SherpaRail() {
     setInput('');
   }, [input, trackAndProcess, adminUnlocked, dispatch]);
 
+  // TTS state: track whether the last query came from voice, and whether TTS is active
+  const lastWasVoiceRef = useRef(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const ttsSupported = typeof window !== 'undefined' && 'speechSynthesis' in window;
+
+  // Speak a response aloud via the Web Speech API
+  const speakResponse = useCallback((text: string) => {
+    if (!ttsSupported) return;
+    window.speechSynthesis.cancel(); // cancel any in-progress speech
+    // Strip markdown — the voice should hear clean prose
+    const clean = text
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1')
+      .replace(/`(.*?)`/g, '$1')
+      .replace(/#{1,6}\s+/g, '')
+      .replace(/\[(.*?)\]\(.*?\)/g, '$1')
+      .trim();
+    if (!clean) return;
+    const utterance = new SpeechSynthesisUtterance(clean);
+    utterance.rate = 1.05;
+    utterance.pitch = 1.0;
+    utterance.volume = 0.95;
+    // Prefer a natural English voice if available
+    const voices = window.speechSynthesis.getVoices();
+    const preferred = voices.find(v => v.lang.startsWith('en') && !v.name.includes('Google') && v.localService)
+      || voices.find(v => v.lang.startsWith('en'));
+    if (preferred) utterance.voice = preferred;
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    window.speechSynthesis.speak(utterance);
+  }, [ttsSupported]);
+
+  // Speak the response when a voice query gets a reply
+  useEffect(() => {
+    if (!lastWasVoiceRef.current) return;
+    if (!lastResponse || isProcessing) return;
+    lastWasVoiceRef.current = false;
+    speakResponse(lastResponse);
+  }, [lastResponse, isProcessing, speakResponse]);
+
   const handleVoiceResult = useCallback(
     (transcript: string) => {
+      lastWasVoiceRef.current = true;
       play('focus');
       trackAndProcess(transcript);
     },
@@ -213,8 +255,8 @@ export function SherpaRail() {
     onResult: handleVoiceResult,
     onInterim: handleVoiceInterim,
   });
-  const composerState = voice.isListening ? 'Listening' : isProcessing ? 'Reasoning' : input.trim() ? 'Ready to send' : 'Standing by';
-  const composerStateTone = voice.isListening ? 'bg-rose-500' : isProcessing ? 'bg-amber-500' : input.trim() ? 'bg-emerald-500' : 'bg-workspace-accent';
+  const composerState = isSpeaking ? 'Speaking' : voice.isListening ? 'Listening' : isProcessing ? 'Reasoning' : input.trim() ? 'Ready to send' : 'Standing by';
+  const composerStateTone = isSpeaking ? 'bg-violet-500' : voice.isListening ? 'bg-rose-500' : isProcessing ? 'bg-amber-500' : input.trim() ? 'bg-emerald-500' : 'bg-workspace-accent';
 
   const handleSuggestionClick = (query: string) => {
     trackAndProcess(query);
@@ -562,6 +604,19 @@ export function SherpaRail() {
                     <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
                     <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
                     <line x1="12" x2="12" y1="19" y2="22" />
+                  </svg>
+                </button>
+              )}
+
+              {/* Stop speaking button — only when TTS is active */}
+              {isSpeaking && (
+                <button
+                  onClick={() => { window.speechSynthesis.cancel(); setIsSpeaking(false); }}
+                  className="rounded-full p-1.5 bg-violet-100 text-violet-600 hover:bg-violet-200 transition-colors animate-pulse"
+                  title="Stop speaking"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="6" y="6" width="12" height="12" rx="2" />
                   </svg>
                 </button>
               )}

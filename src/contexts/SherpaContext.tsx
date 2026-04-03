@@ -5,6 +5,7 @@ import { Suggestion } from '@/lib/workspace-types';
 import { getMemories } from '@/lib/memory-store';
 import { parseThreshold, checkAlertThresholds } from '@/lib/alert-monitor';
 import { getActiveDataset } from '@/lib/active-dataset';
+import { loadTriggers, checkTriggers, markTriggerFired } from '@/lib/automation-triggers';
 import { supabase } from '@/integrations/supabase/client';
 
 /**
@@ -96,6 +97,36 @@ export function SherpaProvider({ children }: { children: React.ReactNode }) {
     const alertTimer = setInterval(runAlertScan, 60000);
     return () => clearInterval(alertTimer);
   }, [dispatch]); // dispatch is stable from useWorkspace
+
+  // Automation trigger scan — runs every 30 seconds (in sync with observation scan).
+  // Loads triggers from Supabase, evaluates conditions, dispatches observations or card events.
+  useEffect(() => {
+    const runTriggerScan = async () => {
+      try {
+        const triggers = await loadTriggers();
+        if (triggers.length === 0) return;
+
+        const firings = checkTriggers(triggers);
+        for (const firing of firings) {
+          const obs = firing.observation;
+          if (!observationsRef.current.includes(obs)) {
+            dispatch({ type: 'ADD_SHERPA_OBSERVATION', payload: obs });
+          }
+          // For create_card actions, emit a synthetic sherpa-query event
+          if (firing.actionType === 'create_card' && firing.actionParams.query) {
+            document.dispatchEvent(new CustomEvent('sherpa-query', { detail: firing.actionParams.query }));
+          }
+          // Mark as fired in Supabase (fire-and-forget)
+          markTriggerFired(firing.trigger.id).catch(() => {});
+        }
+      } catch (err) {
+        console.warn('[SherpaContext] Trigger scan failed:', err);
+      }
+    };
+
+    const triggerTimer = setInterval(runTriggerScan, 30000);
+    return () => clearInterval(triggerTimer);
+  }, [dispatch]); // dispatch is stable
 
   // Compute a lightweight fingerprint of object state for reactivity.
   // Captures count, types, statuses, and pinned flags — not just count.

@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { agentLoop } from '@/lib/sherpa-agent';
+import { agentLoop, orchestratorLoop } from '@/lib/sherpa-agent';
 import { WorkspaceObject, IntentOrigin, WorkspaceAction, WorkspaceReducerAction } from '@/lib/workspace-types';
 import { computeFreeformPosition } from '@/lib/freeform-placement';
 import { handleUpdate, handleFuse, handleRefineRules, HandlerResult, DispatchInstruction } from '@/lib/action-handlers';
@@ -94,7 +94,7 @@ export function useWorkspaceActions() {
       }
 
       try {
-        const agentResult = await agentLoop({
+        const agentResult = await orchestratorLoop({
           query,
           workspaceState: stateRef.current,
           activeContext: stateRef.current.activeContext,

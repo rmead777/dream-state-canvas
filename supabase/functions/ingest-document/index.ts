@@ -246,6 +246,88 @@ Return ONLY JSON, no markdown fences.`,
   };
 }
 
+/**
+ * Extract tabular data from an image (screenshot of a spreadsheet, table, report).
+ * Returns { headers, rows } suitable for the structured_data.sheets format.
+ * Only called when the initial analysis suggests tabular content is present.
+ */
+async function aiExtractTableFromImage(
+  base64: string,
+  mimeType: string,
+  filename: string,
+  apiKey: string,
+): Promise<{ headers: string[]; rows: string[][] } | null> {
+  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      max_tokens: 8192,
+      messages: [
+        {
+          role: "system",
+          content: `You are a precise data extraction assistant. Your ONLY job is to extract tabular data from images.
+
+Extract ALL rows and columns from any table, spreadsheet, or data grid visible in the image.
+
+Rules:
+- Include ALL rows, even if there are many
+- Preserve column headers EXACTLY as shown
+- Preserve cell values EXACTLY (numbers, text, dates, currency symbols)
+- Use null for empty cells
+- If multiple tables exist, extract the LARGEST/MOST COMPLETE one
+
+Return ONLY valid JSON with no markdown:
+{
+  "headers": ["Column A", "Column B", ...],
+  "rows": [
+    ["value1", "value2", ...],
+    ["value1", "value2", ...]
+  ]
+}
+
+If NO tabular data is visible, return: {"headers": [], "rows": []}`,
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `Extract the tabular data from this image: "${filename}"`,
+            },
+            {
+              type: "image_url",
+              image_url: { url: `data:${mimeType};base64,${base64}` },
+            },
+          ],
+        },
+      ],
+    }),
+  });
+
+  if (!resp.ok) return null;
+
+  const result = await resp.json();
+  const text = result.choices?.[0]?.message?.content || "";
+
+  try {
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (!Array.isArray(parsed.headers) || !Array.isArray(parsed.rows)) return null;
+    if (parsed.headers.length === 0) return null;
+    return {
+      headers: parsed.headers.map((h: unknown) => String(h ?? "")),
+      rows: parsed.rows.map((row: unknown[]) => row.map((v) => String(v ?? ""))),
+    };
+  } catch {
+    return null;
+  }
+}
+
 // ─── Main handler ────────────────────────────────────────────────────────────
 
 serve(async (req) => {
@@ -445,7 +527,7 @@ Return ONLY JSON.`,
       fingerprint = "pdf-" + simpleHash(base64Content.slice(0, 2000));
     }
 
-    // ─── Images — AI Vision ─────────────────────────────────────────────────
+    // ─── Images — AI Vision + Structured Data Extraction ────────────────────
     else if (fileType === "image" && base64Content) {
       const aiResult = await aiUnderstandDocument(
         base64Content,
@@ -455,11 +537,38 @@ Return ONLY JSON.`,
         LOVABLE_API_KEY
       );
       extractedText = aiResult.extractedText;
+
+      // Detect if image appears to contain tabular/spreadsheet data
+      const looksTabular = (
+        ["table", "spreadsheet", "report", "ledger", "invoice", "csv", "list", "rows", "columns", "data"]
+          .some((kw) => (aiResult.summary + extractedText).toLowerCase().includes(kw))
+        || (aiResult.structuredInsights?.documentType as string || "").toLowerCase().includes("table")
+        || (aiResult.structuredInsights?.documentType as string || "").toLowerCase().includes("spreadsheet")
+      );
+
+      if (looksTabular) {
+        // Second AI call: extract table as structured rows
+        const tableResult = await aiExtractTableFromImage(
+          base64Content,
+          mimeType || "image/png",
+          filename,
+          LOVABLE_API_KEY
+        );
+        if (tableResult && tableResult.headers.length > 0 && tableResult.rows.length > 0) {
+          structuredData = {
+            sheets: {
+              [filename]: { headers: tableResult.headers, rows: tableResult.rows },
+            },
+          };
+        }
+      }
+
       metadata = {
         summary: aiResult.summary,
         keywords: aiResult.keywords,
         structuredInsights: aiResult.structuredInsights,
-        domain: "image",
+        domain: looksTabular ? "data" : "image",
+        hasStructuredData: Object.keys(structuredData).length > 0,
       };
       fingerprint = "img-" + simpleHash(base64Content.slice(0, 2000));
     }

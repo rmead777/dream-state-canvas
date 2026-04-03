@@ -22,6 +22,8 @@ import { CashPlanner } from '@/components/objects/CashPlanner';
 import { EscalationTracker } from '@/components/objects/EscalationTracker';
 import { OutreachTracker } from '@/components/objects/OutreachTracker';
 import { ProductionRiskMap } from '@/components/objects/ProductionRiskMap';
+import { EmailDraft } from '@/components/objects/EmailDraft';
+import { SimulationCard } from '@/components/objects/SimulationCard';
 
 const typeLabels: Record<string, string> = {
   metric: 'Metric',
@@ -40,6 +42,8 @@ const typeLabels: Record<string, string> = {
   'escalation-tracker': 'Escalation',
   'outreach-tracker': 'Outreach',
   'production-risk': 'Production Risk',
+  'email-draft': 'Email Draft',
+  'simulation': 'Simulation',
 };
 
 function ObjectContent({ object }: { object: WO }) {
@@ -65,6 +69,8 @@ function ObjectContent({ object }: { object: WO }) {
     case 'escalation-tracker': return <EscalationTracker object={object} />;
     case 'outreach-tracker': return <OutreachTracker object={object} />;
     case 'production-risk': return <ProductionRiskMap object={object} />;
+    case 'email-draft': return <EmailDraft object={object} />;
+    case 'simulation': return <SimulationCard object={object} />;
     default:
       // Unknown types: try AnalysisCard (handles sections + markdown), then show content
       if (object.context?.content) {

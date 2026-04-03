@@ -323,6 +323,179 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
   };
 }
 
+// ─── Multi-Agent Orchestrator ─────────────────────────────────────────────────
+
+/**
+ * Heuristic: does this query look complex enough to benefit from parallel workers?
+ * We check for multiple intents connected by coordination words.
+ */
+function looksComplex(query: string): boolean {
+  const q = query.toLowerCase();
+  const coordinators = [' and also ', ' then ', ' plus ', ' as well as ', ' additionally '];
+  const hasCoordinator = coordinators.some(c => q.includes(c));
+  // Long AND referencing multiple items OR explicit multi-part request
+  const isLong = query.length > 120;
+  const hasAnd = /\band\b.*\band\b/i.test(query); // multiple "and"s
+  return (hasCoordinator || (isLong && hasAnd));
+}
+
+/**
+ * Decompose a complex query into focused sub-tasks using AI.
+ * Returns 2-3 independent sub-queries the orchestrator can run in parallel.
+ */
+async function decomposeQuery(
+  query: string,
+  workspaceContext: string,
+  documentIds: string[],
+  memories: string,
+): Promise<string[]> {
+  try {
+    const resp = await callAIWithTools(
+      [
+        {
+          role: 'user',
+          content: [
+            `Decompose the following request into 2-3 focused, independent sub-tasks that can be executed in parallel.`,
+            `Each sub-task should be a specific, actionable question or instruction.`,
+            `If the request is simple (only 1 logical task), return just that task as-is.`,
+            `\nWorkspace context:\n${workspaceContext}`,
+            `\nOriginal request: "${query}"`,
+            `\nReturn a JSON array of sub-task strings, e.g.: ["task 1", "task 2"]`,
+            `Return ONLY the JSON array. No explanation.`,
+          ].join('\n'),
+        },
+      ],
+      documentIds,
+      memories,
+      true,
+    );
+    if (!resp) return [query];
+    const jsonMatch = resp.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      const tasks = JSON.parse(jsonMatch[0]);
+      if (Array.isArray(tasks) && tasks.every(t => typeof t === 'string')) {
+        return tasks.slice(0, 3); // max 3 parallel workers
+      }
+    }
+  } catch {}
+  return [query]; // fallback: single task
+}
+
+/**
+ * Merge results from multiple parallel worker loops.
+ * - Combine all actions (create, focus, dissolve, update)
+ * - Deduplicate creates with identical titles
+ * - Combine responses into a coherent summary
+ * - Merge next moves, deduped
+ */
+function mergeWorkerResults(results: AgentLoopResult[]): AgentLoopResult {
+  if (results.length === 0) return { response: 'Done.', actions: [], toolCallsUsed: 0 };
+  if (results.length === 1) return results[0];
+
+  const allActions: any[] = [];
+  const seenTitles = new Set<string>();
+  let totalToolCalls = 0;
+
+  for (const r of results) {
+    totalToolCalls += r.toolCallsUsed;
+    for (const action of r.actions) {
+      // Dedup creates with same title
+      if (action.type === 'create') {
+        const key = `${action.objectType}:${action.title}`;
+        if (seenTitles.has(key)) continue;
+        seenTitles.add(key);
+      }
+      allActions.push(action);
+    }
+  }
+
+  // Combine response texts — remove duplicates, join with newlines
+  const responseParts = results
+    .map(r => r.response?.trim())
+    .filter(Boolean)
+    .filter((v, i, arr) => arr.indexOf(v) === i);
+
+  const combinedResponse = responseParts.length > 1
+    ? responseParts.join(' ')
+    : responseParts[0] || 'Done.';
+
+  // Merge next moves (deduped by label)
+  const seenLabels = new Set<string>();
+  const nextMoves: { label: string; query: string }[] = [];
+  for (const r of results) {
+    for (const move of r.nextMoves ?? []) {
+      if (!seenLabels.has(move.label)) {
+        seenLabels.add(move.label);
+        nextMoves.push(move);
+      }
+    }
+  }
+
+  return {
+    response: combinedResponse,
+    actions: allActions,
+    toolCallsUsed: totalToolCalls,
+    nextMoves: nextMoves.slice(0, 4),
+  };
+}
+
+/**
+ * Orchestrator loop — for complex multi-intent queries.
+ *
+ * 1. Decomposes the query into parallel sub-tasks
+ * 2. Runs each sub-task as an independent agentLoop (in parallel)
+ * 3. Merges results, deduplicating conflicting actions
+ * 4. Falls through to a single agentLoop for simple queries
+ */
+export async function orchestratorLoop(params: AgentLoopParams): Promise<AgentLoopResult> {
+  const { query, workspaceState, activeContext, documentIds, memories, onStatusUpdate } = params;
+
+  // Only fan out for genuinely complex queries — single loop is faster otherwise
+  if (!looksComplex(query)) {
+    return agentLoop(params);
+  }
+
+  onStatusUpdate?.('Decomposing complex request...');
+
+  // Build context for decomposition
+  const ds = getActiveDataset();
+  const profile = getCurrentProfile(ds.columns, ds.rows);
+  const workspaceContext = buildWorkspaceIntentContext({
+    objects: workspaceState.objects,
+    activeContext,
+    profile,
+  });
+
+  const subTasks = await decomposeQuery(query, workspaceContext, documentIds, memories);
+
+  // If decomposition returned a single task, just run the normal agent
+  if (subTasks.length <= 1) {
+    return agentLoop(params);
+  }
+
+  console.log(`[orchestrator] Fanning out to ${subTasks.length} parallel workers:`, subTasks);
+  onStatusUpdate?.(`Running ${subTasks.length} parallel analyses...`);
+
+  // Run all workers in parallel
+  const workerPromises = subTasks.map((subQuery, i) =>
+    agentLoop({
+      ...params,
+      query: subQuery,
+      onStatusUpdate: (status) => {
+        if (status) onStatusUpdate?.(`[Worker ${i + 1}] ${status}`);
+      },
+    })
+  );
+
+  const workerResults = await Promise.all(workerPromises);
+  onStatusUpdate?.('Synthesizing results...');
+
+  const merged = mergeWorkerResults(workerResults);
+  console.log(`[orchestrator] Merged: ${merged.actions.length} actions, ${merged.toolCallsUsed} tool calls`);
+
+  return merged;
+}
+
 /**
  * Call the AI with tool definitions.
  * The edge function passes tools to the provider.

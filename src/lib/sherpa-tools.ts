@@ -12,6 +12,7 @@ import { getDocument } from './document-store';
 import { createMemory } from './memory-store';
 import { retrieveRelevantMemories, formatMemoriesForPrompt, determineWorkspaceState } from './memory-retriever';
 import { supabase } from '@/integrations/supabase/client';
+import { createTrigger as saveTrigger } from './automation-triggers';
 
 // ─── Tool Definitions (OpenAI function-calling format) ──────────────────────
 
@@ -220,6 +221,128 @@ export const SHERPA_TOOLS = [
     },
   },
 
+  // AUTOMATION TRIGGER tool
+  {
+    type: 'function' as const,
+    function: {
+      name: 'createTrigger',
+      description: 'Create a persistent workflow automation trigger. The trigger monitors a dataset condition and fires automatically when met (checked every 30 seconds). Use when the user says "automatically", "whenever", "trigger when", "watch and do", etc.',
+      parameters: {
+        type: 'object',
+        properties: {
+          label: { type: 'string', description: 'Human-readable trigger name, e.g. "Flag overdue invoices"' },
+          condition: {
+            type: 'object',
+            description: 'Condition to evaluate against the dataset',
+            properties: {
+              column: { type: 'string', description: 'Dataset column to monitor' },
+              operator: { type: 'string', description: 'gt|lt|gte|lte|eq|neq' },
+              value: { type: 'number', description: 'Threshold value' },
+              aggregation: { type: 'string', description: 'any (default)|count|sum' },
+            },
+            required: ['column', 'operator', 'value'],
+          },
+          actionType: { type: 'string', description: 'notify (default) | create_card' },
+          actionParams: { type: 'object', description: 'For create_card: { objectType, title, query }' },
+        },
+        required: ['label', 'condition'],
+      },
+    },
+  },
+
+  // EMAIL DRAFT tool
+  {
+    type: 'function' as const,
+    function: {
+      name: 'draftEmail',
+      description: 'Compose a professional email draft based on workspace data. Creates an email-draft card the user can copy or open in their email client. Use when the user says "draft an email", "write an email to", "send a follow-up to", etc.',
+      parameters: {
+        type: 'object',
+        properties: {
+          to: { type: 'string', description: 'Recipient email or name (e.g. "vendor@company.com" or "Acme Corp contact")' },
+          subject: { type: 'string', description: 'Email subject line' },
+          body: { type: 'string', description: 'Full email body text. Use \\n for line breaks.' },
+          contextCardId: { type: 'string', description: 'Optional: ID of the card that triggered this draft, for provenance' },
+        },
+        required: ['to', 'subject', 'body'],
+      },
+    },
+  },
+
+  // CALENDAR tool
+  {
+    type: 'function' as const,
+    function: {
+      name: 'createCalendarEvent',
+      description: 'Create a calendar event and offer a .ics download. Use when the user says "add to calendar", "schedule a meeting", "set a reminder", "deadline on [date]", etc.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Event title' },
+          date: { type: 'string', description: 'ISO 8601 date (YYYY-MM-DD) or datetime (YYYY-MM-DDTHH:mm)' },
+          durationMinutes: { type: 'number', description: 'Duration in minutes (default 60 for meetings, 0 for all-day deadlines)' },
+          description: { type: 'string', description: 'Optional event notes / description' },
+          allDay: { type: 'boolean', description: 'True for deadline reminders with no specific time' },
+        },
+        required: ['title', 'date'],
+      },
+    },
+  },
+
+  // EXPORT tool
+  {
+    type: 'function' as const,
+    function: {
+      name: 'exportWorkspace',
+      description: 'Generate a PDF report of the current workspace or specific cards. Use when the user says "export", "generate a report", "create a PDF", "download as PDF", etc.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Report title' },
+          cardIds: { type: 'array', items: { type: 'string' }, description: 'Optional: specific card IDs to include. If omitted, includes all visible cards.' },
+          includeData: { type: 'boolean', description: 'Include raw data tables in the report (default: false — summary only)' },
+        },
+        required: ['title'],
+      },
+    },
+  },
+
+  // SIMULATION tool
+  {
+    type: 'function' as const,
+    function: {
+      name: 'runSimulation',
+      description: 'Run a what-if scenario simulation on dataset metrics. Creates a simulation card showing original vs. adjusted projections. Use when the user says "what if", "simulate", "model the impact", "project", "forecast", etc.',
+      parameters: {
+        type: 'object',
+        properties: {
+          metric: { type: 'string', description: 'The metric or column to simulate (e.g. "revenue", "balance", "invoice amount")' },
+          scenarioA: {
+            type: 'object',
+            description: 'Baseline scenario',
+            properties: {
+              label: { type: 'string' },
+              assumption: { type: 'string', description: 'Human-readable assumption (e.g. "Current trajectory")' },
+              adjustmentPct: { type: 'number', description: 'Percentage change from baseline (0 = no change)' },
+            },
+          },
+          scenarioB: {
+            type: 'object',
+            description: 'Alternative scenario',
+            properties: {
+              label: { type: 'string' },
+              assumption: { type: 'string', description: 'Human-readable assumption (e.g. "+15% growth")' },
+              adjustmentPct: { type: 'number', description: 'Percentage change from baseline' },
+            },
+          },
+          periods: { type: 'number', description: 'Number of periods to project (default 6)' },
+          periodLabel: { type: 'string', description: 'Period unit (months, quarters, weeks — default: months)' },
+        },
+        required: ['metric', 'scenarioA', 'scenarioB'],
+      },
+    },
+  },
+
   // NEXT MOVES tool
   {
     type: 'function' as const,
@@ -264,6 +387,11 @@ const TOOL_STATUS: Record<string, string> = {
   recallMemories: 'Checking memory...',
   joinDatasets: 'Joining datasets...',
   setThreshold: 'Setting alert threshold...',
+  createTrigger: 'Creating automation trigger...',
+  draftEmail: 'Composing email...',
+  createCalendarEvent: 'Creating calendar event...',
+  exportWorkspace: 'Generating PDF report...',
+  runSimulation: 'Running simulation...',
   suggestNextMoves: '',
 };
 
@@ -500,6 +628,166 @@ export async function executeTool(
           id: memory?.id,
           threshold: thresholdData,
           message: `Alert set: ${args.label}. I'll watch ${args.column} ${args.operator} ${args.value} every 60 seconds.`,
+        });
+      }
+
+      case 'createTrigger': {
+        const trigger = await saveTrigger({
+          label: args.label,
+          condition: {
+            column: args.condition.column,
+            operator: args.condition.operator,
+            value: Number(args.condition.value),
+            aggregation: args.condition.aggregation ?? 'any',
+          },
+          action: {
+            type: (args.actionType ?? 'notify') as 'notify' | 'create_card',
+            params: args.actionParams ?? {},
+          },
+        });
+        if (!trigger) {
+          return JSON.stringify({ error: 'Failed to create trigger. Automation triggers table may not be deployed yet.' });
+        }
+        return JSON.stringify({
+          saved: true,
+          id: trigger.id,
+          label: trigger.label,
+          message: `Automation trigger "${trigger.label}" is active. I'll check it every 30 seconds.`,
+        });
+      }
+
+      case 'draftEmail':
+        return JSON.stringify({
+          action: 'create',
+          objectType: 'email-draft',
+          title: args.subject || 'Email Draft',
+          data: {
+            to: args.to,
+            subject: args.subject,
+            body: args.body,
+            contextCardId: args.contextCardId,
+          },
+        });
+
+      case 'createCalendarEvent': {
+        const { title, date, durationMinutes = 60, description = '', allDay = false } = args;
+        // Build .ics content in-browser — no server round-trip needed
+        const uid = `${Date.now()}-${Math.random().toString(36).slice(2)}@dreamstate`;
+        const now = new Date().toISOString().replace(/[-:.]/g, '').slice(0, 15) + 'Z';
+        let dtStart: string;
+        let dtEnd: string;
+        if (allDay || !date.includes('T')) {
+          const d = date.slice(0, 10).replace(/-/g, '');
+          dtStart = `DTSTART;VALUE=DATE:${d}`;
+          dtEnd = `DTEND;VALUE=DATE:${d}`;
+        } else {
+          const start = new Date(date);
+          const end = new Date(start.getTime() + (durationMinutes || 60) * 60000);
+          dtStart = `DTSTART:${start.toISOString().replace(/[-:.]/g, '').slice(0, 15)}Z`;
+          dtEnd = `DTEND:${end.toISOString().replace(/[-:.]/g, '').slice(0, 15)}Z`;
+        }
+        const icsContent = [
+          'BEGIN:VCALENDAR',
+          'VERSION:2.0',
+          'PRODID:-//Dream State Canvas//EN',
+          'BEGIN:VEVENT',
+          `UID:${uid}`,
+          `DTSTAMP:${now}`,
+          dtStart,
+          dtEnd,
+          `SUMMARY:${title}`,
+          description ? `DESCRIPTION:${description.replace(/\n/g, '\\n')}` : '',
+          'END:VEVENT',
+          'END:VCALENDAR',
+        ].filter(Boolean).join('\r\n');
+        return JSON.stringify({
+          action: 'create',
+          objectType: 'analysis',
+          title: `📅 ${title}`,
+          data: {
+            calendarEvent: { title, date, durationMinutes, description, allDay },
+            icsContent,
+            icsFilename: `${title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.ics`,
+          },
+          sections: [
+            {
+              type: 'narrative',
+              text: `**${title}**\n\nDate: ${date}${!allDay && durationMinutes ? `\nDuration: ${durationMinutes} min` : ''}\n${description ? `\nNotes: ${description}` : ''}`,
+            },
+            {
+              type: 'callout',
+              severity: 'info',
+              text: `Calendar event ready to download. Click the button below to add to your calendar.`,
+            },
+          ],
+        });
+      }
+
+      case 'exportWorkspace': {
+        // Collect visible card data from workspace state
+        const visibleCards = Object.values(state.objects).filter(o => o.status !== 'dissolved');
+        const cards = (args.cardIds?.length
+          ? visibleCards.filter(o => args.cardIds.includes(o.id))
+          : visibleCards
+        ).map((o: WorkspaceObject) => ({
+          id: o.id,
+          type: o.type,
+          title: o.title,
+          sections: o.context?.sections || [],
+          rows: Array.isArray(o.context?.rows) ? o.context.rows.slice(0, 20) : [],
+          columns: o.context?.columns || [],
+        }));
+
+        try {
+          const { data, error } = await supabase.functions.invoke('generate-report', {
+            body: { title: args.title, cards, includeData: args.includeData ?? false },
+          });
+          if (error || !data?.url) {
+            return JSON.stringify({ error: `PDF generation failed: ${error?.message || 'generate-report function may not be deployed yet'}` });
+          }
+          return JSON.stringify({
+            action: 'create',
+            objectType: 'analysis',
+            title: `📊 ${args.title}`,
+            data: { reportUrl: data.url, reportTitle: args.title },
+            sections: [
+              { type: 'summary', text: `Report "${args.title}" is ready` },
+              { type: 'callout', severity: 'success', text: `PDF generated with ${cards.length} cards. Click "Download PDF Report" below.` },
+            ],
+          });
+        } catch (err) {
+          return JSON.stringify({ error: `Export failed: ${err instanceof Error ? err.message : 'Unknown error'}` });
+        }
+      }
+
+      case 'runSimulation': {
+        const { metric, scenarioA, scenarioB, periods = 6, periodLabel = 'months' } = args;
+        const { columns, rows } = getActiveDataset();
+        const colIdx = columns.findIndex((c: string) => c.toLowerCase().includes(metric.toLowerCase()));
+        const baseValues: number[] = colIdx >= 0
+          ? rows.map((r: any[]) => parseFloat(String(r[colIdx] ?? '0').replace(/[^0-9.-]/g, '')) || 0).filter((v: number) => !isNaN(v))
+          : [100];
+        const baseline = baseValues.length > 0 ? baseValues.reduce((a: number, b: number) => a + b, 0) / baseValues.length : 100;
+        const aAdj = (scenarioA?.adjustmentPct ?? 0) / 100;
+        const bAdj = (scenarioB?.adjustmentPct ?? 0) / 100;
+        const simRows = Array.from({ length: periods }, (_, i) => ({
+          period: i + 1,
+          label: `${periodLabel.charAt(0).toUpperCase() + periodLabel.slice(1)} ${i + 1}`,
+          scenarioA: Math.round(baseline * Math.pow(1 + aAdj, i + 1) * 100) / 100,
+          scenarioB: Math.round(baseline * Math.pow(1 + bAdj, i + 1) * 100) / 100,
+        }));
+        return JSON.stringify({
+          action: 'create',
+          objectType: 'simulation',
+          title: `What-If: ${metric}`,
+          data: {
+            metric,
+            baseline,
+            periodLabel,
+            scenarioA: { label: scenarioA?.label || 'Scenario A', assumption: scenarioA?.assumption || '', adjustmentPct: scenarioA?.adjustmentPct || 0 },
+            scenarioB: { label: scenarioB?.label || 'Scenario B', assumption: scenarioB?.assumption || '', adjustmentPct: scenarioB?.adjustmentPct || 0 },
+            simRows,
+          },
         });
       }
 
