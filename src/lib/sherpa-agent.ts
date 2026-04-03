@@ -21,6 +21,7 @@ import { listDocuments } from './document-store';
 import { buildWorkspaceIntentContext } from './workspace-intelligence';
 import { getCurrentProfile } from './data-analyzer';
 import { getActiveDataset } from './active-dataset';
+import { recordAICall, extractRouteMeta } from './ai-telemetry';
 
 interface Message {
   role: 'user' | 'assistant' | 'system' | 'tool';
@@ -274,6 +275,7 @@ async function callAIWithTools(
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 60000); // 60s for agent calls
+  const callStartTime = Date.now();
 
   try {
     const resp = await fetch(
@@ -289,10 +291,25 @@ async function callAIWithTools(
       },
     );
 
+    // Extract routing metadata for telemetry
+    const routeMeta = extractRouteMeta(resp);
+
     if (!resp.ok) return null;
 
     // Non-streaming: read full JSON response
     const text = await resp.text();
+
+    // Record telemetry
+    recordAICall({
+      timestamp: Date.now(),
+      model: routeMeta.model,
+      provider: routeMeta.provider,
+      billing: routeMeta.billing,
+      fallback: routeMeta.fallback,
+      durationMs: Date.now() - callStartTime,
+      mode: 'intent',
+      toolCalls: body.tools ? 1 : 0,
+    });
 
     // If the response is SSE format (edge function didn't respect stream:false),
     // extract the content from the SSE lines

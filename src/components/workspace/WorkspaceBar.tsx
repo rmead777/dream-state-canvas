@@ -6,14 +6,12 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useWorkspaceActions } from '@/hooks/useWorkspaceActions';
 import { useDocumentUpload } from '@/hooks/useDocumentUpload';
-import { RulesEditor } from './RulesEditor';
 import { DocumentUpload } from './DocumentUpload';
-import { MemoryPanel } from './MemoryPanel';
 import { WorkspaceRadar } from './WorkspaceRadar';
 import { toast } from 'sonner';
 import { ActivityTicker } from './ActivityTicker';
 
-type UtilityPanel = 'upload' | 'rules' | 'memory' | 'health' | null;
+type UtilityPanel = 'upload' | 'health' | null;
 
 const TYPE_ICONS: Record<string, string> = {
   metric: '◈', alert: '◆', comparison: '⇄', inspector: '▤',
@@ -92,7 +90,7 @@ export function WorkspaceBar() {
           ref={popoverRef}
           className="absolute bottom-full right-4 mb-2 z-50 animate-[materialize_0.2s_cubic-bezier(0.16,1,0.3,1)_forwards]"
           style={{
-            width: activePanel === 'upload' ? 320 : activePanel === 'rules' ? 360 : 380,
+            width: activePanel === 'upload' ? 320 : 380,
             maxHeight: 400,
           }}
         >
@@ -107,12 +105,6 @@ export function WorkspaceBar() {
                   XLSX, CSV, PDF, DOCX, TXT, MD, Images
                 </p>
               </>
-            )}
-            {activePanel === 'rules' && (
-              <RulesEditor onClose={() => setActivePanel(null)} />
-            )}
-            {activePanel === 'memory' && (
-              <MemoryPanel />
             )}
             {activePanel === 'health' && (
               <WorkspaceRadar />
@@ -188,18 +180,6 @@ export function WorkspaceBar() {
             label="Upload"
             active={activePanel === 'upload'}
             onClick={() => togglePanel('upload')}
-          />
-          <UtilityButton
-            icon="⚙"
-            label="Rules"
-            active={activePanel === 'rules'}
-            onClick={() => togglePanel('rules')}
-          />
-          <UtilityButton
-            icon="◈"
-            label="Memory"
-            active={activePanel === 'memory'}
-            onClick={() => togglePanel('memory')}
           />
           <UtilityButton
             icon="♡"

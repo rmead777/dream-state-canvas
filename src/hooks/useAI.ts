@@ -3,6 +3,7 @@ import { useState, useCallback, useRef } from 'react';
 import { getAdminSettings } from '@/lib/admin-settings';
 import { getPromptOverride } from '@/lib/system-prompts';
 import { supabase } from '@/integrations/supabase/client';
+import { recordAICall, extractRouteMeta } from '@/lib/ai-telemetry';
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`;
 
@@ -41,6 +42,7 @@ export function useAI() {
       setIsStreaming(true);
       let fullText = '';
       deltaBufferRef.current = '';
+      const callStartTime = Date.now();
 
       // Batched flush: accumulate tokens, flush every 80ms to avoid per-token re-renders
       const flushDelta = () => {
@@ -82,6 +84,9 @@ export function useAI() {
           body: JSON.stringify(body),
           signal: controller.signal,
         });
+
+        // Extract routing metadata from response headers
+        const routeMeta = extractRouteMeta(resp);
 
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({ error: 'Request failed' }));
@@ -169,6 +174,17 @@ export function useAI() {
         }
         flushDelta();
 
+        // Record telemetry
+        recordAICall({
+          timestamp: Date.now(),
+          model: routeMeta.model,
+          provider: routeMeta.provider,
+          billing: routeMeta.billing,
+          fallback: routeMeta.fallback,
+          durationMs: Date.now() - callStartTime,
+          mode,
+        });
+
         onComplete?.(fullText);
         setIsStreaming(false);
         return fullText;
@@ -210,6 +226,7 @@ export async function callAI(
 ): Promise<string | null> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30000);
+  const callStartTime = Date.now();
 
   try {
     const admin = getAdminSettings();
@@ -239,6 +256,8 @@ export async function callAI(
       signal: controller.signal,
     });
 
+    const routeMeta = extractRouteMeta(resp);
+
     if (!resp.ok) return null;
     if (!resp.body) return null;
 
@@ -267,6 +286,16 @@ export async function callAI(
         } catch (e) { console.warn('[callAI] Failed to parse SSE line:', e); }
       }
     }
+
+    recordAICall({
+      timestamp: Date.now(),
+      model: routeMeta.model,
+      provider: routeMeta.provider,
+      billing: routeMeta.billing,
+      fallback: routeMeta.fallback,
+      durationMs: Date.now() - callStartTime,
+      mode,
+    });
 
     return result;
   } catch (e: any) {

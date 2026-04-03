@@ -59,6 +59,14 @@ interface Message {
 
 interface RouteResult {
   response: Response;
+  meta: RouteMeta;
+}
+
+export interface RouteMeta {
+  model: string;
+  provider: Provider;
+  billing: 'subscription' | 'api-key' | 'gateway';
+  fallback: boolean;
 }
 
 /**
@@ -100,7 +108,7 @@ async function fallbackToDefault(
 
 /**
  * Route an AI request to the correct provider.
- * Returns a streaming Response that can be piped directly to the client.
+ * Returns a streaming Response + routing metadata.
  * If the selected provider returns an auth error, automatically falls back to the default.
  */
 export async function routeToProvider(
@@ -110,7 +118,7 @@ export async function routeToProvider(
   maxTokens: number,
   stream: boolean = true,
   tools?: any[],
-): Promise<Response> {
+): Promise<RouteResult> {
   const { provider, model } = parseModelId(modelId);
   const config = PROVIDERS[provider];
 
@@ -132,11 +140,14 @@ export async function routeToProvider(
 
   if (!apiKey) {
     console.warn(`[provider-router] No API key for ${provider}, falling back to default model`);
-    return fallbackToDefault(systemPrompt, messages, maxTokens, stream, tools);
+    const response = await fallbackToDefault(systemPrompt, messages, maxTokens, stream, tools);
+    return { response, meta: { model: DEFAULT_MODEL, provider: 'google', billing: 'gateway', fallback: true } };
   }
 
   // Lovable gateway requires full "provider/model" format; others use bare model name
   const modelForRequest = provider === 'google' ? modelId : model;
+
+  let billing: RouteMeta['billing'] = provider === 'google' ? 'gateway' : useOAuth ? 'subscription' : 'api-key';
 
   let response: Response;
   if (config.format === 'anthropic') {
@@ -149,10 +160,11 @@ export async function routeToProvider(
   if (!response.ok && [400, 401, 403, 429].includes(response.status) && provider !== 'google') {
     const errBody = await response.text();
     console.warn(`[provider-router] ${provider} returned ${response.status}: ${errBody}. Falling back to default.`);
-    return fallbackToDefault(systemPrompt, messages, maxTokens, stream, tools);
+    const fallbackResp = await fallbackToDefault(systemPrompt, messages, maxTokens, stream, tools);
+    return { response: fallbackResp, meta: { model: DEFAULT_MODEL, provider: 'google', billing: 'gateway', fallback: true } };
   }
 
-  return response;
+  return { response, meta: { model: modelId, provider, billing, fallback: false } };
 }
 
 /**
@@ -371,4 +383,4 @@ async function makeAnthropicRequest(
 }
 
 export { DEFAULT_MODEL, PROVIDERS, parseModelId };
-export type { Provider, ProviderConfig };
+export type { Provider, ProviderConfig, RouteMeta };

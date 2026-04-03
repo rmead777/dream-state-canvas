@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { routeToProvider, DEFAULT_MODEL } from "../_shared/provider-router.ts";
+import { routeToProvider, DEFAULT_MODEL, type RouteMeta } from "../_shared/provider-router.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -330,26 +330,37 @@ Return JSON matching the ProductionRiskData schema.`,
     const modelId = adminModel || DEFAULT_MODEL;
     const maxTokens = adminMaxTokens ?? 16192;
 
-    const response = await routeToProvider(modelId, systemPrompt, messages, maxTokens, shouldStream, tools);
+    const { response, meta } = await routeToProvider(modelId, systemPrompt, messages, maxTokens, shouldStream, tools);
+
+    // Log routing metadata for observability
+    console.log(`[Solaris] model=${meta.model} billing=${meta.billing}${meta.fallback ? ' (fallback)' : ''}`);
+
+    // Metadata headers injected into every response
+    const metaHeaders: Record<string, string> = {
+      'x-ai-model': meta.model,
+      'x-ai-provider': meta.provider,
+      'x-ai-billing': meta.billing,
+      ...(meta.fallback ? { 'x-ai-fallback': 'true' } : {}),
+    };
 
     if (!response.ok) {
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limited — please try again shortly." }), {
           status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...corsHeaders, ...metaHeaders, "Content-Type": "application/json" },
         });
       }
       if (response.status === 402) {
         return new Response(JSON.stringify({ error: "Credits exhausted — please add funds." }), {
           status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...corsHeaders, ...metaHeaders, "Content-Type": "application/json" },
         });
       }
       const t = await response.text();
       console.error("AI gateway error:", response.status, t);
       return new Response(JSON.stringify({ error: "AI gateway error" }), {
         status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders, ...metaHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -357,13 +368,14 @@ Return JSON matching the ProductionRiskData schema.`,
       // Non-streaming: return JSON response with proper content-type
       const body = await response.text();
       return new Response(body, {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders, ...metaHeaders, "Content-Type": "application/json" },
       });
     }
 
     return new Response(response.body, {
       headers: {
         ...corsHeaders,
+        ...metaHeaders,
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache, no-store, must-revalidate",
         "X-Accel-Buffering": "no",
