@@ -464,10 +464,14 @@ export function SherpaRail() {
             {/* Processing indicator */}
             {isProcessing && (
               <div
-                className="relative overflow-hidden rounded-xl border border-workspace-accent/30 bg-[linear-gradient(135deg,rgba(99,102,241,0.13),rgba(99,102,241,0.06),rgba(99,102,241,0.13))] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_8px_20px_rgba(99,102,241,0.15)] animate-[materialize_0.25s_cubic-bezier(0.16,1,0.3,1)_forwards]"
+                className="relative overflow-hidden rounded-2xl border border-workspace-accent/30 bg-[linear-gradient(135deg,rgba(99,102,241,0.13),rgba(99,102,241,0.06),rgba(99,102,241,0.13))] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_12px_32px_rgba(99,102,241,0.20)] animate-[materialize_0.25s_cubic-bezier(0.16,1,0.3,1)_forwards]"
                 role="status"
+                aria-label="Sherpa is reasoning"
               >
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-0.5 gap-px overflow-hidden rounded-b-xl">
+                {/* Vertical scanline sweep */}
+                <div className="pointer-events-none absolute inset-x-0 h-px bg-gradient-to-r from-transparent via-workspace-accent/55 to-transparent animate-[scanline_2s_linear_infinite]" />
+                {/* Data stream at bottom edge */}
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-0.5 gap-px overflow-hidden rounded-b-2xl">
                   {Array.from({ length: 18 }).map((_, i) => (
                     <div
                       key={i}
@@ -476,21 +480,34 @@ export function SherpaRail() {
                     />
                   ))}
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="relative h-5 w-5 shrink-0">
+                <div className="relative flex items-center gap-3">
+                  {/* Orbital spinner */}
+                  <div className="relative h-7 w-7 shrink-0">
                     <div className="absolute inset-0 rounded-full border border-workspace-accent/30 animate-[spin_2.5s_linear_infinite]">
-                      <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-px h-1 w-1 rounded-full bg-workspace-accent" />
+                      <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-px h-1.5 w-1.5 rounded-full bg-workspace-accent" />
                     </div>
+                    <div className="absolute inset-1 rounded-full border border-workspace-accent/15 animate-[spin_1.8s_linear_infinite_reverse]">
+                      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-px h-1 w-1 rounded-full bg-workspace-accent/65" />
+                    </div>
+                    <div className="absolute inset-2.5 rounded-full bg-workspace-accent/20 animate-[pulse_1.5s_cubic-bezier(0.34,1.56,0.64,1)_infinite]" />
                   </div>
-                  <span className="text-[10px] font-semibold tracking-wide text-workspace-accent">Reasoning</span>
-                  <div className="flex items-center gap-0.5">
-                    {[0, 1, 2, 3].map((i) => (
-                      <div
-                        key={i}
-                        className="h-0.5 w-2 rounded-full bg-workspace-accent/45 animate-[progressDot_1.2s_cubic-bezier(0.34,1.56,0.64,1)_infinite]"
-                        style={{ animationDelay: `${i * 0.15}s` }}
-                      />
-                    ))}
+                  {/* Label + progress dots */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold tracking-wide text-workspace-accent">Reasoning</span>
+                      <div className="flex items-center gap-1">
+                        {[0, 1, 2, 3].map((i) => (
+                          <div
+                            key={i}
+                            className="h-1 w-3 rounded-full bg-workspace-accent/45 animate-[progressDot_1.2s_cubic-bezier(0.34,1.56,0.64,1)_infinite]"
+                            style={{ animationDelay: `${i * 0.15}s` }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <p className="mt-0.5 text-[10px] leading-4 text-workspace-accent/65">
+                      Sherpa is analyzing your workspace
+                    </p>
                   </div>
                 </div>
               </div>
