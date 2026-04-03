@@ -8,7 +8,7 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { WorkspaceObject } from '@/lib/workspace-types';
-import { loadTriggers, toggleTrigger, deleteTrigger, AutomationTrigger } from '@/lib/automation-triggers';
+import { loadAllTriggers, toggleTrigger, deleteTrigger, AutomationTrigger } from '@/lib/automation-triggers';
 import { useToast } from '@/hooks/use-toast';
 
 interface Props {
@@ -39,7 +39,7 @@ export function AutomationPanel({ object: _object }: Props) {
   const fetchTriggers = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await loadTriggers();
+      const data = await loadAllTriggers();
       setTriggers(data);
     } finally {
       setLoading(false);

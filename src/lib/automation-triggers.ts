@@ -88,7 +88,7 @@ function evaluateTrigger(
 }
 
 /**
- * Load all enabled triggers for the current user from Supabase.
+ * Load only enabled triggers — used by the 30s scan loop.
  */
 export async function loadTriggers(): Promise<AutomationTrigger[]> {
   const { data, error } = await supabase
@@ -99,6 +99,22 @@ export async function loadTriggers(): Promise<AutomationTrigger[]> {
 
   if (error) {
     console.warn('[automation-triggers] Failed to load triggers:', error.message);
+    return [];
+  }
+  return (data ?? []) as AutomationTrigger[];
+}
+
+/**
+ * Load ALL triggers (enabled + disabled) — used by the AutomationPanel UI.
+ */
+export async function loadAllTriggers(): Promise<AutomationTrigger[]> {
+  const { data, error } = await supabase
+    .from('automation_triggers')
+    .select('*')
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.warn('[automation-triggers] Failed to load all triggers:', error.message);
     return [];
   }
   return (data ?? []) as AutomationTrigger[];
