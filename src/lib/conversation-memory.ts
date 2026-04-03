@@ -10,6 +10,8 @@ export interface ConversationTurn {
   query: string;
   response: string | null;
   timestamp: number;
+  /** IDs of cards created or updated during this turn — enables outcome-linked threading */
+  outcomeCardIds?: string[];
 }
 
 const STORAGE_KEY = 'sherpa-conversation';
@@ -46,6 +48,14 @@ export function updateLastResponse(response: string): void {
   }
 }
 
+/** Record which cards were created/updated in the most recent turn */
+export function updateLastOutcomeCards(cardIds: string[]): void {
+  if (_turns.length > 0 && cardIds.length > 0) {
+    _turns[_turns.length - 1].outcomeCardIds = cardIds;
+    persist();
+  }
+}
+
 /** Rough token estimate — ~4 chars per token for English text */
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
@@ -77,7 +87,11 @@ export function getConversationMessages(
 
     pair.push({ role: 'user', content: turn.query });
     if (turn.response) {
-      pair.push({ role: 'assistant', content: turn.response });
+      // Append outcome card IDs to assistant message so the agent can reference prior cards
+      const cardSuffix = turn.outcomeCardIds?.length
+        ? ` [cards: ${turn.outcomeCardIds.join(', ')}]`
+        : '';
+      pair.push({ role: 'assistant', content: turn.response + cardSuffix });
     }
     pairs.unshift(pair);
   }

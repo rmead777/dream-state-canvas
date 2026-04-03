@@ -8,7 +8,7 @@ import { toast } from '@/hooks/use-toast';
 import { buildDocumentObjectContext, resolveDocumentRecord } from '@/lib/document-store';
 import { validateSections } from '@/lib/card-schema';
 import { executeDataQuery } from '@/lib/data-query';
-import { addQuery, updateLastResponse } from '@/lib/conversation-memory';
+import { addQuery, updateLastResponse, updateLastOutcomeCards } from '@/lib/conversation-memory';
 import { retrieveRelevantMemories, formatMemoriesForPrompt, determineWorkspaceState } from '@/lib/memory-retriever';
 import { recordAction, detectLearningSignals } from '@/lib/memory-detector';
 import { supabase } from '@/integrations/supabase/client';
@@ -149,6 +149,10 @@ export function useWorkspaceActions() {
           dispatch({ type: 'SET_SHERPA_RESPONSE', payload: text });
           addQuery(query);
           updateLastResponse(text);
+          // Link created/updated cards to this conversation turn for context-chain threading
+          if (outcome.createdObjectIds.length > 0 || outcome.affectedObjectIds.length > 0) {
+            updateLastOutcomeCards([...new Set([...outcome.createdObjectIds, ...outcome.affectedObjectIds])]);
+          }
         }
 
         dispatch({
