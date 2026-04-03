@@ -101,7 +101,7 @@ export async function loadTriggers(): Promise<AutomationTrigger[]> {
     console.warn('[automation-triggers] Failed to load triggers:', error.message);
     return [];
   }
-  return (data ?? []) as AutomationTrigger[];
+  return (data ?? []) as unknown as AutomationTrigger[];
 }
 
 /**
@@ -117,7 +117,7 @@ export async function loadAllTriggers(): Promise<AutomationTrigger[]> {
     console.warn('[automation-triggers] Failed to load all triggers:', error.message);
     return [];
   }
-  return (data ?? []) as AutomationTrigger[];
+  return (data ?? []) as unknown as AutomationTrigger[];
 }
 
 /**
@@ -131,8 +131,8 @@ export async function createTrigger(params: {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data, error } = await supabase
-    .from('automation_triggers')
+  const { data, error } = await (supabase
+    .from('automation_triggers') as any)
     .insert({
       user_id: user.id,
       label: params.label,
@@ -146,7 +146,7 @@ export async function createTrigger(params: {
     console.error('[automation-triggers] Insert failed:', error.message);
     return null;
   }
-  return data as AutomationTrigger;
+  return data as unknown as AutomationTrigger;
 }
 
 /**
