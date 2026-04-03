@@ -124,7 +124,6 @@ serve(async (req) => {
     cover.drawText("DREAM STATE CANVAS", {
       x: MARGIN, y: PAGE_H - 60, size: 10,
       font: fontBold, color: COLORS.white,
-      letterSpacing: 3,
     });
 
     // Report title
@@ -148,7 +147,7 @@ serve(async (req) => {
 
     // Card index
     let idxY = PAGE_H - 270;
-    cover.drawText("CONTENTS", { x: MARGIN, y: idxY, size: 9, font: fontBold, color: COLORS.textLight, letterSpacing: 2 });
+    cover.drawText("CONTENTS", { x: MARGIN, y: idxY, size: 9, font: fontBold, color: COLORS.textLight });
     idxY -= 18;
     for (const card of cards.slice(0, 20)) {
       const typeLabel = String(card.type || "card").toUpperCase().replace(/-/g, " ");
@@ -176,7 +175,7 @@ serve(async (req) => {
 
       // Type badge + title
       const typeLabel = String(card.type || "card").toUpperCase().replace(/-/g, " ");
-      page.drawText(typeLabel, { x: MARGIN + 8, y: y - 14, size: 7, font: fontBold, color: COLORS.accent, letterSpacing: 1.5 });
+      page.drawText(typeLabel, { x: MARGIN + 8, y: y - 14, size: 7, font: fontBold, color: COLORS.accent });
       page.drawText(card.title || "Untitled", { x: MARGIN + 8, y: y - 28, size: 16, font: fontBold, color: COLORS.text });
       y -= 58;
 
@@ -291,7 +290,7 @@ serve(async (req) => {
           y = PAGE_H - MARGIN;
         }
         y -= 8;
-        page.drawText("DATA SAMPLE", { x: MARGIN, y, size: 7, font: fontBold, color: COLORS.textLight, letterSpacing: 1.5 });
+        page.drawText("DATA SAMPLE", { x: MARGIN, y, size: 7, font: fontBold, color: COLORS.textLight });
         y -= 16;
         const cols = card.columns.slice(0, 6);
         const rows = card.rows.slice(0, 12);

@@ -206,17 +206,6 @@ export function checkTriggers(triggers: AutomationTrigger[]): TriggerFiring[] {
  * Fire-and-forget — failures are non-fatal.
  */
 export async function markTriggerFired(triggerId: string): Promise<void> {
-  // Read current fire_count, then increment — avoiding the need for an RPC function
-  const { data } = await supabase
-    .from('automation_triggers')
-    .select('fire_count')
-    .eq('id', triggerId)
-    .single();
-  await supabase
-    .from('automation_triggers')
-    .update({
-      last_fired_at: new Date().toISOString(),
-      fire_count: ((data?.fire_count as number) ?? 0) + 1,
-    })
-    .eq('id', triggerId);
+  // Atomic increment via server-side RPC — no read-modify-write race
+  await supabase.rpc('increment_trigger_fire_count', { trigger_id: triggerId });
 }
