@@ -64,6 +64,7 @@ describe('buildWorkspaceIntentContext', () => {
       focusedObjectId: object.id,
       immersiveObjectId: null,
       sessionStartedAt: 0,
+      highlightedEntity: null,
       recentIntents: [
         {
           type: 'user-query',

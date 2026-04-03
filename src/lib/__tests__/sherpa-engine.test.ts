@@ -41,6 +41,7 @@ const activeContext: ActiveContext = {
   immersiveObjectId: null,
   recentIntents: [],
   sessionStartedAt: 0,
+  highlightedEntity: null,
 };
 
 describe('generateSuggestions', () => {
