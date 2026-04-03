@@ -178,7 +178,7 @@ function normalizeSection(item: unknown): unknown {
       caption: s.caption,
       height: (s.height as number) || 320,
       spec: {
-        $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
+        $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
         mark: 'rect',
         encoding: {
           x: { field: s.xAxis as string || 'x', type: 'ordinal' },

@@ -294,12 +294,12 @@ When creating analysis or CFO cards, populate sections:
                  boxplot, waterfall, donut, radial, treemap — any chart recharts can't do natively.
                  NEVER say "vegalite isn't available" or "I don't have a Vega-Lite renderer" — it exists and works.
 
-                 Scatter:  { type: "vegalite", spec: { "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+                 Scatter:  { type: "vegalite", spec: { "$schema": "https://vega.github.io/schema/vega-lite/v6.json",
                    "mark": "point", "encoding": { "x": { "field": "col", "type": "quantitative" },
                    "y": { "field": "col2", "type": "quantitative" } }, "data": { "values": [...] } },
                    height: 240, caption: "Scatter description" }
 
-                 Heatmap:  { type: "vegalite", spec: { "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+                 Heatmap:  { type: "vegalite", spec: { "$schema": "https://vega.github.io/schema/vega-lite/v6.json",
                    "mark": "rect",
                    "encoding": {
                      "x": { "field": "vendor", "type": "ordinal", "title": "Vendor" },
@@ -308,7 +308,7 @@ When creating analysis or CFO cards, populate sections:
                    }, "data": { "values": [{ "vendor": "CSX", "tier": "Tier 3", "balance": 523216 }, ...] } },
                    height: 300, caption: "Balance intensity by vendor and tier" }
 
-                 Donut:    { type: "vegalite", spec: { "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+                 Donut:    { type: "vegalite", spec: { "$schema": "https://vega.github.io/schema/vega-lite/v6.json",
                    "mark": { "type": "arc", "innerRadius": 60 },
                    "encoding": { "theta": { "field": "value", "type": "quantitative" },
                      "color": { "field": "category", "type": "nominal" } },
