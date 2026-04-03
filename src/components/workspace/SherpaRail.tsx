@@ -319,18 +319,28 @@ export function SherpaRail() {
 
       {/* Model dropdown panel — rendered OUTSIDE header to avoid clipping */}
       {showModelDropdown && adminUnlocked && (
-        <div className="absolute right-4 top-[72px] z-50 w-64 max-h-[70vh] overflow-y-auto rounded-xl border border-workspace-border/45 bg-white shadow-[0_20px_60px_rgba(0,0,0,0.15)] animate-[materialize_0.15s_cubic-bezier(0.16,1,0.3,1)_forwards]">
+        <div className="absolute right-12 top-[72px] z-50 w-56 max-h-[70vh] overflow-y-auto rounded-xl border border-workspace-border/45 bg-white shadow-[0_20px_60px_rgba(0,0,0,0.15)] animate-[materialize_0.15s_cubic-bezier(0.16,1,0.3,1)_forwards]">
           <div className="sticky top-0 z-10 bg-white border-b border-workspace-border/30 px-3 py-2">
             <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-workspace-text-secondary/60">Switch Model</span>
           </div>
           {(['google', 'anthropic', 'xai', 'openai'] as const).map((provider) => {
             const providerModels = AVAILABLE_MODELS.filter(m => m.provider === provider);
             if (providerModels.length === 0) return null;
-            const providerLabels: Record<string, string> = { google: 'Google', anthropic: 'Anthropic', xai: 'xAI', openai: 'OpenAI' };
+            const providerConfig: Record<string, { label: string; color: string; border: string }> = {
+              google:    { label: 'Google',    color: 'text-blue-600',    border: 'border-blue-400' },
+              anthropic: { label: 'Anthropic', color: 'text-orange-600',  border: 'border-orange-400' },
+              xai:       { label: 'xAI',       color: 'text-purple-600',  border: 'border-purple-400' },
+              openai:    { label: 'OpenAI',    color: 'text-emerald-600', border: 'border-emerald-400' },
+            };
+            const cfg = providerConfig[provider];
             return (
               <div key={provider} className="py-1">
-                <div className="px-3 py-1.5 text-[9px] uppercase tracking-wider text-workspace-text-secondary/40 font-medium">
-                  {providerLabels[provider]}
+                <div className={`mx-3 mt-1 mb-1 flex items-center gap-2`}>
+                  <span className={`h-px flex-1 ${cfg.border}`} />
+                  <span className={`text-[9px] uppercase tracking-wider font-semibold ${cfg.color}`}>
+                    {cfg.label}
+                  </span>
+                  <span className={`h-px flex-1 ${cfg.border}`} />
                 </div>
                 {providerModels.map((m) => (
                   <button
