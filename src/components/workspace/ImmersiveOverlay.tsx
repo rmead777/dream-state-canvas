@@ -77,11 +77,9 @@ export function ImmersiveOverlay() {
 
 /** Render the appropriate content for any card type in immersive mode */
 function ImmersiveContent({ object }: { object: any }) {
-  // Cards with AI-generated sections always use AnalysisCard
-  if (object.context?.sections?.length > 0) {
-    return <AnalysisCard object={object} />;
-  }
-
+  // Source document cards always use their dedicated viewers — never bypass these with a sections check.
+  // dataset → full virtualized table with hover detail bars, sort, filter, inline editing
+  // document/document-viewer → native PDF canvas (PDFs) or full-text reader with AI sidebar
   switch (object.type) {
     case 'document':
     case 'document-viewer':
@@ -95,7 +93,6 @@ function ImmersiveContent({ object }: { object: any }) {
     case 'alert':
       return <AlertRiskPanel object={object} />;
     case 'brief':
-      // Briefs may have markdown content
       if (object.context?.content) {
         return <MarkdownRenderer content={object.context.content} />;
       }
@@ -107,21 +104,13 @@ function ImmersiveContent({ object }: { object: any }) {
     case 'analysis':
       return <AnalysisCard object={object} />;
     default:
-      // Any unknown type: try AnalysisCard first (handles sections), then markdown, then raw
+      // Fallback: sections → AnalysisCard, content → Markdown, otherwise raw
       if (object.context?.sections?.length > 0) {
         return <AnalysisCard object={object} />;
       }
       if (object.context?.content) {
         return <MarkdownRenderer content={object.context.content} />;
       }
-      // Show whatever context exists in a readable format
-      return (
-        <div className="text-sm text-workspace-text-secondary">
-          <AnalysisCard object={object} />
-          <pre className="mt-4 rounded-xl bg-workspace-surface/50 p-4 text-[11px] overflow-auto">
-            {JSON.stringify(object.context, null, 2)}
-          </pre>
-        </div>
-      );
+      return <AnalysisCard object={object} />;
   }
 }
