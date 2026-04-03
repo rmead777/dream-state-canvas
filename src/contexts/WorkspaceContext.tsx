@@ -14,6 +14,7 @@ const initialState: WorkspaceState = {
     immersiveObjectId: null,
     recentIntents: [],
     sessionStartedAt: Date.now(),
+    highlightedEntity: null,
   },
   sherpa: {
     suggestions: [],
@@ -307,6 +308,28 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
         objects: newObjects,
         spatialLayout: { primary: [], secondary: [], peripheral: [] },
         activeContext: { ...state.activeContext, focusedObjectId: null, immersiveObjectId: null },
+      };
+    }
+
+    case 'HIGHLIGHT_ENTITY': {
+      const entityName = action.payload.entityName;
+      // Toggle off if clicking the same entity again
+      const next = state.activeContext.highlightedEntity === entityName ? null : entityName;
+      return {
+        ...state,
+        activeContext: { ...state.activeContext, highlightedEntity: next },
+      };
+    }
+
+    case 'UPDATE_OBJECT_ENTITY_REFS': {
+      const obj = state.objects[action.payload.id];
+      if (!obj) return state;
+      return {
+        ...state,
+        objects: {
+          ...state.objects,
+          [action.payload.id]: { ...obj, entityRefs: action.payload.entityRefs },
+        },
       };
     }
 

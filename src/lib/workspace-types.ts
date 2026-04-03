@@ -39,6 +39,11 @@ export interface FreeformPosition {
 
 export type LayoutMode = 'auto' | 'freeform';
 
+export interface EntityRef {
+  entityName: string;
+  entityType: 'vendor' | 'person' | 'date' | 'other';
+}
+
 export interface WorkspaceObject {
   id: string;
   type: ObjectType;
@@ -47,6 +52,8 @@ export interface WorkspaceObject {
   pinned: boolean;
   origin: IntentOrigin;
   relationships: string[];
+  /** Entity references extracted from this card's content — used for smart card linking */
+  entityRefs?: EntityRef[];
   context: Record<string, any>;
   position: SpatialPosition;
   freeformPosition?: FreeformPosition;
@@ -127,6 +134,8 @@ export interface ActiveContext {
   immersiveObjectId: string | null;
   recentIntents: IntentOrigin[];
   sessionStartedAt: number;
+  /** Entity name currently highlighted — cards containing this entity get a visual ring */
+  highlightedEntity: string | null;
 }
 
 export interface SpatialLayout {
@@ -171,4 +180,6 @@ export type WorkspaceReducerAction =
   | { type: 'EXIT_IMMERSIVE' }
   | { type: 'CLEAR_SHERPA' }
   | { type: 'COLLAPSE_ALL_OBJECTS' }
-  | { type: 'DISSOLVE_ALL_OBJECTS' };
+  | { type: 'DISSOLVE_ALL_OBJECTS' }
+  | { type: 'HIGHLIGHT_ENTITY'; payload: { entityName: string | null } }
+  | { type: 'UPDATE_OBJECT_ENTITY_REFS'; payload: { id: string; entityRefs: EntityRef[] } };

@@ -7,20 +7,32 @@
  * The AI decides the structure; this component renders whatever it produces.
  * Unknown or malformed sections are silently skipped.
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { WorkspaceObject } from '@/lib/workspace-types';
 import { CardSectionType } from '@/lib/card-schema';
 import { CHART_THEMES } from '@/lib/chart-themes';
 import MarkdownRenderer from './MarkdownRenderer';
 import DOMPurify from 'dompurify';
 import { BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 
 interface AnalysisCardProps {
   object: WorkspaceObject;
 }
 
 export function AnalysisCard({ object }: AnalysisCardProps) {
+  const { state, dispatch } = useWorkspace();
+  const highlightedEntity = state.activeContext.highlightedEntity;
   const sections: CardSectionType[] = object.context?.sections || [];
+
+  // Check if this card contains the highlighted entity
+  const isHighlighted = highlightedEntity != null && object.entityRefs?.some(
+    (ref) => ref.entityName.toLowerCase() === highlightedEntity.toLowerCase()
+  );
+
+  const handleEntityClick = useCallback((entityName: string) => {
+    dispatch({ type: 'HIGHLIGHT_ENTITY', payload: { entityName } });
+  }, [dispatch]);
 
   if (sections.length === 0) {
     // Fallback: if no sections but there's content, render as narrative
@@ -35,9 +47,9 @@ export function AnalysisCard({ object }: AnalysisCardProps) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className={`space-y-4 transition-all duration-300 ${isHighlighted ? 'ring-2 ring-workspace-accent ring-offset-2 ring-offset-workspace-bg rounded-xl p-1' : ''}`}>
       {sections.map((section, i) => (
-        <SectionRenderer key={i} section={section} />
+        <SectionRenderer key={i} section={section} highlightedEntity={highlightedEntity} onEntityClick={handleEntityClick} />
       ))}
       {/* Query metadata */}
       {object.context?.queryMeta?.truncated && (
@@ -49,12 +61,16 @@ export function AnalysisCard({ object }: AnalysisCardProps) {
   );
 }
 
-function SectionRenderer({ section }: { section: CardSectionType }) {
+function SectionRenderer({ section, highlightedEntity, onEntityClick }: {
+  section: CardSectionType;
+  highlightedEntity?: string | null;
+  onEntityClick?: (name: string) => void;
+}) {
   switch (section.type) {
     case 'summary': return <SummaryRenderer text={section.text} />;
     case 'narrative': return <NarrativeRenderer text={section.text} />;
     case 'metric': return <MetricRenderer section={section} />;
-    case 'table': return <TableRenderer section={section} />;
+    case 'table': return <TableRenderer section={section} highlightedEntity={highlightedEntity} onEntityClick={onEntityClick} />;
     case 'callout': return <CalloutRenderer section={section} />;
     case 'metrics-row': return <MetricsRowRenderer section={section} />;
     case 'chart': return <ChartRenderer section={section} />;
@@ -102,7 +118,14 @@ function MetricRenderer({ section }: { section: { label: string; value: string |
   );
 }
 
-function TableRenderer({ section }: { section: { columns: string[]; rows: (string | number | null)[][]; highlights?: { column: string; condition: string; style: string }[]; caption?: string } }) {
+// Column names that suggest entity names (mirrored from entity-extractor.ts)
+const ENTITY_COLUMN_PATTERNS = [/vendor/i, /company/i, /supplier/i, /client/i, /customer/i, /name/i, /entity/i, /payee/i, /recipient/i, /contact/i, /person/i];
+
+function TableRenderer({ section, highlightedEntity, onEntityClick }: {
+  section: { columns: string[]; rows: (string | number | null)[][]; highlights?: { column: string; condition: string; style: string }[]; caption?: string };
+  highlightedEntity?: string | null;
+  onEntityClick?: (name: string) => void;
+}) {
   const highlightMap = new Map<string, { condition: string; style: string }[]>();
   if (section.highlights) {
     for (const h of section.highlights) {
@@ -141,9 +164,20 @@ function TableRenderer({ section }: { section: { columns: string[]; rows: (strin
               <tr key={i} className="border-b border-workspace-border/20 hover:bg-workspace-surface/20 transition-colors">
                 {row.map((cell, j) => {
                   const highlight = getCellHighlight(section.columns[j], cell);
+                  const colName = section.columns[j] || '';
+                  const isEntityCol = ENTITY_COLUMN_PATTERNS.some((p) => p.test(colName));
+                  const cellStr = cell != null ? String(cell) : null;
+                  const isActiveEntity = highlightedEntity && cellStr?.toLowerCase() === highlightedEntity.toLowerCase();
                   return (
                     <td key={j} className={`px-3 py-2 whitespace-nowrap ${j === 0 ? 'font-medium text-workspace-text' : 'text-workspace-text-secondary'} ${highlight || ''}`}>
-                      {cell ?? '—'}
+                      {isEntityCol && cellStr && onEntityClick ? (
+                        <button
+                          onClick={() => onEntityClick(cellStr)}
+                          className={`text-left underline-offset-2 hover:underline hover:text-workspace-accent transition-colors ${isActiveEntity ? 'text-workspace-accent font-semibold' : ''}`}
+                        >
+                          {cellStr}
+                        </button>
+                      ) : (cell ?? '—')}
                     </td>
                   );
                 })}

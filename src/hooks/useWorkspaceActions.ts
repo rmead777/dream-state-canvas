@@ -9,6 +9,7 @@ import { buildDocumentObjectContext, resolveDocumentRecord } from '@/lib/documen
 import { validateSections } from '@/lib/card-schema';
 import { executeDataQuery } from '@/lib/data-query';
 import { addQuery, updateLastResponse, updateLastOutcomeCards } from '@/lib/conversation-memory';
+import { extractEntityRefs } from '@/lib/entity-extractor';
 import { retrieveRelevantMemories, formatMemoriesForPrompt, determineWorkspaceState } from '@/lib/memory-retriever';
 import { recordAction, detectLearningSignals } from '@/lib/memory-detector';
 import { supabase } from '@/integrations/supabase/client';
@@ -434,6 +435,16 @@ export function useWorkspaceActions() {
     };
     dispatch({ type: 'MATERIALIZE_OBJECT', payload: obj });
     setTimeout(() => dispatch({ type: 'OPEN_OBJECT', payload: { id } }), 400);
+
+    // Extract entity refs from sections for smart card linking
+    const sections = (context as any).sections;
+    if (Array.isArray(sections) && sections.length > 0) {
+      const entityRefs = extractEntityRefs(sections);
+      if (entityRefs.length > 0) {
+        dispatch({ type: 'UPDATE_OBJECT_ENTITY_REFS', payload: { id, entityRefs } });
+      }
+    }
+
     return { id, title: obj.title, type: obj.type };
   }
 
