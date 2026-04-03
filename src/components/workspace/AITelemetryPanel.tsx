@@ -47,24 +47,33 @@ export function AITelemetryPanel() {
   const oauthCalls = events.filter(e => e.authMode === 'oauth').length;
   const paidCalls = events.filter(e => e.authMode === 'api_key' || e.authMode === 'api_key_fallback').length;
   const avgDuration = events.reduce((sum, e) => sum + e.durationMs, 0) / events.length;
+  const totalInputTokens = events.reduce((sum, e) => sum + (e.inputTokens || 0), 0);
+  const totalOutputTokens = events.reduce((sum, e) => sum + (e.outputTokens || 0), 0);
+  const totalTokens = totalInputTokens + totalOutputTokens;
 
   return (
     <div className="space-y-4">
       {/* Summary stats */}
-      <div className="grid grid-cols-3 gap-2">
-        <div className="rounded-lg border border-workspace-border/30 bg-workspace-surface/20 px-2.5 py-2 text-center">
+      <div className="grid grid-cols-4 gap-1.5">
+        <div className="rounded-lg border border-workspace-border/30 bg-workspace-surface/20 px-2 py-2 text-center">
           <div className="text-sm font-semibold text-workspace-text tabular-nums">{totalCalls}</div>
           <div className="text-[9px] text-workspace-text-secondary/50 uppercase tracking-wider">Calls</div>
         </div>
-        <div className="rounded-lg border border-workspace-border/30 bg-workspace-surface/20 px-2.5 py-2 text-center">
+        <div className="rounded-lg border border-workspace-border/30 bg-workspace-surface/20 px-2 py-2 text-center">
           <div className="text-sm font-semibold text-workspace-text tabular-nums">{(avgDuration / 1000).toFixed(1)}s</div>
-          <div className="text-[9px] text-workspace-text-secondary/50 uppercase tracking-wider">Avg Time</div>
+          <div className="text-[9px] text-workspace-text-secondary/50 uppercase tracking-wider">Avg</div>
         </div>
-        <div className="rounded-lg border border-workspace-border/30 bg-workspace-surface/20 px-2.5 py-2 text-center">
+        <div className="rounded-lg border border-workspace-border/30 bg-workspace-surface/20 px-2 py-2 text-center">
+          <div className="text-sm font-semibold text-workspace-accent tabular-nums">
+            {totalTokens > 0 ? (totalTokens > 999999 ? `${(totalTokens / 1000000).toFixed(1)}M` : totalTokens > 999 ? `${(totalTokens / 1000).toFixed(1)}k` : totalTokens) : '—'}
+          </div>
+          <div className="text-[9px] text-workspace-text-secondary/50 uppercase tracking-wider">Tokens</div>
+        </div>
+        <div className="rounded-lg border border-workspace-border/30 bg-workspace-surface/20 px-2 py-2 text-center">
           {oauthCalls > 0 ? (
             <>
               <div className="text-sm font-semibold text-emerald-600 tabular-nums">{oauthCalls}/{totalCalls}</div>
-              <div className="text-[9px] text-emerald-600/60 uppercase tracking-wider">Subscription</div>
+              <div className="text-[9px] text-emerald-600/60 uppercase tracking-wider">Sub</div>
             </>
           ) : paidCalls > 0 ? (
             <>
@@ -111,12 +120,16 @@ export function AITelemetryPanel() {
                   {(event.durationMs / 1000).toFixed(1)}s
                 </span>
               </div>
-              {/* Row 2: auth badge + details */}
+              {/* Row 2: tokens + auth badge */}
               <div className="flex items-center gap-1.5 flex-wrap">
+                {(event.inputTokens || event.outputTokens) ? (
+                  <span className="font-mono text-[9px] text-workspace-accent/70 tabular-nums">
+                    {event.inputTokens?.toLocaleString() || '?'}→{event.outputTokens?.toLocaleString() || '?'}
+                  </span>
+                ) : null}
                 <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-medium ${auth.bg} ${auth.color}`}>
                   {auth.label}
                 </span>
-                <span className="text-[9px] text-workspace-text-secondary/40">{auth.detail}</span>
                 {event.fallback && (
                   <span className="inline-flex items-center rounded-full border border-amber-200/50 bg-amber-50 px-2 py-0.5 text-[9px] font-medium text-amber-600">
                     Fallback

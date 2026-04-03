@@ -15,6 +15,8 @@ export interface AICallEvent {
   durationMs: number;
   mode: string;
   toolCalls?: number;
+  inputTokens?: number;
+  outputTokens?: number;
 }
 
 const MAX_EVENTS = 100;

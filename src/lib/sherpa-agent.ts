@@ -362,13 +362,15 @@ async function callAIWithTools(
     );
 
     let routeMeta = defaultRouteMeta();
+    let inputTokens: number | undefined;
+    let outputTokens: number | undefined;
 
     if (!resp.ok) return null;
 
     // Non-streaming: read full JSON response
     let text = await resp.text();
 
-    // Try to extract __telemetry from the JSON body (injected by edge function)
+    // Try to extract __telemetry and token usage from the JSON body
     try {
       const bodyParsed = JSON.parse(text);
       if (bodyParsed.__telemetry) {
@@ -380,9 +382,14 @@ async function callAIWithTools(
           text = JSON.stringify(bodyParsed);
         }
       } else if (bodyParsed.model) {
-        // Raw Anthropic response — extract model from the response itself
+        // Raw Anthropic response — extract model and usage
         routeMeta.model = `anthropic/${bodyParsed.model}`;
         routeMeta.provider = 'anthropic';
+      }
+      // Extract token usage (Anthropic: usage.input_tokens/output_tokens, OpenAI: usage.prompt_tokens/completion_tokens)
+      if (bodyParsed.usage) {
+        inputTokens = bodyParsed.usage.input_tokens ?? bodyParsed.usage.prompt_tokens;
+        outputTokens = bodyParsed.usage.output_tokens ?? bodyParsed.usage.completion_tokens;
       }
     } catch {
       // Not JSON — will be handled below as SSE
@@ -398,6 +405,8 @@ async function callAIWithTools(
       durationMs: Date.now() - callStartTime,
       mode: 'intent',
       toolCalls: body.tools ? 1 : 0,
+      inputTokens,
+      outputTokens,
     });
 
     // If the response is SSE format (edge function didn't respect stream:false),
