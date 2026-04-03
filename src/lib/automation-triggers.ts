@@ -131,8 +131,8 @@ export async function createTrigger(params: {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data, error } = await supabase
-    .from('automation_triggers')
+  const { data, error } = await (supabase
+    .from('automation_triggers') as any)
     .insert({
       user_id: user.id,
       label: params.label,
@@ -146,7 +146,7 @@ export async function createTrigger(params: {
     console.error('[automation-triggers] Insert failed:', error.message);
     return null;
   }
-  return data as AutomationTrigger;
+  return data as unknown as AutomationTrigger;
 }
 
 /**
