@@ -124,6 +124,10 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
   const shadowObjects = { ...workspaceState.objects };
   const shadowState: WorkspaceState = { ...workspaceState, objects: shadowObjects };
 
+  // Track best response text across iterations — earlier iterations often have
+  // good explanatory text that gets lost when the loop continues with tool calls
+  let bestText = '';
+
   for (let iteration = 0; iteration < maxIterations; iteration++) {
     onStatusUpdate?.(iteration > 0 ? 'Thinking...' : null);
 
@@ -131,7 +135,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
     const response = await callAIWithTools(messages, documentIds, memories);
 
     if (!response) {
-      return { response: 'Sherpa could not reach the AI service. Please try again.', actions: [], toolCallsUsed };
+      return { response: bestText || 'Sherpa could not reach the AI service. Please try again.', actions: remapPendingActions(), toolCallsUsed };
     }
 
     // Parse the response — check for tool calls
@@ -144,15 +148,19 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
       console.log('[sherpa-agent] cleanResponseText changed text from', JSON.stringify(text?.slice(0, 80)), 'to', JSON.stringify(cleaned.text?.slice(0, 80)), '| extracted actions:', cleaned.actions?.length || 0);
       text = cleaned.text;
       if (cleaned.actions && cleaned.actions.length > 0) {
-        // Merge: cleaned actions supplement (don't replace) already-parsed actions
         rawActions = [...(rawActions || []), ...cleaned.actions];
       }
+    }
+
+    // Preserve the best (most recent non-empty) response text across iterations
+    if (text && text.trim()) {
+      bestText = text;
     }
 
     // If AI returned actions directly (the normal intent-parsing path), return them
     if (rawActions && rawActions.length > 0) {
       onStatusUpdate?.(null);
-      const finalResponse = text || (rawActions.some(a => a.type === 'update') ? 'Updated.' : 'Done.');
+      const finalResponse = bestText || (rawActions.some(a => a.type === 'update') ? 'Updated.' : 'Done.');
       console.log('[sherpa-agent] Returning with', rawActions.length, 'actions, response:', JSON.stringify(finalResponse.slice(0, 80)));
       return {
         response: finalResponse,
@@ -161,14 +169,14 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
       };
     }
 
-    // If no tool calls, we're done — never show a blank fallback if we can avoid it
+    // If no tool calls, we're done
     if (!toolCalls || toolCalls.length === 0) {
       onStatusUpdate?.(null);
       const pendingActions = remapPendingActions();
       const fallback = pendingActions.length > 0
         ? (pendingActions.some(a => a.type === 'update') ? 'Updated.' : 'Done.')
-        : 'I processed your request.';
-      const finalResponse = text || fallback;
+        : '';
+      const finalResponse = bestText || fallback || 'Done.';
       console.log('[sherpa-agent] Returning no-tool-call path, response:', JSON.stringify(finalResponse.slice(0, 80)), '| pendingActions:', pendingActions.length);
       return {
         response: finalResponse,
@@ -248,11 +256,15 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
     }
   }
 
-  // Max iterations reached
+  // Max iterations reached — use best text from any iteration
   onStatusUpdate?.(null);
+  const pendingActions = remapPendingActions();
+  const maxIterFallback = pendingActions.length > 0
+    ? (pendingActions.some(a => a.type === 'update') ? 'Updated.' : 'Done.')
+    : 'I\'ve gathered what I can.';
   return {
-    response: 'I\'ve gathered what I can. Here\'s what I found.',
-    actions: remapPendingActions(),
+    response: bestText || maxIterFallback,
+    actions: pendingActions,
     toolCallsUsed,
   };
 }
