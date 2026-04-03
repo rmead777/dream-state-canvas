@@ -35,6 +35,7 @@ WRITE to make changes:
   createCard(objectType, title, sections?, dataQuery?)  → add a new card
   dissolveCard(objectId)       → remove a card
   focusCard(objectId)          → bring a card to the foreground
+  openInImmersive(objectId)    → open a card in full-screen immersive view (use when user says "open", "view in full screen", "read", "expand", "immersive", or "open source file")
 
 MEMORY — persist and recall learnings across sessions:
   rememberFact(type, content, reasoning?)  → save a fact to long-term memory
@@ -68,7 +69,9 @@ After calling write tools, respond naturally in 1-2 sentences. Keep responses br
 
 1. Is the user talking about a SPECIFIC card that exists? (said "this", "that", a card title, or one is focused)
    → YES: call getCardData then updateCard. STOP.
-2. Is the user asking to see/analyze something an EXISTING card already covers?
+2. Is the user asking to open/view/read a card in full screen or immersive mode?
+   → YES: openInImmersive(objectId). STOP.
+3. Is the user asking to see/analyze something an EXISTING card already covers?
    → YES: focusCard or updateCard. STOP.
 3. Is the user asking for something NEW?
    → YES: createCard with the most appropriate objectType.

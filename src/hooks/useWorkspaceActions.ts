@@ -224,6 +224,13 @@ export function useWorkspaceActions() {
           break;
         }
 
+        case 'immersive':
+          dispatch({ type: 'ENTER_IMMERSIVE', payload: { id: action.objectId } });
+          dispatch({ type: 'TOUCH_OBJECT', payload: { id: action.objectId } });
+          outcome.affectedObjectIds = mergeUnique(outcome.affectedObjectIds, [action.objectId]);
+          summaryParts.push(`Opened ${stateRef.current.objects[action.objectId]?.title || action.objectId} in immersive view.`);
+          break;
+
         case 'focus':
           dispatch({ type: 'FOCUS_OBJECT', payload: { id: action.objectId } });
           dispatch({ type: 'TOUCH_OBJECT', payload: { id: action.objectId } });

@@ -167,6 +167,18 @@ export const SHERPA_TOOLS = [
       },
     },
   },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'openInImmersive',
+      description: 'Open a card in full-screen immersive view. Use this when the user asks to "open", "view", "read", or "expand" a document, dataset, or any card in immersive/full-screen/reader mode.',
+      parameters: {
+        type: 'object',
+        properties: { objectId: { type: 'string', description: 'ID of the card to open in immersive view' } },
+        required: ['objectId'],
+      },
+    },
+  },
 
   // MEMORY tools
   {
@@ -396,6 +408,7 @@ const TOOL_STATUS: Record<string, string> = {
   createCard: 'Creating card...',
   dissolveCard: 'Removing card...',
   focusCard: 'Focusing card...',
+  openInImmersive: 'Opening in immersive view...',
   rememberFact: 'Saving to memory...',
   recallMemories: 'Checking memory...',
   joinDatasets: 'Joining datasets...',
@@ -586,6 +599,9 @@ export async function executeTool(
 
       case 'focusCard':
         return JSON.stringify({ action: 'focus', objectId: args.objectId });
+
+      case 'openInImmersive':
+        return JSON.stringify({ action: 'immersive', objectId: args.objectId });
 
       case 'rememberFact': {
         // Extract keywords from content for trigger matching
