@@ -138,7 +138,7 @@ export async function getPendingMemories(userId: string): Promise<SherpaMemory[]
 export async function confirmMemory(id: string): Promise<void> {
   await db
     .from('sherpa_memories')
-    .update({ source: 'confirmed', confidence: 1.0, tier: 'override' })
+    .update({ source: 'confirmed', confidence: 1.0, tier: 'override', trigger: { always: true } })
     .eq('id', id);
 }
 

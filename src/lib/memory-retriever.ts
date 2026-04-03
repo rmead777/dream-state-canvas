@@ -101,7 +101,7 @@ export function determineWorkspaceState(state: WorkspaceState): WorkspaceStateCo
 export async function retrieveRelevantMemories(
   userId: string,
   ctx: RetrievalContext,
-  maxMemories: number = 10
+  maxMemories: number = 25
 ): Promise<SherpaMemory[]> {
   try {
     const allMemories = await getMemories(userId);
@@ -115,11 +115,9 @@ export async function retrieveRelevantMemories(
     // Corrections ALWAYS get priority (low threshold — better to over-include than miss)
     const corrections = scored
       .filter(s => s.memory.type === 'correction' && s.relevance > 0.05)
-      .sort((a, b) => b.relevance - a.relevance)
-      .slice(0, 6);
+      .sort((a, b) => b.relevance - a.relevance);
 
     // Fill remaining slots with highest-relevance non-corrections
-    // Threshold lowered: confirmed/high-hit memories score 0.6+ from the new rules above
     const correctionIds = new Set(corrections.map(c => c.memory.id));
     const rest = scored
       .filter(s => !correctionIds.has(s.memory.id) && s.relevance > 0.1)

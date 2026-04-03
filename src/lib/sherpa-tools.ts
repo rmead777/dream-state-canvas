@@ -622,17 +622,15 @@ export async function executeTool(
         return JSON.stringify({ action: 'open-source-document', documentId: args.documentId });
 
       case 'rememberFact': {
-        // Extract keywords from content for trigger matching
         const keywords = args.content.toLowerCase()
           .split(/\s+/)
           .filter((w: string) => w.length > 3 && !['that', 'this', 'when', 'with', 'from', 'should', 'the', 'and'].includes(w))
           .slice(0, 5);
+        // All memory types are always-on — the AI only saves things that matter,
+        // and keyword-only triggering was causing most preferences to never inject.
         const memory = await createMemory({
           type: args.type as any,
-          trigger: {
-            always: args.type === 'correction',
-            onQueryContains: keywords.length > 0 ? keywords : undefined,
-          },
+          trigger: { always: true },
           content: args.content,
           reasoning: args.reasoning,
           confidence: args.type === 'correction' ? 0.7 : 0.5,
