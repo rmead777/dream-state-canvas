@@ -160,7 +160,7 @@ export function PanelCanvas() {
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
           >
-            <div className="mx-auto max-w-4xl space-y-4">
+            <div className="mx-auto max-w-5xl space-y-4">
               {primaryObjects.length > 0 && (
                 <SortableContext items={primaryObjects.map((o) => o.id)} strategy={verticalListSortingStrategy}>
                   <div className="space-y-5">

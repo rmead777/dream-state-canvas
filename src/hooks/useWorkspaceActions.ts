@@ -225,6 +225,9 @@ export function useWorkspaceActions() {
           outcome.affectedObjectIds.push(created.id);
           outcome.focusedObjectId = created.id;
           summaryParts.push(`Created ${created.type} "${created.title}".`);
+          // Ensure new card wins the layout sort even if other cards were touched during creation
+          dispatch({ type: 'TOUCH_OBJECT', payload: { id: created.id } });
+          dispatch({ type: 'REFLOW_LAYOUT' });
           break;
         }
 
@@ -332,6 +335,9 @@ export function useWorkspaceActions() {
             outcome.createdObjectIds = mergeUnique(outcome.createdObjectIds, execution.createdObjectIds);
             outcome.focusedObjectId = execution.focusedObjectId ?? outcome.focusedObjectId;
             summaryParts.push(...execution.summaryParts);
+            // Float updated card to top — touch updates lastInteractedAt, reflow resorts layout
+            dispatch({ type: 'TOUCH_OBJECT', payload: { id: action.objectId } });
+            dispatch({ type: 'REFLOW_LAYOUT' });
           } catch (e) {
             console.error('[applyResult] Update handler failed:', e);
             dispatch({ type: 'SET_SHERPA_RESPONSE', payload: `Could not update "${target.title}". Try a different instruction.` });
