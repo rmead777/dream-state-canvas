@@ -226,12 +226,14 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
       };
     }
 
-    // Detect stuck loop: if 2+ consecutive iterations have empty text + only READ tool calls,
-    // the AI is spinning without making progress. But if the current iteration contains WRITE
-    // tools, the AI is about to act — let those execute (read → read → write is a valid pattern).
+    // Detect stuck loop: if 3+ consecutive iterations have empty text + only READ tool calls,
+    // the AI is spinning without making progress. Threshold is 3 (not 2) because a legitimate
+    // multi-read workflow (get state → query data → create card) uses 2 read-only iterations
+    // before the write call. Breaking at 2 fires too early for those flows.
+    // If the current iteration contains a WRITE tool, the AI is about to act — always let it run.
     const hasWriteToolCall = toolCalls.some(tc => WRITE_TOOLS.has(tc.function.name));
-    if (emptyTextStreak >= 2 && iteration >= 2 && !hasWriteToolCall) {
-      console.warn('[sherpa-agent] Stuck loop detected: 2+ empty iterations with only read tools, breaking out at iteration', iteration);
+    if (emptyTextStreak >= 3 && !hasWriteToolCall) {
+      console.warn('[sherpa-agent] Stuck loop detected: 3+ empty iterations with only read tools, breaking out at iteration', iteration);
       onStatusUpdate?.(null);
       const pendingActions = remapPendingActions();
       const finalResponse = bestText || (pendingActions.length > 0 ? 'Done.' : 'I wasn\'t able to complete that. Could you try rephrasing?');
