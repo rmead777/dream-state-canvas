@@ -375,6 +375,11 @@ function extractFromSSE(sse: string): string {
   return result;
 }
 
+/** Strip markdown code fences (```json ... ```) that AI models love to add around JSON */
+function stripCodeFences(text: string): string {
+  return text.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+}
+
 /**
  * Parse AI response — extract text, tool calls, and/or actions.
  * Handles: OpenAI JSON, Anthropic JSON, intent JSON, SSE-assembled text, plain text.
@@ -385,7 +390,7 @@ function parseAgentResponse(response: string): {
   toolCalls: ToolCall[] | null;
   rawActions: any[] | null;
 } {
-  const trimmed = response.trim();
+  const trimmed = stripCodeFences(response.trim());
 
   // 1. Try direct JSON parse
   try {
@@ -449,9 +454,9 @@ function extractFromParsedJSON(parsed: any): {
     let rawActions: any[] | null = null;
 
     // msg.content might be a JSON string (double-wrapped: the AI returns intent JSON as content)
-    // It may also have a random prefix like "vitamins" before the JSON
+    // It may also have a random prefix or markdown code fences
     if (typeof text === 'string') {
-      // Find the first { in the content
+      text = stripCodeFences(text);
       const jsonStart = text.indexOf('{');
       if (jsonStart >= 0) {
         const jsonCandidate = text.slice(jsonStart).trim();
@@ -491,8 +496,8 @@ function extractFromParsedJSON(parsed: any): {
     const textBlock = parsed.content.find((b: any) => b.type === 'text');
     const toolBlocks = parsed.content.filter((b: any) => b.type === 'tool_use');
 
-    // Anthropic text might itself be JSON (the intent response), possibly with a prefix
-    let text = textBlock?.text || '';
+    // Anthropic text might itself be JSON (the intent response), possibly wrapped in code fences
+    let text = stripCodeFences(textBlock?.text || '');
     let rawActions: any[] | null = null;
     const jsonIdx = text.indexOf('{');
     if (jsonIdx >= 0) {
@@ -502,7 +507,19 @@ function extractFromParsedJSON(parsed: any): {
           text = innerParsed.response || '';
           rawActions = innerParsed.actions || null;
         }
-      } catch {}
+      } catch {
+        // Try greedy regex match (handles trailing garbage)
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          try {
+            const inner = JSON.parse(jsonMatch[0]);
+            if (inner.response !== undefined) {
+              text = inner.response || '';
+              rawActions = inner.actions || null;
+            }
+          } catch {}
+        }
+      }
     }
 
     const toolCalls = toolBlocks.length > 0
