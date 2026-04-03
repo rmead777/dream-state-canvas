@@ -64,6 +64,10 @@ ANALYSIS TYPES (AI generates sections with real data):
   outreach-tracker → "What have I promised?" — communication tracking
   production-risk  → "What breaks if...?" — supply chain dependency map
 
+ACTION TYPES (use the dedicated tool, NOT createCard):
+  email-draft  → Use draftEmail() tool — creates pre-filled email with Send/Copy buttons
+  simulation   → Use runSimulation() tool — creates what-if projection with SVG chart
+
 DATA-VIEW TYPES (use dataQuery to filter/sort):
   dataset    → full data table
   inspector  → filtered/sorted subset

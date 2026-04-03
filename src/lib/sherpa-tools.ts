@@ -221,6 +221,19 @@ export const SHERPA_TOOLS = [
     },
   },
 
+  // SHOW AUTOMATIONS tool
+  {
+    type: 'function' as const,
+    function: {
+      name: 'showAutomations',
+      description: 'Show the user\'s active automation triggers in a management panel. Use when the user says "show my automations", "list my triggers", "what automations do I have", "manage triggers", etc.',
+      parameters: {
+        type: 'object',
+        properties: {},
+      },
+    },
+  },
+
   // AUTOMATION TRIGGER tool
   {
     type: 'function' as const,
@@ -387,6 +400,7 @@ const TOOL_STATUS: Record<string, string> = {
   recallMemories: 'Checking memory...',
   joinDatasets: 'Joining datasets...',
   setThreshold: 'Setting alert threshold...',
+  showAutomations: 'Loading automations...',
   createTrigger: 'Creating automation trigger...',
   draftEmail: 'Composing email...',
   createCalendarEvent: 'Creating calendar event...',
@@ -630,6 +644,15 @@ export async function executeTool(
           message: `Alert set: ${args.label}. I'll watch ${args.column} ${args.operator} ${args.value} every 60 seconds.`,
         });
       }
+
+      case 'showAutomations':
+        return JSON.stringify({
+          action: 'create',
+          objectType: 'analysis',
+          title: '⚡ Automation Triggers',
+          data: { isAutomationPanel: true },
+          sections: [],
+        });
 
       case 'createTrigger': {
         const trigger = await saveTrigger({

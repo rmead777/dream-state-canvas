@@ -24,6 +24,7 @@ import { OutreachTracker } from '@/components/objects/OutreachTracker';
 import { ProductionRiskMap } from '@/components/objects/ProductionRiskMap';
 import { EmailDraft } from '@/components/objects/EmailDraft';
 import { SimulationCard } from '@/components/objects/SimulationCard';
+import { AutomationPanel } from '@/components/objects/AutomationPanel';
 
 const typeLabels: Record<string, string> = {
   metric: 'Metric',
@@ -47,6 +48,11 @@ const typeLabels: Record<string, string> = {
 };
 
 function ObjectContent({ object }: { object: WO }) {
+  // Special flag: automation panel view
+  if (object.context?.isAutomationPanel) {
+    return <AutomationPanel object={object} />;
+  }
+
   // If any card type has AI-generated sections, use the universal renderer
   if (object.context?.sections?.length > 0) {
     return <AnalysisCard object={object} />;
