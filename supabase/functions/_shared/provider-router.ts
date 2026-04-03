@@ -422,4 +422,4 @@ async function makeAnthropicRequest(
 }
 
 export { DEFAULT_MODEL, PROVIDERS, parseModelId };
-export type { Provider, ProviderConfig, RouteMeta, AuthMode };
+export type { Provider, ProviderConfig, AuthMode };
