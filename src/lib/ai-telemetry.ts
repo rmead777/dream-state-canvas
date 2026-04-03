@@ -1,14 +1,16 @@
 /**
- * AI Telemetry — tracks model calls, billing type, and response metadata.
+ * AI Telemetry — tracks model calls, auth mode, and response metadata.
  * Emits custom events so UI components can subscribe to real-time updates.
  */
+
+export type AuthMode = 'oauth' | 'api_key' | 'api_key_fallback' | 'oauth_failed' | 'gateway' | 'unknown';
 
 export interface AICallEvent {
   id: string;
   timestamp: number;
   model: string;
   provider: string;
-  billing: 'subscription' | 'api-key' | 'gateway' | 'unknown';
+  authMode: AuthMode;
   fallback: boolean;
   durationMs: number;
   mode: string;
@@ -36,19 +38,37 @@ export function clearAITelemetry() {
 }
 
 /**
- * Extract routing metadata from response headers.
- * The edge function injects x-ai-model, x-ai-provider, x-ai-billing headers.
+ * Default route metadata — populated from response headers (usually blank
+ * since Supabase strips them) and then overridden by __telemetry in the body.
  */
-export function extractRouteMeta(resp: Response): {
+export function defaultRouteMeta(): {
   model: string;
   provider: string;
-  billing: AICallEvent['billing'];
+  authMode: AuthMode;
   fallback: boolean;
 } {
   return {
-    model: resp.headers.get('x-ai-model') || 'unknown',
-    provider: resp.headers.get('x-ai-provider') || 'unknown',
-    billing: (resp.headers.get('x-ai-billing') as AICallEvent['billing']) || 'unknown',
-    fallback: resp.headers.get('x-ai-fallback') === 'true',
+    model: 'unknown',
+    provider: 'unknown',
+    authMode: 'unknown',
+    fallback: false,
+  };
+}
+
+/**
+ * Extract route metadata from a __telemetry object (injected by edge function
+ * into the SSE stream or JSON body). Falls back to defaults for missing fields.
+ */
+export function parseRouteMeta(telemetry: any): {
+  model: string;
+  provider: string;
+  authMode: AuthMode;
+  fallback: boolean;
+} {
+  return {
+    model: telemetry?.model || 'unknown',
+    provider: telemetry?.provider || 'unknown',
+    authMode: telemetry?.authMode || 'unknown',
+    fallback: telemetry?.fallback ?? false,
   };
 }

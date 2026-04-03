@@ -3,7 +3,7 @@ import { useState, useCallback, useRef } from 'react';
 import { getAdminSettings } from '@/lib/admin-settings';
 import { getPromptOverride } from '@/lib/system-prompts';
 import { supabase } from '@/integrations/supabase/client';
-import { recordAICall, extractRouteMeta } from '@/lib/ai-telemetry';
+import { recordAICall, defaultRouteMeta, parseRouteMeta } from '@/lib/ai-telemetry';
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`;
 
@@ -85,8 +85,8 @@ export function useAI() {
           signal: controller.signal,
         });
 
-        // routeMeta will be populated from SSE __telemetry event or response headers as fallback
-        let routeMeta = extractRouteMeta(resp);
+        // routeMeta will be populated from SSE __telemetry event injected by edge function
+        let routeMeta = defaultRouteMeta();
 
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({ error: 'Request failed' }));
@@ -130,12 +130,7 @@ export function useAI() {
 
               // Intercept telemetry event from edge function
               if (parsed.__telemetry) {
-                routeMeta = {
-                  model: parsed.__telemetry.model || routeMeta.model,
-                  provider: parsed.__telemetry.provider || routeMeta.provider,
-                  billing: parsed.__telemetry.billing || routeMeta.billing,
-                  fallback: parsed.__telemetry.fallback ?? routeMeta.fallback,
-                };
+                routeMeta = parseRouteMeta(parsed.__telemetry);
                 parseRetries = 0;
                 continue;
               }
@@ -192,7 +187,7 @@ export function useAI() {
           timestamp: Date.now(),
           model: routeMeta.model,
           provider: routeMeta.provider,
-          billing: routeMeta.billing,
+          authMode: routeMeta.authMode,
           fallback: routeMeta.fallback,
           durationMs: Date.now() - callStartTime,
           mode,
@@ -269,7 +264,7 @@ export async function callAI(
       signal: controller.signal,
     });
 
-    let routeMeta = extractRouteMeta(resp);
+    let routeMeta = defaultRouteMeta();
 
     if (!resp.ok) return null;
     if (!resp.body) return null;
@@ -296,12 +291,7 @@ export async function callAI(
           const parsed = JSON.parse(jsonStr);
           // Intercept telemetry event
           if (parsed.__telemetry) {
-            routeMeta = {
-              model: parsed.__telemetry.model || routeMeta.model,
-              provider: parsed.__telemetry.provider || routeMeta.provider,
-              billing: parsed.__telemetry.billing || routeMeta.billing,
-              fallback: parsed.__telemetry.fallback ?? routeMeta.fallback,
-            };
+            routeMeta = parseRouteMeta(parsed.__telemetry);
             continue;
           }
           const content = parsed.choices?.[0]?.delta?.content;
@@ -314,7 +304,7 @@ export async function callAI(
       timestamp: Date.now(),
       model: routeMeta.model,
       provider: routeMeta.provider,
-      billing: routeMeta.billing,
+      authMode: routeMeta.authMode,
       fallback: routeMeta.fallback,
       durationMs: Date.now() - callStartTime,
       mode,

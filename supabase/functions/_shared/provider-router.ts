@@ -12,14 +12,17 @@
  *   - xai:       xAI/Grok API (OpenAI-compatible)
  *
  * Required env vars per provider:
- *   - LOVABLE_API_KEY      (google — always required as fallback)
- *   - CLAUDE_CODE_OAUTH_TOKEN (anthropic — OAuth preferred, zero per-token cost)
- *   - ANTHROPIC_API_KEY       (anthropic — legacy fallback)
- *   - OPENAI_API_KEY       (openai models)
- *   - XAI_API_KEY          (xai/grok models)
+ *   - LOVABLE_API_KEY          (google — always required as fallback)
+ *   - CLAUDE_CODE_OAUTH_TOKEN  (anthropic — subscription, zero per-token cost)
+ *   - ANTHROPIC_API_KEY        (anthropic — paid API key fallback)
+ *   - OPENAI_API_KEY           (openai models)
+ *   - XAI_API_KEY              (xai/grok models)
+ *
+ * Anthropic auth chain: OAuth → API key → Google gateway
  */
 
 type Provider = 'google' | 'anthropic' | 'openai' | 'xai';
+type AuthMode = 'oauth' | 'api_key' | 'api_key_fallback' | 'oauth_failed' | 'gateway';
 
 interface ProviderConfig {
   endpoint: string;
@@ -35,7 +38,7 @@ const PROVIDERS: Record<Provider, ProviderConfig> = {
   },
   anthropic: {
     endpoint: 'https://api.anthropic.com/v1/messages',
-    envKey: 'CLAUDE_CODE_OAUTH_TOKEN',  // OAuth token preferred; falls back to ANTHROPIC_API_KEY
+    envKey: 'CLAUDE_CODE_OAUTH_TOKEN',
     format: 'anthropic',
   },
   openai: {
@@ -65,7 +68,7 @@ interface RouteResult {
 export interface RouteMeta {
   model: string;
   provider: Provider;
-  billing: 'subscription' | 'api-key' | 'gateway';
+  authMode: AuthMode;
   fallback: boolean;
 }
 
@@ -76,7 +79,6 @@ export interface RouteMeta {
 function parseModelId(modelId: string): { provider: Provider; model: string } {
   const slash = modelId.indexOf('/');
   if (slash === -1) {
-    // No provider prefix — assume Google/Lovable gateway
     return { provider: 'google', model: modelId };
   }
   const prefix = modelId.slice(0, slash) as Provider;
@@ -108,8 +110,10 @@ async function fallbackToDefault(
 
 /**
  * Route an AI request to the correct provider.
- * Returns a streaming Response + routing metadata.
- * If the selected provider returns an auth error, automatically falls back to the default.
+ * Returns a Response + routing metadata.
+ *
+ * For Anthropic: tries OAuth subscription first, then API key, then Google gateway.
+ * For other providers: tries the provider's key, then Google gateway.
  */
 export async function routeToProvider(
   modelId: string,
@@ -122,49 +126,93 @@ export async function routeToProvider(
   const { provider, model } = parseModelId(modelId);
   const config = PROVIDERS[provider];
 
-  // For Anthropic: prefer OAuth token, fall back to API key
-  let apiKey: string | undefined;
-  let useOAuth = false;
+  // ─── Anthropic: OAuth → API key → gateway ─────────────────────────
   if (provider === 'anthropic') {
     const oauthToken = Deno.env.get('CLAUDE_CODE_OAUTH_TOKEN');
     const legacyKey = Deno.env.get('ANTHROPIC_API_KEY');
+
+    // 1. Try OAuth subscription first
     if (oauthToken) {
-      apiKey = oauthToken;
-      useOAuth = true;
-    } else if (legacyKey) {
-      apiKey = legacyKey;
+      const response = await makeAnthropicRequest(config.endpoint, oauthToken, model, systemPrompt, messages, maxTokens, stream, tools, true);
+
+      if (response.ok) {
+        console.log(`[anthropic] model=${model} auth=oauth (subscription)`);
+        return { response, meta: { model: modelId, provider, authMode: 'oauth', fallback: false } };
+      }
+
+      // OAuth failed — log it
+      const errBody = await response.text();
+      console.warn(`[anthropic] OAuth failed (${response.status}) for ${model}: ${errBody.slice(0, 200)}`);
+
+      // 2. Try API key fallback
+      if (legacyKey) {
+        console.log(`[anthropic] Retrying with API key for ${model}`);
+        const fallbackResponse = await makeAnthropicRequest(config.endpoint, legacyKey, model, systemPrompt, messages, maxTokens, stream, tools, false);
+
+        if (fallbackResponse.ok) {
+          console.log(`[anthropic] model=${model} auth=api_key_fallback (paid)`);
+          return { response: fallbackResponse, meta: { model: modelId, provider, authMode: 'api_key_fallback', fallback: true } };
+        }
+
+        // API key also failed — fall to gateway
+        const errBody2 = await fallbackResponse.text();
+        console.warn(`[anthropic] API key also failed (${fallbackResponse.status}): ${errBody2.slice(0, 200)}`);
+      }
+
+      // 3. Fall back to Google gateway
+      console.log(`[anthropic] Falling back to Google gateway for ${model}`);
+      const gwResponse = await fallbackToDefault(systemPrompt, messages, maxTokens, stream, tools);
+      return {
+        response: gwResponse,
+        meta: {
+          model: DEFAULT_MODEL,
+          provider: 'google',
+          authMode: oauthToken && !legacyKey ? 'oauth_failed' : 'gateway',
+          fallback: true,
+        },
+      };
     }
-  } else {
-    apiKey = Deno.env.get(config.envKey);
+
+    // No OAuth token — try API key directly
+    if (legacyKey) {
+      const response = await makeAnthropicRequest(config.endpoint, legacyKey, model, systemPrompt, messages, maxTokens, stream, tools, false);
+
+      if (response.ok) {
+        console.log(`[anthropic] model=${model} auth=api_key (paid)`);
+        return { response, meta: { model: modelId, provider, authMode: 'api_key', fallback: false } };
+      }
+
+      const errBody = await response.text();
+      console.warn(`[anthropic] API key failed (${response.status}): ${errBody.slice(0, 200)}`);
+    }
+
+    // No keys at all — gateway fallback
+    console.warn(`[provider-router] No Anthropic auth configured, falling back to gateway`);
+    const gwResponse = await fallbackToDefault(systemPrompt, messages, maxTokens, stream, tools);
+    return { response: gwResponse, meta: { model: DEFAULT_MODEL, provider: 'google', authMode: 'gateway', fallback: true } };
   }
+
+  // ─── Non-Anthropic providers ───────────────────────────────────────
+  const apiKey = Deno.env.get(config.envKey);
 
   if (!apiKey) {
     console.warn(`[provider-router] No API key for ${provider}, falling back to default model`);
     const response = await fallbackToDefault(systemPrompt, messages, maxTokens, stream, tools);
-    return { response, meta: { model: DEFAULT_MODEL, provider: 'google', billing: 'gateway', fallback: true } };
+    return { response, meta: { model: DEFAULT_MODEL, provider: 'google', authMode: 'gateway', fallback: true } };
   }
 
-  // Lovable gateway requires full "provider/model" format; others use bare model name
   const modelForRequest = provider === 'google' ? modelId : model;
+  const response = await makeOpenAIRequest(config.endpoint, apiKey, modelForRequest, systemPrompt, messages, maxTokens, stream, tools);
 
-  let billing: RouteMeta['billing'] = provider === 'google' ? 'gateway' : useOAuth ? 'subscription' : 'api-key';
-
-  let response: Response;
-  if (config.format === 'anthropic') {
-    response = await makeAnthropicRequest(config.endpoint, apiKey, modelForRequest, systemPrompt, messages, maxTokens, stream, tools, useOAuth);
-  } else {
-    response = await makeOpenAIRequest(config.endpoint, apiKey, modelForRequest, systemPrompt, messages, maxTokens, stream, tools);
-  }
-
-  // If the provider returned an auth/client error, fall back to default gateway
   if (!response.ok && [400, 401, 403, 429].includes(response.status) && provider !== 'google') {
     const errBody = await response.text();
     console.warn(`[provider-router] ${provider} returned ${response.status}: ${errBody}. Falling back to default.`);
     const fallbackResp = await fallbackToDefault(systemPrompt, messages, maxTokens, stream, tools);
-    return { response: fallbackResp, meta: { model: DEFAULT_MODEL, provider: 'google', billing: 'gateway', fallback: true } };
+    return { response: fallbackResp, meta: { model: DEFAULT_MODEL, provider: 'google', authMode: 'gateway', fallback: true } };
   }
 
-  return { response, meta: { model: modelId, provider, billing, fallback: false } };
+  const authMode: AuthMode = provider === 'google' ? 'gateway' : 'api_key';
+  return { response, meta: { model: modelId, provider, authMode, fallback: false } };
 }
 
 /**
@@ -186,7 +234,6 @@ async function makeOpenAIRequest(
     stream,
     max_tokens: maxTokens,
   };
-  // Include tools if provided (enables function calling)
   if (tools && tools.length > 0) {
     body.tools = tools;
   }
@@ -221,7 +268,6 @@ async function makeAnthropicRequest(
   const anthropicMessages = messages
     .filter(m => m.role !== 'system')
     .map(m => {
-      // Map tool role to Anthropic's format
       if ((m as any).role === 'tool') {
         return {
           role: 'user' as const,
@@ -247,7 +293,6 @@ async function makeAnthropicRequest(
     stream,
   };
 
-  // Convert OpenAI tool format to Anthropic tool format
   if (tools && tools.length > 0) {
     body.tools = tools.map(t => ({
       name: t.function?.name || t.name,
@@ -285,7 +330,6 @@ async function makeAnthropicRequest(
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
 
-  // Track tool_use blocks being streamed so we can emit complete tool calls
   let activeToolBlock: { id: string; name: string; inputJson: string } | null = null;
   const completedToolCalls: { id: string; type: 'function'; function: { name: string; arguments: string } }[] = [];
 
@@ -313,7 +357,6 @@ async function makeAnthropicRequest(
           try {
             const event = JSON.parse(json);
 
-            // Anthropic content_block_delta with text → OpenAI text delta
             if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
               const openaiChunk = {
                 choices: [{ delta: { content: event.delta.text }, index: 0 }],
@@ -321,7 +364,6 @@ async function makeAnthropicRequest(
               controller.enqueue(encoder.encode(`data: ${JSON.stringify(openaiChunk)}\n\n`));
             }
 
-            // Anthropic content_block_start with tool_use → begin accumulating tool call
             if (event.type === 'content_block_start' && event.content_block?.type === 'tool_use') {
               activeToolBlock = {
                 id: event.content_block.id,
@@ -330,12 +372,10 @@ async function makeAnthropicRequest(
               };
             }
 
-            // Anthropic input_json_delta → accumulate tool arguments
             if (event.type === 'content_block_delta' && event.delta?.type === 'input_json_delta' && activeToolBlock) {
               activeToolBlock.inputJson += event.delta.partial_json;
             }
 
-            // Anthropic content_block_stop → finalize tool call if one was active
             if (event.type === 'content_block_stop' && activeToolBlock) {
               completedToolCalls.push({
                 id: activeToolBlock.id,
@@ -348,7 +388,6 @@ async function makeAnthropicRequest(
               activeToolBlock = null;
             }
 
-            // Anthropic message_stop → emit any tool calls as a final OpenAI chunk, then [DONE]
             if (event.type === 'message_stop') {
               if (completedToolCalls.length > 0) {
                 const toolCallChunk = {
@@ -383,4 +422,4 @@ async function makeAnthropicRequest(
 }
 
 export { DEFAULT_MODEL, PROVIDERS, parseModelId };
-export type { Provider, ProviderConfig };
+export type { Provider, ProviderConfig, RouteMeta, AuthMode };

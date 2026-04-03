@@ -21,7 +21,7 @@ import { listDocuments } from './document-store';
 import { buildWorkspaceIntentContext } from './workspace-intelligence';
 import { getCurrentProfile } from './data-analyzer';
 import { getActiveDataset } from './active-dataset';
-import { recordAICall, extractRouteMeta } from './ai-telemetry';
+import { recordAICall, defaultRouteMeta, parseRouteMeta } from './ai-telemetry';
 
 interface Message {
   role: 'user' | 'assistant' | 'system' | 'tool';
@@ -291,8 +291,7 @@ async function callAIWithTools(
       },
     );
 
-    // Extract routing metadata — try headers first, then body
-    let routeMeta = extractRouteMeta(resp);
+    let routeMeta = defaultRouteMeta();
 
     if (!resp.ok) return null;
 
@@ -303,20 +302,17 @@ async function callAIWithTools(
     try {
       const bodyParsed = JSON.parse(text);
       if (bodyParsed.__telemetry) {
-        routeMeta = {
-          model: bodyParsed.__telemetry.model || routeMeta.model,
-          provider: bodyParsed.__telemetry.provider || routeMeta.provider,
-          billing: bodyParsed.__telemetry.billing || routeMeta.billing,
-          fallback: bodyParsed.__telemetry.fallback ?? routeMeta.fallback,
-        };
-        // If the edge function wrapped the raw response, unwrap it
+        routeMeta = parseRouteMeta(bodyParsed.__telemetry);
         if (bodyParsed.__raw !== undefined) {
           text = bodyParsed.__raw;
         } else {
-          // Remove __telemetry from the object before passing downstream
           delete bodyParsed.__telemetry;
           text = JSON.stringify(bodyParsed);
         }
+      } else if (bodyParsed.model) {
+        // Raw Anthropic response — extract model from the response itself
+        routeMeta.model = `anthropic/${bodyParsed.model}`;
+        routeMeta.provider = 'anthropic';
       }
     } catch {
       // Not JSON — will be handled below as SSE
@@ -327,7 +323,7 @@ async function callAIWithTools(
       timestamp: Date.now(),
       model: routeMeta.model,
       provider: routeMeta.provider,
-      billing: routeMeta.billing,
+      authMode: routeMeta.authMode,
       fallback: routeMeta.fallback,
       durationMs: Date.now() - callStartTime,
       mode: 'intent',

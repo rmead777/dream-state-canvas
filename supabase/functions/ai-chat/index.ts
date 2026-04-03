@@ -333,15 +333,9 @@ Return JSON matching the ProductionRiskData schema.`,
     const { response, meta } = await routeToProvider(modelId, systemPrompt, messages, maxTokens, shouldStream, tools);
 
     // Log routing metadata for observability
-    console.log(`[Solaris] model=${meta.model} billing=${meta.billing}${meta.fallback ? ' (fallback)' : ''}`);
+    console.log(`[Sherpa] model=${meta.model} auth=${meta.authMode}${meta.fallback ? ' (fallback)' : ''}`);
 
-    // Metadata headers injected into every response
-    const metaHeaders: Record<string, string> = {
-      'x-ai-model': meta.model,
-      'x-ai-provider': meta.provider,
-      'x-ai-billing': meta.billing,
-      ...(meta.fallback ? { 'x-ai-fallback': 'true' } : {}),
-    };
+    const metaHeaders: Record<string, string> = {};
 
     if (!response.ok) {
       if (response.status === 429) {

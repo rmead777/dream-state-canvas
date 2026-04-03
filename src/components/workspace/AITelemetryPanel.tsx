@@ -1,15 +1,17 @@
 /**
- * AITelemetryPanel — displays AI model call log with billing info.
- * Shows model, duration, billing type (subscription/api-key/gateway), and fallback status.
+ * AITelemetryPanel — displays AI model call log with auth mode info.
+ * Shows model, duration, auth mode (oauth/api_key/gateway), and fallback status.
  */
 import { useState, useEffect } from 'react';
-import { getAITelemetryEvents, clearAITelemetry, type AICallEvent } from '@/lib/ai-telemetry';
+import { getAITelemetryEvents, clearAITelemetry, type AICallEvent, type AuthMode } from '@/lib/ai-telemetry';
 
-const BILLING_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  subscription: { label: 'Subscription', color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-200/50' },
-  'api-key': { label: 'API Key', color: 'text-amber-600', bg: 'bg-amber-50 border-amber-200/50' },
-  gateway: { label: 'Gateway', color: 'text-blue-600', bg: 'bg-blue-50 border-blue-200/50' },
-  unknown: { label: 'Unknown', color: 'text-workspace-text-secondary', bg: 'bg-workspace-surface/30 border-workspace-border/30' },
+const AUTH_CONFIG: Record<AuthMode, { label: string; detail: string; color: string; bg: string }> = {
+  oauth:             { label: 'Subscription', detail: 'OAuth token', color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-200/50' },
+  api_key:           { label: 'API Key',      detail: 'Paid',        color: 'text-amber-600',   bg: 'bg-amber-50 border-amber-200/50' },
+  api_key_fallback:  { label: 'API Key',      detail: 'OAuth failed, paid fallback', color: 'text-orange-600', bg: 'bg-orange-50 border-orange-200/50' },
+  oauth_failed:      { label: 'Failed',       detail: 'OAuth failed, no API key',    color: 'text-red-600',    bg: 'bg-red-50 border-red-200/50' },
+  gateway:           { label: 'Gateway',      detail: 'Lovable/Google', color: 'text-blue-600',  bg: 'bg-blue-50 border-blue-200/50' },
+  unknown:           { label: 'Unknown',      detail: 'No telemetry', color: 'text-workspace-text-secondary', bg: 'bg-workspace-surface/30 border-workspace-border/30' },
 };
 
 const PROVIDER_COLORS: Record<string, string> = {
@@ -41,10 +43,9 @@ export function AITelemetryPanel() {
     );
   }
 
-  // Stats summary
   const totalCalls = events.length;
-  const subscriptionCalls = events.filter(e => e.billing === 'subscription').length;
-  const apiKeyCalls = events.filter(e => e.billing === 'api-key').length;
+  const oauthCalls = events.filter(e => e.authMode === 'oauth').length;
+  const paidCalls = events.filter(e => e.authMode === 'api_key' || e.authMode === 'api_key_fallback').length;
   const avgDuration = events.reduce((sum, e) => sum + e.durationMs, 0) / events.length;
 
   return (
@@ -60,19 +61,29 @@ export function AITelemetryPanel() {
           <div className="text-[9px] text-workspace-text-secondary/50 uppercase tracking-wider">Avg Time</div>
         </div>
         <div className="rounded-lg border border-workspace-border/30 bg-workspace-surface/20 px-2.5 py-2 text-center">
-          <div className="text-sm font-semibold text-emerald-600 tabular-nums">
-            {subscriptionCalls > 0 ? `${subscriptionCalls}/${totalCalls}` : apiKeyCalls > 0 ? `${apiKeyCalls} paid` : '—'}
-          </div>
-          <div className="text-[9px] text-workspace-text-secondary/50 uppercase tracking-wider">
-            {subscriptionCalls > 0 ? 'Sub' : apiKeyCalls > 0 ? 'API Key' : 'Billing'}
-          </div>
+          {oauthCalls > 0 ? (
+            <>
+              <div className="text-sm font-semibold text-emerald-600 tabular-nums">{oauthCalls}/{totalCalls}</div>
+              <div className="text-[9px] text-emerald-600/60 uppercase tracking-wider">Subscription</div>
+            </>
+          ) : paidCalls > 0 ? (
+            <>
+              <div className="text-sm font-semibold text-amber-600 tabular-nums">{paidCalls}</div>
+              <div className="text-[9px] text-amber-600/60 uppercase tracking-wider">Paid</div>
+            </>
+          ) : (
+            <>
+              <div className="text-sm font-semibold text-workspace-text-secondary tabular-nums">—</div>
+              <div className="text-[9px] text-workspace-text-secondary/50 uppercase tracking-wider">Auth</div>
+            </>
+          )}
         </div>
       </div>
 
       {/* Clear button */}
       <div className="flex justify-end">
         <button
-          onClick={() => { clearAITelemetry(); }}
+          onClick={() => clearAITelemetry()}
           className="text-[10px] text-workspace-text-secondary/40 hover:text-workspace-text-secondary transition-colors"
         >
           Clear log
@@ -82,7 +93,7 @@ export function AITelemetryPanel() {
       {/* Event list */}
       <div className="space-y-1.5">
         {events.map((event) => {
-          const billing = BILLING_CONFIG[event.billing] || BILLING_CONFIG.unknown;
+          const auth = AUTH_CONFIG[event.authMode] || AUTH_CONFIG.unknown;
           const time = new Date(event.timestamp).toLocaleTimeString('en-US', { hour12: false });
           const modelShort = event.model.split('/').pop() || event.model;
           const providerColor = PROVIDER_COLORS[event.provider] || 'text-workspace-text-secondary';
@@ -100,15 +111,12 @@ export function AITelemetryPanel() {
                   {(event.durationMs / 1000).toFixed(1)}s
                 </span>
               </div>
-              {/* Row 2: billing badge + provider + mode + extras */}
+              {/* Row 2: auth badge + details */}
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-medium ${billing.bg} ${billing.color}`}>
-                  {billing.label}
+                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-medium ${auth.bg} ${auth.color}`}>
+                  {auth.label}
                 </span>
-                <span className="text-[9px] text-workspace-text-secondary/40">{event.provider}</span>
-                {event.mode && event.mode !== 'intent' && (
-                  <span className="text-[9px] text-workspace-accent/50">{event.mode}</span>
-                )}
+                <span className="text-[9px] text-workspace-text-secondary/40">{auth.detail}</span>
                 {event.fallback && (
                   <span className="inline-flex items-center rounded-full border border-amber-200/50 bg-amber-50 px-2 py-0.5 text-[9px] font-medium text-amber-600">
                     Fallback
