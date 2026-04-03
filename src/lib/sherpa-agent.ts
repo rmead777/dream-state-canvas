@@ -12,7 +12,7 @@
  * The loop runs client-side. Each AI call goes through the edge function.
  * Tools execute in the browser reading from React state + Supabase.
  */
-import { callAI } from '@/hooks/useAI';
+import { callAI, type ContentPart } from '@/hooks/useAI';
 import { SHERPA_TOOLS, executeTool, getToolStatus } from './sherpa-tools';
 import { WorkspaceState, WorkspaceAction, ActiveContext } from './workspace-types';
 import { getConversationMessages } from './conversation-memory';
@@ -25,7 +25,7 @@ import { recordAICall, defaultRouteMeta, parseRouteMeta } from './ai-telemetry';
 
 interface Message {
   role: 'user' | 'assistant' | 'system' | 'tool';
-  content: string | null;
+  content: string | null | ContentPart[];
   tool_call_id?: string;
   tool_calls?: ToolCall[];
 }
@@ -54,6 +54,8 @@ export interface AgentLoopParams {
   activeContext?: ActiveContext;
   documentIds: string[];
   memories: string;
+  /** Base64 data URIs (e.g. "data:image/jpeg;base64,...") attached to this turn */
+  images?: string[];
   onStatusUpdate?: (status: string | null) => void;
 }
 
@@ -62,6 +64,8 @@ export interface AgentLoopResult {
   actions: any[];
   toolCallsUsed: number;
   nextMoves?: { label: string; query: string }[];
+  /** All non-empty intermediate AI texts from each iteration, for reasoning visibility */
+  steps?: string[];
 }
 
 /**
@@ -104,24 +108,33 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
     }
   } catch {}
 
+  const textContent = [
+    `User query: "${query}"`,
+    focusedHint,
+    `\nWorkspace state:\n${structuredContext}`,
+    documentsHint,
+    // NOTE: memories are sent separately as body.memories to the edge function
+    // and injected into the system prompt. Don't duplicate them in the user message.
+  ].filter(Boolean).join('\n');
+
+  // When images are attached, build a content array so every provider sees them
+  const firstMessageContent: string | ContentPart[] = params.images && params.images.length > 0
+    ? [
+        { type: 'text', text: textContent },
+        ...params.images.map(url => ({ type: 'image_url' as const, image_url: { url } })),
+      ]
+    : textContent;
+
   const messages: Message[] = [
     ...history,
-    {
-      role: 'user',
-      content: [
-        `User query: "${query}"`,
-        focusedHint,
-        `\nWorkspace state:\n${structuredContext}`,
-        documentsHint,
-        // NOTE: memories are sent separately as body.memories to the edge function
-        // and injected into the system prompt. Don't duplicate them in the user message.
-      ].filter(Boolean).join('\n'),
-    },
+    { role: 'user', content: firstMessageContent },
   ];
 
   let toolCallsUsed = 0;
   const pendingWriteActions: any[] = [];
   let capturedNextMoves: { label: string; query: string }[] = [];
+  /** All non-empty AI text responses, collected for reasoning visibility */
+  const allSteps: string[] = [];
 
   /** Remap tool executor output to applyResult format: { action: 'create' } → { type: 'create' } */
   function remapPendingActions(): any[] {
@@ -144,16 +157,16 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
   let firstProvider = ''; // Detect provider switches mid-loop
 
   for (let iteration = 0; iteration < maxIterations; iteration++) {
-    // Show interim thoughts (not just "Thinking...")
+    // Show interim thoughts untruncated — user needs to read the full reasoning
     if (iteration > 0) {
-      onStatusUpdate?.(bestText ? `● ${bestText.slice(0, 100)}...` : 'Thinking...');
+      onStatusUpdate?.(bestText || 'Thinking...');
     }
 
     // Call AI with tools — only inject docs/memories on first iteration
     const response = await callAIWithTools(messages, documentIds, memories, iteration === 0);
 
     if (!response) {
-      return { response: bestText || 'Sherpa could not reach the AI service. Please try again.', actions: remapPendingActions(), toolCallsUsed, nextMoves: capturedNextMoves };
+      return { response: bestText || 'Sherpa could not reach the AI service. Please try again.', actions: remapPendingActions(), toolCallsUsed, nextMoves: capturedNextMoves, steps: allSteps };
     }
 
     // Detect which provider responded (Anthropic starts with {"model":, Google with {"id":"gen-)
@@ -171,6 +184,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
         actions: pendingActions,
         toolCallsUsed,
         nextMoves: capturedNextMoves,
+        steps: allSteps,
       };
     }
 
@@ -192,6 +206,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
     if (text && text.trim()) {
       bestText = text;
       emptyTextStreak = 0;
+      allSteps.push(text.trim()); // collect every distinct AI reasoning step
     } else {
       emptyTextStreak++;
     }
@@ -206,6 +221,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
         actions: [...rawActions, ...remapPendingActions()],
         toolCallsUsed,
         nextMoves: capturedNextMoves,
+        steps: allSteps,
       };
     }
 
@@ -223,6 +239,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
         actions: pendingActions,
         toolCallsUsed,
         nextMoves: capturedNextMoves,
+        steps: allSteps,
       };
     }
 
@@ -242,6 +259,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
         actions: pendingActions,
         toolCallsUsed,
         nextMoves: capturedNextMoves,
+        steps: allSteps,
       };
     }
 
@@ -333,6 +351,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
     actions: pendingActions,
     toolCallsUsed,
     nextMoves: capturedNextMoves,
+    steps: allSteps,
   };
 }
 

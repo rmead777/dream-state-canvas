@@ -24,6 +24,30 @@ import { RulesEditor } from './RulesEditor';
 import { AITelemetryPanel } from './AITelemetryPanel';
 import MarkdownRenderer from '../objects/MarkdownRenderer';
 
+async function compressImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const MAX = 1024;
+      let { width, height } = img;
+      if (width > MAX || height > MAX) {
+        if (width > height) { height = Math.round(height * MAX / width); width = MAX; }
+        else { width = Math.round(width * MAX / height); height = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { reject(new Error('No canvas context')); return; }
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = reject;
+    img.src = objectUrl;
+  });
+}
+
 const RAIL_MIN_WIDTH = 320;
 const RAIL_MAX_WIDTH = 800;
 const RAIL_DEFAULT_WIDTH = 440;
@@ -91,13 +115,16 @@ export function SherpaRail() {
 
   const [adminUnlocked, setAdminUnlocked] = useState(isAdminUnlocked());
   const [adminState, setAdminState] = useState(getAdminSettings());
-  const [promptHistory, setPromptHistory] = useState<Array<{ query: string; response: string | null; timestamp: number }>>([]);
+  const [promptHistory, setPromptHistory] = useState<Array<{ query: string; response: string | null; timestamp: number; steps?: string[] }>>([]);
   const [contextMode, setContextMode] = useState<ContextMode>('auto');
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingImages, setPendingImages] = useState<string[]>([]);
+  const [expandedSteps, setExpandedSteps] = useState<Record<number, boolean>>({});
   const { addDocument, documents } = useDocuments();
 
   const contextScopeLabel = contextMode === 'auto'
@@ -152,10 +179,14 @@ export function SherpaRail() {
     }
   }, [lastResponse, isProcessing, activeTab]);
 
-  const trackAndProcess = useCallback((text: string) => {
-    setPromptHistory(prev => [...prev, { query: text, response: null, timestamp: Date.now() }]);
-    setActiveTab('origin'); // Switch to Origin when sending a message
-    processIntent(text);
+  const trackAndProcess = useCallback(async (text: string, images?: string[]) => {
+    const ts = Date.now();
+    setPromptHistory(prev => [...prev, { query: text, response: null, timestamp: ts }]);
+    setActiveTab('origin');
+    const result = await processIntent(text, images);
+    if (result?.steps?.length) {
+      setPromptHistory(prev => prev.map(e => e.timestamp === ts ? { ...e, steps: result.steps } : e));
+    }
   }, [processIntent]);
 
   // Listen for sherpa-query events from empty state buttons
@@ -172,10 +203,10 @@ export function SherpaRail() {
 
   const handleSubmit = useCallback(() => {
     const trimmed = input.trim();
-    if (!trimmed) return;
+    if (!trimmed && pendingImages.length === 0) return;
 
-    // Check for admin passphrase
-    if (checkPassphrase(trimmed)) {
+    // Check for admin passphrase (text-only)
+    if (trimmed && checkPassphrase(trimmed)) {
       if (!adminUnlocked) {
         unlockAdmin();
         setAdminUnlocked(true);
@@ -193,9 +224,11 @@ export function SherpaRail() {
       return;
     }
 
-    trackAndProcess(trimmed);
+    const images = pendingImages.length > 0 ? pendingImages : undefined;
+    trackAndProcess(trimmed || 'What do you see in this image?', images);
     setInput('');
-  }, [input, trackAndProcess, adminUnlocked, dispatch]);
+    setPendingImages([]);
+  }, [input, pendingImages, trackAndProcess, adminUnlocked, dispatch]);
 
   // TTS state: track whether the last query came from voice, and whether TTS is active
   const lastWasVoiceRef = useRef(false);
@@ -257,6 +290,25 @@ export function SherpaRail() {
   });
   const composerState = isSpeaking ? 'Speaking' : voice.isListening ? 'Listening' : isProcessing ? 'Reasoning' : input.trim() ? 'Ready to send' : 'Standing by';
   const composerStateTone = isSpeaking ? 'bg-violet-500' : voice.isListening ? 'bg-rose-500' : isProcessing ? 'bg-amber-500' : input.trim() ? 'bg-emerald-500' : 'bg-workspace-accent';
+
+  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
+    const items = Array.from(e.clipboardData.items);
+    const imageItems = items.filter(item => item.type.startsWith('image/'));
+    if (imageItems.length === 0) return;
+    e.preventDefault();
+    const compressed = await Promise.all(
+      imageItems.map(item => compressImage(item.getAsFile()!))
+    );
+    setPendingImages(prev => [...prev, ...compressed]);
+  }, []);
+
+  const handleImageFiles = useCallback(async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+    if (imageFiles.length === 0) return;
+    const compressed = await Promise.all(imageFiles.map(compressImage));
+    setPendingImages(prev => [...prev, ...compressed]);
+  }, []);
 
   const handleSuggestionClick = (query: string) => {
     trackAndProcess(query);
@@ -449,10 +501,34 @@ export function SherpaRail() {
                   </div>
                   {/* Sherpa response — left-aligned */}
                   {entry.response && (
-                    <div className="flex justify-start">
+                    <div className="flex flex-col items-start gap-1">
                       <div className="max-w-[90%] rounded-2xl rounded-bl-md bg-white border border-workspace-border/40 px-3.5 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
                         <MarkdownRenderer content={entry.response} />
                       </div>
+                      {/* Collapsible reasoning steps */}
+                      {entry.steps && entry.steps.length > 1 && (
+                        <div className="max-w-[90%] w-full">
+                          <button
+                            onClick={() => setExpandedSteps(prev => ({ ...prev, [i]: !prev[i] }))}
+                            className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] text-workspace-text-secondary/50 hover:text-workspace-text-secondary/80 hover:bg-workspace-surface/40 transition-colors"
+                          >
+                            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                              className={`transition-transform duration-150 ${expandedSteps[i] ? 'rotate-90' : ''}`}>
+                              <path d="m9 18 6-6-6-6"/>
+                            </svg>
+                            {entry.steps.length} reasoning steps
+                          </button>
+                          {expandedSteps[i] && (
+                            <div className="mt-1 space-y-1.5 pl-1 border-l-2 border-workspace-border/30">
+                              {entry.steps.map((step, si) => (
+                                <div key={si} className="rounded-xl bg-workspace-surface/30 border border-workspace-border/25 px-3 py-2">
+                                  <p className="text-[10px] text-workspace-text-secondary/60 leading-relaxed whitespace-pre-wrap">{step}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                   {/* Processing indicator after last message */}
@@ -510,7 +586,19 @@ export function SherpaRail() {
           )}
 
           {/* ═══ INPUT AREA ═══ */}
-          <div className="relative z-10 border-t border-workspace-border/50 bg-white/70 px-4 py-3 space-y-2 backdrop-blur-md">
+          <div
+            className="relative z-10 border-t border-workspace-border/50 bg-white/70 px-4 py-3 space-y-2 backdrop-blur-md"
+            onPaste={handlePaste}
+          >
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => handleImageFiles(e.target.files)}
+            />
             {/* Processing indicator */}
             {isProcessing && (
               <div
@@ -566,6 +654,28 @@ export function SherpaRail() {
             {/* Voice indicator */}
             <VoiceIndicator volume={voice.volume} isListening={voice.isListening} />
 
+            {/* Image preview strip */}
+            {pendingImages.length > 0 && (
+              <div className="flex flex-wrap gap-2 px-1">
+                {pendingImages.map((src, idx) => (
+                  <div key={idx} className="relative group">
+                    <img
+                      src={src}
+                      alt={`Image ${idx + 1}`}
+                      className="h-16 w-16 rounded-lg object-cover border border-workspace-border/50 shadow-sm"
+                    />
+                    <button
+                      onClick={() => setPendingImages(prev => prev.filter((_, i) => i !== idx))}
+                      className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-workspace-text/70 text-white text-[9px] opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive"
+                      title="Remove image"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="workspace-card-surface flex items-center gap-2 rounded-2xl border border-workspace-border/60 px-3 py-2
               transition-all duration-200 workspace-spring focus-within:border-workspace-accent/30 focus-within:shadow-[0_12px_28px_rgba(99,102,241,0.10)]"
               aria-busy={isProcessing}
@@ -586,6 +696,25 @@ export function SherpaRail() {
                 placeholder="Ask anything..."
                 className="flex-1 bg-transparent text-sm text-workspace-text placeholder:text-workspace-text-secondary/40 outline-none"
               />
+
+              {/* Image upload button */}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className={`rounded-full p-1.5 transition-all duration-200 ${
+                  pendingImages.length > 0
+                    ? 'bg-workspace-accent/15 text-workspace-accent'
+                    : 'text-workspace-text-secondary/40 hover:text-workspace-accent/60 hover:bg-workspace-accent/5'
+                }`}
+                title="Attach image (or paste)"
+              >
+                {pendingImages.length > 0 ? (
+                  <span className="text-[9px] font-medium tabular-nums">{pendingImages.length}</span>
+                ) : (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" />
+                  </svg>
+                )}
+              </button>
 
               {/* Voice button */}
               {voice.isSupported && (
@@ -645,7 +774,7 @@ export function SherpaRail() {
 
             {/* Footer */}
             <div className="flex items-center justify-between text-[9px] text-workspace-text-secondary/35 px-1">
-              <span>Enter to send · Hold mic to dictate</span>
+              <span>Enter to send · Hold mic · Paste image</span>
               {user && (
                 <button
                   onClick={signOut}

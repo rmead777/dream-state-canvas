@@ -13,9 +13,15 @@ async function getAuthToken(): Promise<string> {
   return session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 }
 
-interface Message {
+export interface ContentPart {
+  type: 'text' | 'image_url';
+  text?: string;
+  image_url?: { url: string };
+}
+
+export interface Message {
   role: 'user' | 'assistant' | 'system';
-  content: string;
+  content: string | ContentPart[];
 }
 
 interface UseAIOptions {

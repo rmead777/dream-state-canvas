@@ -55,9 +55,15 @@ const PROVIDERS: Record<Provider, ProviderConfig> = {
 
 const DEFAULT_MODEL = 'google/gemini-3-flash-preview';
 
+interface ContentPart {
+  type: 'text' | 'image_url';
+  text?: string;
+  image_url?: { url: string };
+}
+
 interface Message {
   role: string;
-  content: string;
+  content: string | null | ContentPart[];
 }
 
 interface RouteResult {
@@ -242,6 +248,31 @@ async function makeOpenAIRequest(
 }
 
 /**
+ * Convert OpenAI-style content (string or ContentPart[]) to Anthropic's native format.
+ * - text parts → { type: 'text', text }
+ * - image_url parts with data URI → { type: 'image', source: { type: 'base64', media_type, data } }
+ * - image_url parts with https URL → { type: 'image', source: { type: 'url', url } }
+ */
+function toAnthropicContent(content: string | null | ContentPart[]): string | any[] {
+  if (content === null || content === undefined) return '';
+  if (typeof content === 'string') return content;
+  return content.map(part => {
+    if (part.type === 'text') return { type: 'text', text: part.text ?? '' };
+    if (part.type === 'image_url' && part.image_url?.url) {
+      const url = part.image_url.url;
+      if (url.startsWith('data:')) {
+        const commaIdx = url.indexOf(',');
+        const header = url.slice(5, commaIdx).replace(';base64', '');
+        const data = url.slice(commaIdx + 1);
+        return { type: 'image', source: { type: 'base64', media_type: header || 'image/jpeg', data } };
+      }
+      return { type: 'image', source: { type: 'url', url } };
+    }
+    return { type: 'text', text: '' };
+  });
+}
+
+/**
  * Anthropic Messages API request.
  * Converts OpenAI-style messages to Anthropic format and streams via SSE.
  * Re-wraps Anthropic's SSE events into OpenAI-compatible format so the
@@ -266,13 +297,13 @@ async function makeAnthropicRequest(
       if ((m as any).role === 'tool') {
         return {
           role: 'user' as const,
-          content: [{ type: 'tool_result', tool_use_id: (m as any).tool_call_id, content: m.content ?? '' }],
+          content: [{ type: 'tool_result', tool_use_id: (m as any).tool_call_id, content: typeof m.content === 'string' ? m.content : '' }],
         };
       }
       // Assistant message with tool_calls → Anthropic content block array
       if (m.role === 'assistant' && (m as any).tool_calls?.length > 0) {
         const blocks: any[] = [];
-        if (m.content) blocks.push({ type: 'text', text: m.content });
+        if (m.content && typeof m.content === 'string') blocks.push({ type: 'text', text: m.content });
         for (const tc of (m as any).tool_calls) {
           let input: Record<string, unknown> = {};
           try { input = JSON.parse(tc.function.arguments); } catch {}
@@ -280,7 +311,7 @@ async function makeAnthropicRequest(
         }
         return { role: 'assistant' as const, content: blocks };
       }
-      return { role: m.role as 'user' | 'assistant', content: m.content ?? '' };
+      return { role: m.role as 'user' | 'assistant', content: toAnthropicContent(m.content) };
     });
 
   // OAuth requires system as array with Claude Code identity as first block

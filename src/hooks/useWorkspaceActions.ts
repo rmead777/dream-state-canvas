@@ -60,7 +60,7 @@ export function useWorkspaceActions() {
   }, []);
 
   const processIntent = useCallback(
-    async (query: string) => {
+    async (query: string, images?: string[]) => {
       dispatch({ type: 'SET_SHERPA_PROCESSING', payload: true });
 
       const origin: IntentOrigin = {
@@ -100,9 +100,10 @@ export function useWorkspaceActions() {
           activeContext: stateRef.current.activeContext,
           documentIds: _documentIdsRef,
           memories: memoryBlock,
+          images,
           onStatusUpdate: (status) => {
             if (status) {
-              dispatch({ type: 'SET_SHERPA_RESPONSE', payload: `● ${status}` });
+              dispatch({ type: 'SET_SHERPA_RESPONSE', payload: status });
             }
           },
         });
@@ -171,6 +172,9 @@ export function useWorkspaceActions() {
             },
           },
         });
+
+        // Return steps so the caller (SherpaRail) can show reasoning history
+        return { steps: agentResult.steps || [] };
       } catch (aiError) {
         console.error('[processIntent] AI intent parsing failed:', aiError);
         const errorMsg = 'Sherpa is having trouble reaching the AI service right now. Please check your connection and try again in a moment.';
