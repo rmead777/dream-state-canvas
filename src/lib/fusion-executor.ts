@@ -1,9 +1,89 @@
 import { WorkspaceObject } from './workspace-types';
 import { canFuse, SynthesisType } from './fusion-rules';
 import { callAI } from '@/hooks/useAI';
-import { buildObjectPromptSummary } from './workspace-intelligence';
-import { getCurrentProfile } from './data-analyzer';
-import { getActiveDataset } from './active-dataset';
+
+/**
+ * Build a content-rich summary of a card for fusion context.
+ * Deliberately different from buildObjectPromptSummary — that function is optimised
+ * for lightweight workspace snapshots. Fusion needs actual content, not metadata.
+ */
+function buildFusionContext(object: WorkspaceObject): string {
+  const ctx = object.context || {};
+  const lines: string[] = [`[${object.type.toUpperCase()}] "${object.title}"`];
+
+  // Sections-based cards (analysis, brief, etc.) — extract real text
+  const sections: any[] = ctx.sections || [];
+  for (const s of sections) {
+    if (!s) continue;
+    if (s.type === 'summary' && s.text) lines.push(`Summary: ${s.text}`);
+    else if ((s.type === 'narrative' || s.type === 'text') && s.text)
+      lines.push(`Analysis: ${s.text.slice(0, 600)}`);
+    else if (s.type === 'metric' && s.label)
+      lines.push(`Metric — ${s.label}: ${s.value}${s.trendLabel ? ` (${s.trendLabel})` : ''}`);
+    else if (s.type === 'callout' && s.text)
+      lines.push(`[${(s.severity || 'note').toUpperCase()}] ${s.text}`);
+    else if (s.type === 'table' && Array.isArray(s.columns) && Array.isArray(s.rows)) {
+      lines.push(`Table (${s.rows.length} rows): ${s.columns.join(', ')}`);
+      s.rows.slice(0, 10).forEach((row: string[]) =>
+        lines.push('  ' + s.columns.map((c: string, i: number) => `${c}: ${row[i] ?? ''}`).join(' | '))
+      );
+    }
+    else if (s.type === 'metrics-row' && Array.isArray(s.metrics))
+      lines.push('Metrics: ' + s.metrics.map((m: any) => `${m.label}: ${m.value}`).join(', '));
+  }
+
+  // Data-query cards (dataset, inspector, alert, metric, comparison)
+  if (Array.isArray(ctx.columns) && Array.isArray(ctx.rows)) {
+    const cols: string[] = ctx.columns;
+    const rows: string[][] = ctx.rows;
+    lines.push(`Data (${rows.length} rows): ${cols.join(', ')}`);
+    rows.slice(0, 20).forEach(row =>
+      lines.push('  ' + cols.map((c, i) => `${c}: ${row[i] ?? ''}`).join(' | '))
+    );
+  }
+
+  // Metric cards
+  if (ctx.currentValue !== undefined) {
+    lines.push(`Value: ${ctx.unit || ''}${ctx.currentValue}${ctx.change ? ` (${ctx.trend === 'up' ? '+' : ''}${ctx.change})` : ''}`);
+    if (Array.isArray(ctx.breakdown))
+      (ctx.breakdown as any[]).forEach(b => lines.push(`  ${b.name}: ${b.value}`));
+  }
+
+  // Alert cards
+  if (Array.isArray(ctx.alerts)) {
+    lines.push(`Alerts (${(ctx.alerts as any[]).length} total):`);
+    (ctx.alerts as any[]).slice(0, 15).forEach((a: any) =>
+      lines.push(`  [${a.severity?.toUpperCase() || 'ALERT'}] ${a.title || a.text || ''}`)
+    );
+  }
+
+  // Comparison cards
+  if (Array.isArray(ctx.entities)) {
+    lines.push(`Comparison (${(ctx.entities as any[]).length} entities):`);
+    (ctx.entities as any[]).forEach((e: any) => {
+      const metrics = e.metrics ? Object.entries(e.metrics).map(([k, v]) => `${k}: ${v}`).join(', ') : '';
+      lines.push(`  ${e.name}: ${metrics}`);
+    });
+  }
+
+  // Brief/synthesis content
+  if (typeof ctx.content === 'string' && ctx.content)
+    lines.push(`Content: ${ctx.content.slice(0, 800)}`);
+  else if (typeof ctx.summary === 'string' && ctx.summary)
+    lines.push(`Summary: ${ctx.summary.slice(0, 800)}`);
+  if (Array.isArray(ctx.insights))
+    (ctx.insights as string[]).forEach(ins => lines.push(`  • ${ins}`));
+
+  // Simulation cards
+  if (Array.isArray(ctx.simRows)) {
+    lines.push('Simulation projections:');
+    (ctx.simRows as any[]).slice(0, 8).forEach((r: any) =>
+      lines.push(`  ${r.period}: A=${r.scenarioA}, B=${r.scenarioB}`)
+    );
+  }
+
+  return lines.join('\n');
+}
 
 export interface FusionResult {
   success: boolean;
@@ -27,12 +107,8 @@ export async function executeFusion(
   }
 
   try {
-    // Use structured summaries instead of raw truncated JSON — prevents
-    // broken JSON fragments from confusing the AI (ME-011 fix)
-    const ds = getActiveDataset();
-    const profile = getCurrentProfile(ds.columns, ds.rows);
-    const sourceSum = JSON.stringify(buildObjectPromptSummary(source, profile), null, 2);
-    const targetSum = JSON.stringify(buildObjectPromptSummary(target, profile), null, 2);
+    const sourceSum = buildFusionContext(source);
+    const targetSum = buildFusionContext(target);
 
     const result = await callAI(
       [
@@ -40,10 +116,10 @@ export async function executeFusion(
           role: 'user',
           content: `You are an analytical synthesis engine. You must produce NEW analysis that NEITHER input contains on its own.
 
-OBJECT A — [${source.type}] "${source.title}":
+OBJECT A:
 ${sourceSum}
 
-OBJECT B — [${target.type}] "${target.title}":
+OBJECT B:
 ${targetSum}
 
 CRITICAL RULES:
