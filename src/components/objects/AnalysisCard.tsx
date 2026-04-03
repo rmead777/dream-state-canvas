@@ -307,14 +307,20 @@ function VegaLiteRenderer({ section }: { section: { spec: Record<string, any>; h
   const containerRef = useRef<HTMLDivElement>(null);
   const chartHeight = section.height || 240;
 
+  // Stable JSON string dep — prevents re-render when parent re-renders but spec content is unchanged
+  const specJson = JSON.stringify(section.spec);
+
   useEffect(() => {
     if (!containerRef.current) return;
     const container = containerRef.current;
+    let mounted = true;
     let vegaView: any = null;
 
     // Lazy-load vega-embed — keeps it out of the main bundle
-    import('vega-embed').then(({ default: embed }) => {
-      if (!container) return;
+    // F003: named chunk via magic comment so network tab shows "vegalite" not "embed"
+    import(/* @vite-chunk-name: "vegalite" */ 'vega-embed').then(({ default: embed }) => {
+      // Abort if component unmounted or container detached before async resolved
+      if (!mounted || !container || !document.contains(container)) return;
       embed(container, section.spec, {
         actions: false,
         theme: 'latimes',
@@ -323,23 +329,28 @@ function VegaLiteRenderer({ section }: { section: { spec: Record<string, any>; h
           view: { stroke: 'transparent' },
         },
       }).then((result) => {
-        vegaView = result;
+        if (mounted) vegaView = result;
+        else result.view.finalize(); // component gone before embed finished
       }).catch((err) => {
+        if (!mounted) return;
         console.warn('[VegaLiteRenderer] Failed to render spec:', err);
         if (container) {
           container.innerHTML = '<p class="text-xs text-red-400 p-2">Chart render failed</p>';
         }
       });
     }).catch(() => {
+      if (!mounted) return;
       if (container) {
         container.innerHTML = '<p class="text-xs text-workspace-text-secondary/50 p-2">Vega-Lite not available</p>';
       }
     });
 
     return () => {
+      mounted = false;
       try { vegaView?.view?.finalize(); } catch {}
     };
-  }, [section.spec]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [specJson]); // specJson is stable across re-renders when content is unchanged
 
   return (
     <div className="space-y-1">
