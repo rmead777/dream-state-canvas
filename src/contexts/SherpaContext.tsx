@@ -30,6 +30,10 @@ export function SherpaProvider({ children }: { children: React.ReactNode }) {
   // The interval calls scanRef.current which always points to the latest closure.
   const scanRef = useRef<() => void>(() => {});
 
+  // Ref to current observations — allows async alert scan to dedup without stale closure
+  const observationsRef = useRef<string[]>(state.sherpa.observations);
+  observationsRef.current = state.sherpa.observations;
+
   // Proactive observation scanning — runs periodically
   const triggerObservationScan = useCallback(() => {
     const newObservations = generateObservations(state.objects);
@@ -79,7 +83,10 @@ export function SherpaProvider({ children }: { children: React.ReactNode }) {
 
         for (const alert of firing) {
           const obs = `[Alert] ${alert.message}`;
-          dispatch({ type: 'ADD_SHERPA_OBSERVATION', payload: obs });
+          // Dedup — observationsRef always reflects current state, no stale closure
+          if (!observationsRef.current.includes(obs)) {
+            dispatch({ type: 'ADD_SHERPA_OBSERVATION', payload: obs });
+          }
         }
       } catch (err) {
         console.warn('[SherpaContext] Alert scan failed:', err);

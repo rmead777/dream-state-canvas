@@ -50,9 +50,26 @@ export function parseThreshold(memoryContent: string): AlertThreshold | null {
   }
 }
 
+function compareOp(num: number, op: AlertThreshold['operator'], value: number): boolean {
+  switch (op) {
+    case 'gt':  return num > value;
+    case 'lt':  return num < value;
+    case 'gte': return num >= value;
+    case 'lte': return num <= value;
+    case 'eq':  return num === value;
+    case 'neq': return num !== value;
+    default:    return false;
+  }
+}
+
 /**
  * Evaluate a single threshold against a dataset.
  * Returns an AlertFiring if the condition is met, null otherwise.
+ *
+ * Aggregation semantics:
+ *   'sum'   — sum the entire column, fire if total meets condition
+ *   'count' — count rows individually meeting condition, fire if count > 0
+ *   'any'   — fire if any individual row meets condition (same as count but reports match count)
  */
 function evaluateThreshold(
   threshold: AlertThreshold,
@@ -64,45 +81,48 @@ function evaluateThreshold(
   );
   if (colIdx === -1) return null;
 
-  const matchingRows = rows.filter((row) => {
-    const raw = row[colIdx];
-    const num = parseFloat(String(raw ?? '').replace(/[$,%\s]/g, ''));
-    if (isNaN(num)) return false;
+  const parseNum = (raw: unknown) => parseFloat(String(raw ?? '').replace(/[$,%\s]/g, ''));
 
-    switch (threshold.operator) {
-      case 'gt':  return num > threshold.value;
-      case 'lt':  return num < threshold.value;
-      case 'gte': return num >= threshold.value;
-      case 'lte': return num <= threshold.value;
-      case 'eq':  return num === threshold.value;
-      case 'neq': return num !== threshold.value;
-      default:    return false;
-    }
+  if (threshold.aggregation === 'sum') {
+    // Sum ALL rows in the column, then compare the total
+    const total = rows.reduce((acc, row) => {
+      const num = parseNum(row[colIdx]);
+      return acc + (isNaN(num) ? 0 : num);
+    }, 0);
+    if (!compareOp(total, threshold.operator, threshold.value)) return null;
+    return {
+      threshold,
+      message: `${threshold.label}: $${total.toLocaleString()} total`,
+      matchedRows: rows.length,
+      currentValue: total,
+    };
+  }
+
+  // 'any' and 'count' — filter rows that individually meet the condition
+  const matchingRows = rows.filter((row) => {
+    const num = parseNum(row[colIdx]);
+    return !isNaN(num) && compareOp(num, threshold.operator, threshold.value);
   });
 
   if (matchingRows.length === 0) return null;
 
-  let currentValue: number | null = null;
-  let message = threshold.label;
-
-  if (threshold.aggregation === 'sum') {
-    currentValue = matchingRows.reduce((sum, row) => {
-      const num = parseFloat(String(row[colIdx] ?? '').replace(/[$,%\s]/g, ''));
-      return sum + (isNaN(num) ? 0 : num);
-    }, 0);
-    message = `${threshold.label}: $${currentValue.toLocaleString()} (${matchingRows.length} rows)`;
-  } else if (threshold.aggregation === 'count') {
-    currentValue = matchingRows.length;
-    message = `${threshold.label}: ${matchingRows.length} rows`;
-  } else {
-    // 'any' — just report first matching value
-    const rawFirst = matchingRows[0][colIdx];
-    const numFirst = parseFloat(String(rawFirst ?? '').replace(/[$,%\s]/g, ''));
-    currentValue = isNaN(numFirst) ? null : numFirst;
-    message = `${threshold.label}: ${matchingRows.length} row${matchingRows.length !== 1 ? 's' : ''} match`;
+  if (threshold.aggregation === 'count') {
+    return {
+      threshold,
+      message: `${threshold.label}: ${matchingRows.length} row${matchingRows.length !== 1 ? 's' : ''}`,
+      matchedRows: matchingRows.length,
+      currentValue: matchingRows.length,
+    };
   }
 
-  return { threshold, message, matchedRows: matchingRows.length, currentValue };
+  // 'any' default
+  const firstNum = parseNum(matchingRows[0][colIdx]);
+  return {
+    threshold,
+    message: `${threshold.label}: ${matchingRows.length} row${matchingRows.length !== 1 ? 's' : ''} match`,
+    matchedRows: matchingRows.length,
+    currentValue: isNaN(firstNum) ? null : firstNum,
+  };
 }
 
 /**
