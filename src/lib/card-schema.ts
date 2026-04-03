@@ -68,7 +68,33 @@ export const ChartSection = z.object({
   colors: z.array(z.string()).optional(),
   fillOpacity: z.number().optional(),
   height: z.number().optional(),
+  theme: z.string().optional(),
 }).passthrough();
+
+export const VegaLiteSection = z.object({
+  type: z.literal('vegalite'),
+  spec: z.record(z.any()),   // full Vega-Lite JSON spec
+  height: z.number().optional(),
+  caption: z.string().optional(),
+  theme: z.string().optional(),
+});
+
+export const ChartGridSection = z.object({
+  type: z.literal('chart-grid'),
+  columns: z.number().min(1).max(4).default(2),
+  charts: z.array(z.union([
+    z.object({ type: z.literal('chart') }).passthrough(),
+    z.object({ type: z.literal('vegalite') }).passthrough(),
+  ])),
+  caption: z.string().optional(),
+});
+
+export const EmbedSection = z.object({
+  type: z.literal('embed'),
+  html: z.string(),
+  height: z.number().optional(),
+  caption: z.string().optional(),
+});
 
 export const CardSection = z.discriminatedUnion('type', [
   SummarySection,
@@ -78,6 +104,9 @@ export const CardSection = z.discriminatedUnion('type', [
   CalloutSection,
   MetricsRowSection,
   ChartSection,
+  VegaLiteSection,
+  ChartGridSection,
+  EmbedSection,
 ]);
 
 export type CardSectionType = z.infer<typeof CardSection>;

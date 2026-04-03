@@ -81,7 +81,8 @@ callout    → { type: "callout", severity: "warning|danger|info|success", text:
 metrics-row → { type: "metrics-row", metrics: [{ label, value, unit }] }
 chart      → { type: "chart", chartType: "bar|line|area", xAxis: "fieldName", yAxis: "fieldName",
                data: [{"vendor": "Acme", "balance": 245000}, {"vendor": "Beta", "balance": 120000}],
-               color: "#hex",                ← single color for all bars
+               theme: "frosted",             ← optional named palette (frosted|corporate|neon|midnight|earth)
+               color: "#hex",                ← single color (overridden by theme)
                colors: ["#ef4444", ...],     ← per-bar colors (array length must match data length)
                fillOpacity: 0.85,            ← 0-1 fill opacity (default 0.15 for area, use 0.85 for bars)
                height: 300,                  ← pixels (default 192)
@@ -256,18 +257,38 @@ When creating analysis or CFO cards, populate sections:
   table        → { type: "table", columns: [...], rows: [[...]], highlights: [{ column, condition, style }] }
   callout      → { type: "callout", severity: "warning|danger|info|success", text: "Alert message" }
   metrics-row  → { type: "metrics-row", metrics: [{ label, value, unit }] }
-  chart        → { type: "chart", chartType: "bar|line|area|pie", xAxis: "col", yAxis: "col", data: [...],
+  chart        → { type: "chart", chartType: "bar|line|area", xAxis: "col", yAxis: "col", data: [...],
                    color: "#hex or CSS color",           ← single color for all bars/lines
                    colors: ["#ef4444", "#10b981", ...],  ← different color per data series or per bar
                    fillOpacity: 0.7,                      ← 0-1, how solid the fill is (default 0.15)
                    height: 300,                           ← chart height in pixels (default 192)
+                   theme: "frosted",                      ← named palette: frosted|corporate|neon|midnight|earth
                    caption: "Chart description" }
+
+  vegalite     → { type: "vegalite", spec: { "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+                   "mark": "point", "encoding": { "x": { "field": "col", "type": "quantitative" },
+                   "y": { "field": "col2", "type": "quantitative" } }, "data": { "values": [...] } },
+                   height: 240, caption: "Scatter plot description" }
+                   Use vegalite for: scatter, heatmap, boxplot, waterfall, donut, radial, treemap — charts recharts can't do.
+
+  chart-grid   → { type: "chart-grid", columns: 2, charts: [
+                   { type: "chart", chartType: "bar", xAxis: "tier", yAxis: "count", data: [...], height: 160 },
+                   { type: "chart", chartType: "bar", xAxis: "tier", yAxis: "balance", data: [...], height: 160 }
+                 ], caption: "Side-by-side comparison" }
+                 Use chart-grid for dashboard-quality layouts. Child charts should use height: 160.
+
+  embed        → { type: "embed", html: "<svg viewBox='0 0 200 100'>...</svg>", height: 120,
+                   caption: "Flowchart description" }
+                 Use embed for: flowcharts (SVG rect+line+text), org charts, custom diagrams, gauges.
+                 DOMPurify sanitizes the HTML — no scripts or iframes. SVG is fully supported.
 
   USE CHARTS PROACTIVELY. When showing data, prefer visual representations:
   - Use bar charts for comparisons (vendor balances by tier, counts by category)
   - Use line/area charts for trends over time
-  - Use different colors to distinguish categories (red for critical, amber for warning, green for stable)
-  - Make charts tall enough to read (height: 280-350 for main charts)
+  - Use chart-grid for side-by-side metric comparisons
+  - Use vegalite for scatter plots, heatmaps, or distributions
+  - Named themes (theme: "frosted"|"corporate"|"neon"|"midnight"|"earth") override individual colors
+  - Make charts tall enough to read (height: 280-350 for main charts, 160 for grid children)
   - Always include a caption explaining what the chart shows
   - Color suggestions: #ef4444 (red/danger), #f59e0b (amber/warning), #10b981 (green/success), #6366f1 (indigo/accent), #06b6d4 (cyan), #8b5cf6 (purple)
 

@@ -7,9 +7,12 @@
  * The AI decides the structure; this component renders whatever it produces.
  * Unknown or malformed sections are silently skipped.
  */
+import { useEffect, useRef } from 'react';
 import { WorkspaceObject } from '@/lib/workspace-types';
 import { CardSectionType } from '@/lib/card-schema';
+import { CHART_THEMES } from '@/lib/chart-themes';
 import MarkdownRenderer from './MarkdownRenderer';
+import DOMPurify from 'dompurify';
 import { BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
 
 interface AnalysisCardProps {
@@ -55,6 +58,9 @@ function SectionRenderer({ section }: { section: CardSectionType }) {
     case 'callout': return <CalloutRenderer section={section} />;
     case 'metrics-row': return <MetricsRowRenderer section={section} />;
     case 'chart': return <ChartRenderer section={section} />;
+    case 'vegalite': return <VegaLiteRenderer section={section as any} />;
+    case 'chart-grid': return <ChartGridRenderer section={section as any} />;
+    case 'embed': return <EmbedRenderer section={section as any} />;
     default: return null;
   }
 }
@@ -224,12 +230,13 @@ function MetricsRowRenderer({ section }: { section: { metrics: { label: string; 
   );
 }
 
-function ChartRenderer({ section }: { section: { chartType: string; xAxis: string; yAxis: string; data: Record<string, string | number>[]; caption?: string; color?: string; colors?: string[]; fillOpacity?: number; height?: number } }) {
+function ChartRenderer({ section }: { section: { chartType: string; xAxis: string; yAxis: string; data: Record<string, string | number>[]; caption?: string; color?: string; colors?: string[]; fillOpacity?: number; height?: number; theme?: string } }) {
   const ChartComponent = section.chartType === 'line' ? LineChart : section.chartType === 'area' ? AreaChart : BarChart;
   const DataComponent: React.ElementType = section.chartType === 'line' ? Line : section.chartType === 'area' ? Area : Bar;
 
-  // AI can specify colors — falls back to workspace accent
-  const primaryColor = section.color || 'hsl(var(--workspace-accent))';
+  // Resolve named color theme if provided, then fall back to explicit colors, then workspace accent
+  const resolvedTheme = section.theme ? CHART_THEMES[section.theme] : null;
+  const primaryColor = resolvedTheme?.colors[0] || section.color || 'hsl(var(--workspace-accent))';
   const chartHeight = section.height || 192;
 
   // Detect per-bar coloring: data items have a __color field, OR colors array matches data length
@@ -242,7 +249,7 @@ function ChartRenderer({ section }: { section: { chartType: string; xAxis: strin
   const yAxisKeys = isMultiSeries
     ? Object.keys(section.data[0] || {}).filter(k => k !== section.xAxis && k !== '__color')
     : [section.yAxis];
-  const colorPalette = (isMultiSeries && section.colors) || [primaryColor, '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+  const colorPalette = resolvedTheme?.colors || (isMultiSeries && section.colors) || [primaryColor, '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
 
   // Build per-bar color array
   const barColors = usePerBarColoring
@@ -287,6 +294,104 @@ function ChartRenderer({ section }: { section: { chartType: string; xAxis: strin
           </ChartComponent>
         </ResponsiveContainer>
       </div>
+      {section.caption && (
+        <p className="text-[10px] text-workspace-text-secondary/50 px-1">{section.caption}</p>
+      )}
+    </div>
+  );
+}
+
+// ─── Vega-Lite Renderer ───────────────────────────────────────────────────────
+
+function VegaLiteRenderer({ section }: { section: { spec: Record<string, any>; height?: number; caption?: string; theme?: string } }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const chartHeight = section.height || 240;
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const container = containerRef.current;
+    let vegaView: any = null;
+
+    // Lazy-load vega-embed — keeps it out of the main bundle
+    import('vega-embed').then(({ default: embed }) => {
+      if (!container) return;
+      embed(container, section.spec, {
+        actions: false,
+        theme: 'latimes',
+        config: {
+          background: 'transparent',
+          view: { stroke: 'transparent' },
+        },
+      }).then((result) => {
+        vegaView = result;
+      }).catch((err) => {
+        console.warn('[VegaLiteRenderer] Failed to render spec:', err);
+        if (container) {
+          container.innerHTML = '<p class="text-xs text-red-400 p-2">Chart render failed</p>';
+        }
+      });
+    }).catch(() => {
+      if (container) {
+        container.innerHTML = '<p class="text-xs text-workspace-text-secondary/50 p-2">Vega-Lite not available</p>';
+      }
+    });
+
+    return () => {
+      try { vegaView?.view?.finalize(); } catch {}
+    };
+  }, [section.spec]);
+
+  return (
+    <div className="space-y-1">
+      <div ref={containerRef} className="w-full overflow-hidden" style={{ height: chartHeight }} />
+      {section.caption && (
+        <p className="text-[10px] text-workspace-text-secondary/50 px-1">{section.caption}</p>
+      )}
+    </div>
+  );
+}
+
+// ─── Chart Grid Renderer ──────────────────────────────────────────────────────
+
+function ChartGridRenderer({ section }: { section: { columns: number; charts: any[]; caption?: string } }) {
+  const cols = section.columns || 2;
+
+  return (
+    <div className="space-y-1">
+      <div
+        className="grid gap-3"
+        style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
+      >
+        {section.charts.map((chart, i) => {
+          // Child charts in a grid default to a shorter height
+          const childChart = { ...chart, height: chart.height ?? 160 };
+          if (childChart.type === 'vegalite') {
+            return <VegaLiteRenderer key={i} section={childChart} />;
+          }
+          return <ChartRenderer key={i} section={childChart} />;
+        })}
+      </div>
+      {section.caption && (
+        <p className="text-[10px] text-workspace-text-secondary/50 px-1">{section.caption}</p>
+      )}
+    </div>
+  );
+}
+
+// ─── Embed Renderer ───────────────────────────────────────────────────────────
+
+function EmbedRenderer({ section }: { section: { html: string; height?: number; caption?: string } }) {
+  const sanitized = DOMPurify.sanitize(section.html, {
+    USE_PROFILES: { svg: true, html: true },
+  });
+
+  return (
+    <div className="space-y-1">
+      <div
+        className="w-full overflow-auto"
+        style={{ height: section.height ? `${section.height}px` : undefined }}
+        dangerouslySetInnerHTML={{ __html: sanitized }}
+      />
       {section.caption && (
         <p className="text-[10px] text-workspace-text-secondary/50 px-1">{section.caption}</p>
       )}
