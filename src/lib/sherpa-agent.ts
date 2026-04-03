@@ -128,6 +128,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
   // good explanatory text that gets lost when the loop continues with tool calls
   let bestText = '';
   let emptyTextStreak = 0; // Detect stuck loops: consecutive iterations with no text
+  let firstProvider = ''; // Detect provider switches mid-loop
 
   for (let iteration = 0; iteration < maxIterations; iteration++) {
     // Show interim thoughts (not just "Thinking...")
@@ -142,9 +143,26 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
       return { response: bestText || 'Sherpa could not reach the AI service. Please try again.', actions: remapPendingActions(), toolCallsUsed };
     }
 
+    // Detect which provider responded (Anthropic starts with {"model":, Google with {"id":"gen-)
+    const responseProvider = response.startsWith('{"model":"claude') ? 'anthropic'
+      : response.startsWith('{"id":"gen-') ? 'google' : 'unknown';
+    if (iteration === 0) {
+      firstProvider = responseProvider;
+    } else if (firstProvider && responseProvider !== 'unknown' && responseProvider !== firstProvider) {
+      // Provider switched mid-loop — the new provider can't understand the tool conversation
+      console.warn(`[sherpa-agent] Provider switch detected: ${firstProvider} → ${responseProvider} at iteration ${iteration}. Breaking loop.`);
+      onStatusUpdate?.(null);
+      const pendingActions = remapPendingActions();
+      return {
+        response: bestText || (pendingActions.length > 0 ? 'Done.' : 'The AI provider was rate-limited mid-task. Try again in a moment.'),
+        actions: pendingActions,
+        toolCallsUsed,
+      };
+    }
+
     // Parse the response — check for tool calls
     let { text, toolCalls, rawActions } = parseAgentResponse(response);
-    console.log('[sherpa-agent] Iteration', iteration, '| text:', JSON.stringify(text?.slice(0, 120)), '| toolCalls:', toolCalls?.length || 0, '| rawActions:', rawActions?.length || 0, '| raw response length:', response.length);
+    console.log('[sherpa-agent] Iteration', iteration, '| provider:', responseProvider, '| text:', JSON.stringify(text?.slice(0, 120)), '| toolCalls:', toolCalls?.length || 0, '| rawActions:', rawActions?.length || 0, '| raw response length:', response.length);
 
     // Safety net: if text still contains leaked intent JSON, extract clean response
     const cleaned = cleanResponseText(text);

@@ -133,7 +133,14 @@ export async function routeToProvider(
 
     // 1. Try OAuth subscription first
     if (oauthToken) {
-      const response = await makeAnthropicRequest(config.endpoint, oauthToken, model, systemPrompt, messages, maxTokens, stream, tools, true);
+      let response = await makeAnthropicRequest(config.endpoint, oauthToken, model, systemPrompt, messages, maxTokens, stream, tools, true);
+
+      // Retry once on 429 (rate limit) with a short delay — agent loops fire rapid requests
+      if (response.status === 429) {
+        console.log(`[anthropic] OAuth 429 for ${model}, retrying in 2s...`);
+        await new Promise(r => setTimeout(r, 2000));
+        response = await makeAnthropicRequest(config.endpoint, oauthToken, model, systemPrompt, messages, maxTokens, stream, tools, true);
+      }
 
       if (response.ok) {
         console.log(`[anthropic] model=${model} auth=oauth (subscription)`);
