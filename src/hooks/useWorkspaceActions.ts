@@ -116,10 +116,12 @@ export function useWorkspaceActions() {
         };
         const outcome = await applyResult(result, origin);
 
-        // Surface AI-generated next moves as suggestion chips
+        // Surface AI-generated next moves as suggestion chips.
+        // Uses SET_SHERPA_SUGGESTIONS_AI (not SET_SHERPA_SUGGESTIONS) so SherpaContext
+        // won't immediately overwrite them with engine-generated defaults.
         if (agentResult.nextMoves && agentResult.nextMoves.length > 0) {
           dispatch({
-            type: 'SET_SHERPA_SUGGESTIONS',
+            type: 'SET_SHERPA_SUGGESTIONS_AI',
             payload: agentResult.nextMoves.map((m, i) => ({
               id: `ai-nm-${Date.now()}-${i}`,
               label: m.label,

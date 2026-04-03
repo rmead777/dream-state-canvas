@@ -144,11 +144,15 @@ export function SherpaProvider({ children }: { children: React.ReactNode }) {
     }
   }, [objectFingerprint, triggerObservationScan]);
 
-  // Update suggestions reactively — responds to pin/unpin, type changes, not just count
+  // Update suggestions reactively — responds to pin/unpin, type changes, not just count.
+  // Skips regeneration for 30s after AI dispatches nextMoves (lastAISuggestionsAt guard)
+  // to prevent the engine from immediately clobbering AI-tailored suggestions.
   useEffect(() => {
+    const AI_SUGGESTION_HOLDOFF_MS = 30_000;
+    if (Date.now() - state.sherpa.lastAISuggestionsAt < AI_SUGGESTION_HOLDOFF_MS) return;
     const suggestions = generateSuggestions(state.objects, state.activeContext);
     dispatch({ type: 'SET_SHERPA_SUGGESTIONS', payload: suggestions });
-  }, [objectFingerprint, state.activeContext, state.objects, dispatch]);
+  }, [objectFingerprint, state.activeContext, state.objects, state.sherpa.lastAISuggestionsAt, dispatch]);
 
   const value: SherpaContextValue = {
     suggestions: state.sherpa.suggestions,

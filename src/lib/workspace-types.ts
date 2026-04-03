@@ -126,6 +126,8 @@ export interface SherpaState {
   lastResponse: string | null;
   observations: string[];
   isProcessing: boolean;
+  /** Timestamp of last AI-dispatched nextMoves — SherpaContext won't overwrite for 30s after this */
+  lastAISuggestionsAt: number;
 }
 
 // ─── Workspace State ──────────────────────────────────────────────────────────
@@ -168,6 +170,7 @@ export type WorkspaceReducerAction =
   | { type: 'REFLOW_LAYOUT'; payload: SpatialLayout }
   | { type: 'SET_SHERPA_RESPONSE'; payload: string }
   | { type: 'SET_SHERPA_SUGGESTIONS'; payload: Suggestion[] }
+  | { type: 'SET_SHERPA_SUGGESTIONS_AI'; payload: Suggestion[] }
   | { type: 'ADD_SHERPA_OBSERVATION'; payload: string }
   | { type: 'SET_SHERPA_PROCESSING'; payload: boolean }
   | { type: 'ADD_RECENT_INTENT'; payload: IntentOrigin }

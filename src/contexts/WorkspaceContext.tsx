@@ -21,6 +21,7 @@ const initialState: WorkspaceState = {
     lastResponse: null,
     observations: [],
     isProcessing: false,
+    lastAISuggestionsAt: 0,
   },
   spatialLayout: {
     primary: [],
@@ -176,6 +177,11 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
 
     case 'SET_SHERPA_SUGGESTIONS':
       return { ...state, sherpa: { ...state.sherpa, suggestions: action.payload } };
+
+    // AI-generated suggestions — also stamps lastAISuggestionsAt so SherpaContext
+    // won't overwrite them with engine-generated defaults for 30 seconds.
+    case 'SET_SHERPA_SUGGESTIONS_AI':
+      return { ...state, sherpa: { ...state.sherpa, suggestions: action.payload, lastAISuggestionsAt: Date.now() } };
 
     case 'ADD_SHERPA_OBSERVATION':
       return {
