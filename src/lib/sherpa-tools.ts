@@ -223,7 +223,7 @@ export async function executeTool(
           columns: obj.context?.columns || null,
           rows: Array.isArray(obj.context?.rows) ? obj.context.rows.slice(0, 10) : null,
           dataQuery: obj.context?.dataQuery || null,
-          sections: obj.context?.sections ? `${obj.context.sections.length} sections` : null,
+          sections: obj.context?.sections || null,
         });
       }
 

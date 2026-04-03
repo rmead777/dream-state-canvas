@@ -70,10 +70,10 @@ export function useWorkspaceActions() {
       };
       dispatch({ type: 'ADD_RECENT_INTENT', payload: origin });
 
-      // Record query in conversation memory
-      addQuery(query);
-
       // Retrieve relevant Sherpa memories for prompt injection (non-blocking)
+      // NOTE: addQuery is called AFTER agentLoop so history only contains completed turns.
+      // If we addQuery here, getConversationMessages() inside agentLoop returns the current
+      // query in history AND agentLoop appends it again as the structured context message.
       let memoryBlock = '';
       try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -134,6 +134,7 @@ export function useWorkspaceActions() {
           }
           // Set final full text (covers both short and long responses)
           dispatch({ type: 'SET_SHERPA_RESPONSE', payload: text });
+          addQuery(query);
           updateLastResponse(text);
         }
 

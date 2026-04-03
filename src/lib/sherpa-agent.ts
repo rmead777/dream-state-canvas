@@ -103,7 +103,8 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
         focusedHint,
         `\nWorkspace state:\n${structuredContext}`,
         documentsHint,
-        memories ? `\n${memories}` : '',
+        // NOTE: memories are sent separately as body.memories to the edge function
+        // and injected into the system prompt. Don't duplicate them in the user message.
       ].filter(Boolean).join('\n'),
     },
   ];
