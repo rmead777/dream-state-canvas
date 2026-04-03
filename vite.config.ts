@@ -19,4 +19,14 @@ export default defineConfig(({ mode }) => ({
     },
     dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime"],
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Name the vega-embed code-split chunk clearly so network tab shows "vegalite"
+          vegalite: ['vega', 'vega-lite', 'vega-embed'],
+        },
+      },
+    },
+  },
 }));

@@ -375,20 +375,28 @@ export async function executeTool(
         if (leftKeyIdx === -1) return JSON.stringify({ error: `Left key "${args.leftKey}" not found in ${leftDs.sourceLabel}` });
         if (rightKeyIdx === -1) return JSON.stringify({ error: `Right key "${args.rightKey}" not found in ${rightDs.sourceLabel}` });
 
-        // Build hash map from right dataset keyed on join column
-        const rightMap = new Map<string, string[]>();
+        // Build one-to-many hash map from right dataset keyed on join column
+        // (many-to-many: e.g., multiple bank transactions per vendor)
+        const rightMap = new Map<string, string[][]>();
         for (const row of rightDs.rows) {
           const key = String(row[rightKeyIdx] ?? '').toLowerCase().trim();
-          if (!rightMap.has(key)) rightMap.set(key, row);
+          const existing = rightMap.get(key) || [];
+          existing.push(row);
+          rightMap.set(key, existing);
         }
 
-        // Join: for each left row, look up matching right row
+        // INNER JOIN: Cartesian product of left × all matching right rows
         const joinedRows: (string | null)[][] = [];
+        let unmatchedLeft = 0;
         for (const leftRow of leftDs.rows) {
           const key = String(leftRow[leftKeyIdx] ?? '').toLowerCase().trim();
-          const rightRow = rightMap.get(key);
-          if (rightRow) {
-            joinedRows.push([...leftRow, ...rightRow]);
+          const rightRows = rightMap.get(key);
+          if (rightRows && rightRows.length > 0) {
+            for (const rightRow of rightRows) {
+              joinedRows.push([...leftRow, ...rightRow]);
+            }
+          } else {
+            unmatchedLeft++;
           }
         }
 
@@ -418,6 +426,9 @@ export async function executeTool(
           truncated: outRows.length > limit,
           leftSource: leftDs.sourceLabel,
           rightSource: rightDs.sourceLabel,
+          // F-010: unmatched count lets AI report "matched X of Y vendors"
+          unmatchedLeft,
+          note: unmatchedLeft > 0 ? `${unmatchedLeft} left-side rows had no match in ${rightDs.sourceLabel}` : undefined,
         });
       }
 
