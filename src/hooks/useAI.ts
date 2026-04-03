@@ -85,8 +85,8 @@ export function useAI() {
           signal: controller.signal,
         });
 
-        // Extract routing metadata from response headers
-        const routeMeta = extractRouteMeta(resp);
+        // routeMeta will be populated from SSE __telemetry event or response headers as fallback
+        let routeMeta = extractRouteMeta(resp);
 
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({ error: 'Request failed' }));
@@ -127,6 +127,19 @@ export function useAI() {
 
             try {
               const parsed = JSON.parse(jsonStr);
+
+              // Intercept telemetry event from edge function
+              if (parsed.__telemetry) {
+                routeMeta = {
+                  model: parsed.__telemetry.model || routeMeta.model,
+                  provider: parsed.__telemetry.provider || routeMeta.provider,
+                  billing: parsed.__telemetry.billing || routeMeta.billing,
+                  fallback: parsed.__telemetry.fallback ?? routeMeta.fallback,
+                };
+                parseRetries = 0;
+                continue;
+              }
+
               const content = parsed.choices?.[0]?.delta?.content;
               if (content) {
                 fullText += content;
@@ -256,7 +269,7 @@ export async function callAI(
       signal: controller.signal,
     });
 
-    const routeMeta = extractRouteMeta(resp);
+    let routeMeta = extractRouteMeta(resp);
 
     if (!resp.ok) return null;
     if (!resp.body) return null;
@@ -281,6 +294,16 @@ export async function callAI(
         if (jsonStr === '[DONE]') continue;
         try {
           const parsed = JSON.parse(jsonStr);
+          // Intercept telemetry event
+          if (parsed.__telemetry) {
+            routeMeta = {
+              model: parsed.__telemetry.model || routeMeta.model,
+              provider: parsed.__telemetry.provider || routeMeta.provider,
+              billing: parsed.__telemetry.billing || routeMeta.billing,
+              fallback: parsed.__telemetry.fallback ?? routeMeta.fallback,
+            };
+            continue;
+          }
           const content = parsed.choices?.[0]?.delta?.content;
           if (content) result += content;
         } catch (e) { console.warn('[callAI] Failed to parse SSE line:', e); }

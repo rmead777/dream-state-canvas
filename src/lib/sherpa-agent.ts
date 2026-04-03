@@ -291,13 +291,36 @@ async function callAIWithTools(
       },
     );
 
-    // Extract routing metadata for telemetry
-    const routeMeta = extractRouteMeta(resp);
+    // Extract routing metadata — try headers first, then body
+    let routeMeta = extractRouteMeta(resp);
 
     if (!resp.ok) return null;
 
     // Non-streaming: read full JSON response
-    const text = await resp.text();
+    let text = await resp.text();
+
+    // Try to extract __telemetry from the JSON body (injected by edge function)
+    try {
+      const bodyParsed = JSON.parse(text);
+      if (bodyParsed.__telemetry) {
+        routeMeta = {
+          model: bodyParsed.__telemetry.model || routeMeta.model,
+          provider: bodyParsed.__telemetry.provider || routeMeta.provider,
+          billing: bodyParsed.__telemetry.billing || routeMeta.billing,
+          fallback: bodyParsed.__telemetry.fallback ?? routeMeta.fallback,
+        };
+        // If the edge function wrapped the raw response, unwrap it
+        if (bodyParsed.__raw !== undefined) {
+          text = bodyParsed.__raw;
+        } else {
+          // Remove __telemetry from the object before passing downstream
+          delete bodyParsed.__telemetry;
+          text = JSON.stringify(bodyParsed);
+        }
+      }
+    } catch {
+      // Not JSON — will be handled below as SSE
+    }
 
     // Record telemetry
     recordAICall({
@@ -338,6 +361,10 @@ function extractFromSSE(sse: string): string {
     if (json === '[DONE]') continue;
     try {
       const parsed = JSON.parse(json);
+
+      // Skip telemetry events in SSE stream
+      if (parsed.__telemetry) continue;
+
       const content = parsed.choices?.[0]?.delta?.content || parsed.choices?.[0]?.message?.content;
       if (content) result += content;
 

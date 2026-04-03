@@ -365,14 +365,46 @@ Return JSON matching the ProductionRiskData schema.`,
     }
 
     if (!shouldStream) {
-      // Non-streaming: return JSON response with proper content-type
+      // Non-streaming: wrap response with telemetry metadata
       const body = await response.text();
-      return new Response(body, {
-        headers: { ...corsHeaders, ...metaHeaders, "Content-Type": "application/json" },
-      });
+      try {
+        const parsed = JSON.parse(body);
+        parsed.__telemetry = meta;
+        return new Response(JSON.stringify(parsed), {
+          headers: { ...corsHeaders, ...metaHeaders, "Content-Type": "application/json" },
+        });
+      } catch {
+        // Can't parse — return as-is with metadata in a wrapper
+        return new Response(JSON.stringify({ __raw: body, __telemetry: meta }), {
+          headers: { ...corsHeaders, ...metaHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
-    return new Response(response.body, {
+    // Streaming: prepend a telemetry SSE event before the provider's stream
+    const telemetryLine = `data: ${JSON.stringify({ __telemetry: meta })}\n\n`;
+    const encoder = new TextEncoder();
+
+    const wrappedStream = new ReadableStream({
+      async start(controller) {
+        // Emit telemetry event first
+        controller.enqueue(encoder.encode(telemetryLine));
+
+        // Then pipe through the provider's stream
+        const reader = response.body!.getReader();
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            controller.enqueue(value);
+          }
+        } finally {
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(wrappedStream, {
       headers: {
         ...corsHeaders,
         ...metaHeaders,
