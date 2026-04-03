@@ -79,17 +79,22 @@ metric     → { type: "metric", label: "Total AP", value: "$4.15M", trend: "up"
 table      → { type: "table", columns: [...], rows: [[...]], highlights: [{ column, condition, style }] }
 callout    → { type: "callout", severity: "warning|danger|info|success", text: "Alert message" }
 metrics-row → { type: "metrics-row", metrics: [{ label, value, unit }] }
-chart      → { type: "chart", chartType: "bar|line|area|pie", xAxis: "col", yAxis: "col", data: [...],
+chart      → { type: "chart", chartType: "bar|line|area", xAxis: "fieldName", yAxis: "fieldName",
+               data: [{"vendor": "Acme", "balance": 245000}, {"vendor": "Beta", "balance": 120000}],
                color: "#hex",                ← single color for all bars
-               colors: ["#ef4444", ...],     ← different color per bar/series
-               fillOpacity: 0.7,             ← 0-1 fill opacity (default 0.15)
+               colors: ["#ef4444", ...],     ← per-bar colors (array length must match data length)
+               fillOpacity: 0.85,            ← 0-1 fill opacity (default 0.15 for area, use 0.85 for bars)
                height: 300,                  ← pixels (default 192)
                caption: "description" }
+
+IMPORTANT: data must be an array of plain objects with NUMERIC values for the yAxis field.
+NEVER use ASCII art, code blocks, or text-based charts. ALWAYS use the chart section type.
 
 USE CHARTS PROACTIVELY. Prefer visual representations:
 - Bar charts for comparisons (balances by tier, counts by category)
 - Line/area charts for trends
 - Use colors to distinguish categories: #ef4444 (red/danger), #f59e0b (amber), #10b981 (green), #6366f1 (indigo), #06b6d4 (cyan), #8b5cf6 (purple)
+- Per-bar colors: set colors array with one color per data item, e.g. colors: ["#ef4444","#f59e0b","#10b981"]
 - Make charts tall enough to read (height: 280-350 for main charts)
 - Always include a caption
 

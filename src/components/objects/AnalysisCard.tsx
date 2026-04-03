@@ -280,7 +280,7 @@ function ChartRenderer({ section }: { section: { chartType: string; xAxis: strin
                   dataKey={key}
                   fill={colorPalette[i % colorPalette.length]}
                   stroke={colorPalette[i % colorPalette.length]}
-                  fillOpacity={section.fillOpacity ?? 0.15}
+                  fillOpacity={section.fillOpacity ?? (section.chartType === 'bar' ? 0.85 : 0.15)}
                 />
               ))
             )}
