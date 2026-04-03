@@ -12,6 +12,11 @@
 import { supabase } from '@/integrations/supabase/client';
 import { getActiveDataset } from './active-dataset';
 
+// automation_triggers isn't in generated types yet (migration pending sync).
+// Cast once here; remove when Lovable regenerates types.ts after the migration runs.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any;
+
 export interface TriggerCondition {
   column: string;
   operator: 'gt' | 'lt' | 'gte' | 'lte' | 'eq' | 'neq';
@@ -91,7 +96,7 @@ function evaluateTrigger(
  * Load only enabled triggers — used by the 30s scan loop.
  */
 export async function loadTriggers(): Promise<AutomationTrigger[]> {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('automation_triggers')
     .select('*')
     .eq('enabled', true)
@@ -108,7 +113,7 @@ export async function loadTriggers(): Promise<AutomationTrigger[]> {
  * Load ALL triggers (enabled + disabled) — used by the AutomationPanel UI.
  */
 export async function loadAllTriggers(): Promise<AutomationTrigger[]> {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('automation_triggers')
     .select('*')
     .order('created_at', { ascending: true });
@@ -131,8 +136,8 @@ export async function createTrigger(params: {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data, error } = await (supabase
-    .from('automation_triggers') as any)
+  const { data, error } = await db
+    .from('automation_triggers')
     .insert({
       user_id: user.id,
       label: params.label,
@@ -153,7 +158,7 @@ export async function createTrigger(params: {
  * Delete a trigger by ID.
  */
 export async function deleteTrigger(id: string): Promise<boolean> {
-  const { error } = await supabase.from('automation_triggers').delete().eq('id', id);
+  const { error } = await db.from('automation_triggers').delete().eq('id', id);
   return !error;
 }
 
@@ -161,7 +166,7 @@ export async function deleteTrigger(id: string): Promise<boolean> {
  * Toggle a trigger's enabled state.
  */
 export async function toggleTrigger(id: string, enabled: boolean): Promise<boolean> {
-  const { error } = await supabase.from('automation_triggers').update({ enabled }).eq('id', id);
+  const { error } = await db.from('automation_triggers').update({ enabled }).eq('id', id);
   return !error;
 }
 
@@ -207,5 +212,5 @@ export function checkTriggers(triggers: AutomationTrigger[]): TriggerFiring[] {
  */
 export async function markTriggerFired(triggerId: string): Promise<void> {
   // Atomic increment via server-side RPC — no read-modify-write race
-  await supabase.rpc('increment_trigger_fire_count', { trigger_id: triggerId });
+  await db.rpc('increment_trigger_fire_count', { trigger_id: triggerId });
 }
