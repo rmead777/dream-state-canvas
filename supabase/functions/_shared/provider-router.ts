@@ -13,7 +13,8 @@
  *
  * Required env vars per provider:
  *   - LOVABLE_API_KEY      (google — always required as fallback)
- *   - ANTHROPIC_API_KEY    (anthropic models)
+ *   - CLAUDE_CODE_OAUTH_TOKEN (anthropic — OAuth preferred, zero per-token cost)
+ *   - ANTHROPIC_API_KEY       (anthropic — legacy fallback)
  *   - OPENAI_API_KEY       (openai models)
  *   - XAI_API_KEY          (xai/grok models)
  */
@@ -34,7 +35,7 @@ const PROVIDERS: Record<Provider, ProviderConfig> = {
   },
   anthropic: {
     endpoint: 'https://api.anthropic.com/v1/messages',
-    envKey: 'ANTHROPIC_API_KEY',
+    envKey: 'CLAUDE_CODE_OAUTH_TOKEN',  // OAuth token preferred; falls back to ANTHROPIC_API_KEY
     format: 'anthropic',
   },
   openai: {
@@ -112,10 +113,25 @@ export async function routeToProvider(
 ): Promise<Response> {
   const { provider, model } = parseModelId(modelId);
   const config = PROVIDERS[provider];
-  const apiKey = Deno.env.get(config.envKey);
+
+  // For Anthropic: prefer OAuth token, fall back to API key
+  let apiKey: string | undefined;
+  let useOAuth = false;
+  if (provider === 'anthropic') {
+    const oauthToken = Deno.env.get('CLAUDE_CODE_OAUTH_TOKEN');
+    const legacyKey = Deno.env.get('ANTHROPIC_API_KEY');
+    if (oauthToken) {
+      apiKey = oauthToken;
+      useOAuth = true;
+    } else if (legacyKey) {
+      apiKey = legacyKey;
+    }
+  } else {
+    apiKey = Deno.env.get(config.envKey);
+  }
 
   if (!apiKey) {
-    console.warn(`[provider-router] ${config.envKey} not set, falling back to default model`);
+    console.warn(`[provider-router] No API key for ${provider}, falling back to default model`);
     return fallbackToDefault(systemPrompt, messages, maxTokens, stream, tools);
   }
 
@@ -124,13 +140,13 @@ export async function routeToProvider(
 
   let response: Response;
   if (config.format === 'anthropic') {
-    response = await makeAnthropicRequest(config.endpoint, apiKey, modelForRequest, systemPrompt, messages, maxTokens, stream, tools);
+    response = await makeAnthropicRequest(config.endpoint, apiKey, modelForRequest, systemPrompt, messages, maxTokens, stream, tools, useOAuth);
   } else {
     response = await makeOpenAIRequest(config.endpoint, apiKey, modelForRequest, systemPrompt, messages, maxTokens, stream, tools);
   }
 
   // If the provider returned an auth/client error, fall back to default gateway
-  if (!response.ok && [400, 401, 403].includes(response.status) && provider !== 'google') {
+  if (!response.ok && [400, 401, 403, 429].includes(response.status) && provider !== 'google') {
     const errBody = await response.text();
     console.warn(`[provider-router] ${provider} returned ${response.status}: ${errBody}. Falling back to default.`);
     return fallbackToDefault(systemPrompt, messages, maxTokens, stream, tools);
@@ -187,6 +203,7 @@ async function makeAnthropicRequest(
   maxTokens: number,
   stream: boolean,
   tools?: any[],
+  useOAuth: boolean = false,
 ): Promise<Response> {
   // Anthropic expects system prompt as a top-level field, not in messages
   const anthropicMessages = messages
@@ -202,9 +219,17 @@ async function makeAnthropicRequest(
       return { role: m.role as 'user' | 'assistant', content: m.content };
     });
 
+  // OAuth requires system as array with Claude Code identity as first block
+  const systemField = useOAuth
+    ? [
+        { type: 'text', text: "You are Claude Code, Anthropic's official CLI for Claude." },
+        { type: 'text', text: systemPrompt },
+      ]
+    : systemPrompt;
+
   const body: Record<string, unknown> = {
     model,
-    system: systemPrompt,
+    system: systemField,
     messages: anthropicMessages,
     max_tokens: maxTokens,
     stream,
@@ -219,13 +244,25 @@ async function makeAnthropicRequest(
     }));
   }
 
+  // OAuth uses Bearer auth + required headers; legacy uses x-api-key
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'anthropic-version': '2023-06-01',
+  };
+
+  if (useOAuth) {
+    headers['Authorization'] = `Bearer ${apiKey}`;
+    headers['anthropic-beta'] = 'claude-code-20250219,oauth-2025-04-20,fine-grained-tool-streaming-2025-05-14,interleaved-thinking-2025-05-14';
+    headers['user-agent'] = 'claude-cli/2.1.88 (external, cli)';
+    headers['anthropic-dangerous-direct-browser-access'] = 'true';
+    headers['x-app'] = 'cli';
+  } else {
+    headers['x-api-key'] = apiKey;
+  }
+
   const response = await fetch(endpoint, {
     method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify(body),
   });
 
