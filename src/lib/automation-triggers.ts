@@ -117,7 +117,7 @@ export async function loadAllTriggers(): Promise<AutomationTrigger[]> {
     console.warn('[automation-triggers] Failed to load all triggers:', error.message);
     return [];
   }
-  return (data ?? []) as AutomationTrigger[];
+  return (data ?? []) as unknown as AutomationTrigger[];
 }
 
 /**
