@@ -127,9 +127,13 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
   // Track best response text across iterations — earlier iterations often have
   // good explanatory text that gets lost when the loop continues with tool calls
   let bestText = '';
+  let emptyTextStreak = 0; // Detect stuck loops: consecutive iterations with no text
 
   for (let iteration = 0; iteration < maxIterations; iteration++) {
-    onStatusUpdate?.(iteration > 0 ? 'Thinking...' : null);
+    // Show interim thoughts (not just "Thinking...")
+    if (iteration > 0) {
+      onStatusUpdate?.(bestText ? `● ${bestText.slice(0, 100)}...` : 'Thinking...');
+    }
 
     // Call AI with tools
     const response = await callAIWithTools(messages, documentIds, memories);
@@ -155,6 +159,9 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
     // Preserve the best (most recent non-empty) response text across iterations
     if (text && text.trim()) {
       bestText = text;
+      emptyTextStreak = 0;
+    } else {
+      emptyTextStreak++;
     }
 
     // If AI returned actions directly (the normal intent-parsing path), return them
@@ -178,6 +185,20 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
         : '';
       const finalResponse = bestText || fallback || 'Done.';
       console.log('[sherpa-agent] Returning no-tool-call path, response:', JSON.stringify(finalResponse.slice(0, 80)), '| pendingActions:', pendingActions.length);
+      return {
+        response: finalResponse,
+        actions: pendingActions,
+        toolCallsUsed,
+      };
+    }
+
+    // Detect stuck loop: if 2+ consecutive iterations have empty text + only tool calls,
+    // the AI is spinning without making progress. Break out and return what we have.
+    if (emptyTextStreak >= 2 && iteration >= 2) {
+      console.warn('[sherpa-agent] Stuck loop detected: 2+ empty iterations, breaking out at iteration', iteration);
+      onStatusUpdate?.(null);
+      const pendingActions = remapPendingActions();
+      const finalResponse = bestText || (pendingActions.length > 0 ? 'Done.' : 'I wasn\'t able to complete that. Could you try rephrasing?');
       return {
         response: finalResponse,
         actions: pendingActions,
