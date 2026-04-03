@@ -126,77 +126,64 @@ export async function routeToProvider(
   const { provider, model } = parseModelId(modelId);
   const config = PROVIDERS[provider];
 
-  // ─── Anthropic: OAuth → API key → gateway ─────────────────────────
+  // ─── Anthropic: OAuth → API key, with retry. NEVER falls back to Google. ───
   if (provider === 'anthropic') {
     const oauthToken = Deno.env.get('CLAUDE_CODE_OAUTH_TOKEN');
     const legacyKey = Deno.env.get('ANTHROPIC_API_KEY');
 
-    // 1. Try OAuth subscription first
-    if (oauthToken) {
-      let response = await makeAnthropicRequest(config.endpoint, oauthToken, model, systemPrompt, messages, maxTokens, stream, tools, true);
-
-      // Retry once on 429 (rate limit) with a short delay — agent loops fire rapid requests
-      if (response.status === 429) {
-        console.log(`[anthropic] OAuth 429 for ${model}, retrying in 2s...`);
-        await new Promise(r => setTimeout(r, 2000));
-        response = await makeAnthropicRequest(config.endpoint, oauthToken, model, systemPrompt, messages, maxTokens, stream, tools, true);
-      }
-
-      if (response.ok) {
-        console.log(`[anthropic] model=${model} auth=oauth (subscription)`);
-        return { response, meta: { model: modelId, provider, authMode: 'oauth', fallback: false } };
-      }
-
-      // OAuth failed — log it
-      const errBody = await response.text();
-      console.warn(`[anthropic] OAuth failed (${response.status}) for ${model}: ${errBody.slice(0, 200)}`);
-
-      // 2. Try API key fallback
-      if (legacyKey) {
-        console.log(`[anthropic] Retrying with API key for ${model}`);
-        const fallbackResponse = await makeAnthropicRequest(config.endpoint, legacyKey, model, systemPrompt, messages, maxTokens, stream, tools, false);
-
-        if (fallbackResponse.ok) {
-          console.log(`[anthropic] model=${model} auth=api_key_fallback (paid)`);
-          return { response: fallbackResponse, meta: { model: modelId, provider, authMode: 'api_key_fallback', fallback: true } };
-        }
-
-        // API key also failed — fall to gateway
-        const errBody2 = await fallbackResponse.text();
-        console.warn(`[anthropic] API key also failed (${fallbackResponse.status}): ${errBody2.slice(0, 200)}`);
-      }
-
-      // 3. Fall back to Google gateway
-      console.log(`[anthropic] Falling back to Google gateway for ${model}`);
-      const gwResponse = await fallbackToDefault(systemPrompt, messages, maxTokens, stream, tools);
+    if (!oauthToken && !legacyKey) {
+      // No Anthropic auth at all — return a clear error, don't silently switch models
       return {
-        response: gwResponse,
-        meta: {
-          model: DEFAULT_MODEL,
-          provider: 'google',
-          authMode: oauthToken && !legacyKey ? 'oauth_failed' : 'gateway',
-          fallback: true,
-        },
+        response: new Response(JSON.stringify({ error: 'No Anthropic API credentials configured. Set CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY.' }), { status: 500 }),
+        meta: { model: modelId, provider, authMode: 'oauth_failed', fallback: false },
       };
     }
 
-    // No OAuth token — try API key directly
-    if (legacyKey) {
-      const response = await makeAnthropicRequest(config.endpoint, legacyKey, model, systemPrompt, messages, maxTokens, stream, tools, false);
+    // Try OAuth first, then API key. Retry up to 3 times with backoff on 429/5xx.
+    const attempts: { key: string; useOAuth: boolean; authMode: AuthMode }[] = [];
+    if (oauthToken) attempts.push({ key: oauthToken, useOAuth: true, authMode: 'oauth' });
+    if (legacyKey) attempts.push({ key: legacyKey, useOAuth: false, authMode: 'api_key' });
 
-      if (response.ok) {
-        console.log(`[anthropic] model=${model} auth=api_key (paid)`);
-        return { response, meta: { model: modelId, provider, authMode: 'api_key', fallback: false } };
+    const MAX_RETRIES = 3;
+    const RETRY_DELAYS = [2000, 4000, 8000]; // exponential backoff
+
+    for (const attempt of attempts) {
+      for (let retry = 0; retry <= MAX_RETRIES; retry++) {
+        if (retry > 0) {
+          const delay = RETRY_DELAYS[retry - 1] || 8000;
+          console.log(`[anthropic] Retry ${retry}/${MAX_RETRIES} for ${model} (${attempt.authMode}) in ${delay}ms...`);
+          await new Promise(r => setTimeout(r, delay));
+        }
+
+        const response = await makeAnthropicRequest(
+          config.endpoint, attempt.key, model, systemPrompt, messages, maxTokens, stream, tools, attempt.useOAuth,
+        );
+
+        if (response.ok) {
+          console.log(`[anthropic] model=${model} auth=${attempt.authMode}${retry > 0 ? ` (retry ${retry})` : ''}`);
+          return { response, meta: { model: modelId, provider, authMode: attempt.authMode, fallback: false } };
+        }
+
+        // Only retry on rate limits (429) and server errors (5xx)
+        if (response.status === 429 || response.status >= 500) {
+          const errBody = await response.text();
+          console.warn(`[anthropic] ${attempt.authMode} ${response.status} for ${model}: ${errBody.slice(0, 150)}`);
+          continue; // retry
+        }
+
+        // Non-retryable error (400, 401, 403) — try next auth method
+        const errBody = await response.text();
+        console.warn(`[anthropic] ${attempt.authMode} failed (${response.status}) for ${model}: ${errBody.slice(0, 150)}`);
+        break; // don't retry, try next auth method
       }
-
-      const errBody = await response.text();
-      console.warn(`[anthropic] API key failed (${response.status}): ${errBody.slice(0, 200)}`);
     }
 
-    // No keys at all — gateway fallback
-    console.warn(`[provider-router] No Anthropic auth configured, falling back to gateway`);
-    const gwResponse = await fallbackToDefault(systemPrompt, messages, maxTokens, stream, tools);
-    return { response: gwResponse, meta: { model: DEFAULT_MODEL, provider: 'google', authMode: 'gateway', fallback: true } };
+    // All attempts exhausted — return error, NEVER fall back to a different model
+    console.error(`[anthropic] All auth attempts exhausted for ${model}`);
+    return {
+      response: new Response(JSON.stringify({ error: `Anthropic API unavailable after retries. Please try again shortly.` }), { status: 503 }),
+      meta: { model: modelId, provider, authMode: 'oauth_failed', fallback: false },
+    };
   }
 
   // ─── Non-Anthropic providers ───────────────────────────────────────
