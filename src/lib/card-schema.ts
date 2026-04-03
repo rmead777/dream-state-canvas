@@ -180,6 +180,7 @@ function normalizeSection(item: unknown): unknown {
       spec: {
         $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
         mark: 'rect',
+        height: { step: 36 }, // auto-sizes: N rows × 36px — no fixed height clipping
         encoding: {
           x: { field: s.xAxis as string || 'x', type: 'ordinal' },
           y: { field: s.yAxis as string || 'y', type: 'ordinal' },

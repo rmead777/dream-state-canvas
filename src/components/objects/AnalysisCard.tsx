@@ -393,6 +393,8 @@ function ChartRenderer({ section }: { section: { chartType: string; xAxis: strin
 function VegaLiteRenderer({ section }: { section: { spec: Record<string, any>; height?: number; caption?: string; theme?: string } }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartHeight = section.height || 240;
+  // Step-based specs (e.g. heatmaps) self-size by row count — don't constrain with a fixed CSS height
+  const isStepSized = typeof section.spec?.height === 'object' && section.spec.height !== null;
 
   // Stable JSON string dep — prevents re-render when parent re-renders but spec content is unchanged
   const specJson = JSON.stringify(section.spec);
@@ -441,7 +443,11 @@ function VegaLiteRenderer({ section }: { section: { spec: Record<string, any>; h
 
   return (
     <div className="space-y-1">
-      <div ref={containerRef} className="w-full overflow-hidden" style={{ height: chartHeight }} />
+      <div
+        ref={containerRef}
+        className={`w-full ${isStepSized ? '' : 'overflow-hidden'}`}
+        style={isStepSized ? { minHeight: 80 } : { height: chartHeight }}
+      />
       {section.caption && (
         <p className="text-[10px] text-workspace-text-secondary/50 px-1">{section.caption}</p>
       )}
