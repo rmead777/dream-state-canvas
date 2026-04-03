@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 import { DocumentRecord, listDocuments, getDocument, extractDataset, updateDocumentData } from '@/lib/document-store';
 import { CANONICAL_DATASET } from '@/lib/seed-data';
 import { setActiveDataset as setGlobalDataset } from '@/lib/active-dataset';
-import { clearProfileCache } from '@/lib/data-analyzer';
+import { clearProfileCache, analyzeDataset } from '@/lib/data-analyzer';
 import { invalidateProfileCache } from '@/lib/intent-engine';
 
 interface ActiveDataset {
@@ -63,6 +63,8 @@ export function DocumentProvider({ children }: { children: React.ReactNode }) {
           setGlobalDataset(ds);
           clearProfileCache();
           invalidateProfileCache();
+          // Pre-warm the DataProfile cache so Next Moves suggestions are domain-aware immediately
+          analyzeDataset(ds.columns, ds.rows).catch(() => {});
         }
       }
     });
@@ -102,6 +104,8 @@ export function DocumentProvider({ children }: { children: React.ReactNode }) {
           sourceDocId: doc.id,
           sourceLabel: doc.filename,
         });
+        // Pre-warm profile so Next Moves are domain-aware immediately after upload
+        analyzeDataset(dataset.columns, dataset.rows).catch(() => {});
       }
     }
   }, []);
