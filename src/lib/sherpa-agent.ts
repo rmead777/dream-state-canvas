@@ -336,7 +336,7 @@ async function callAIWithTools(
 
   const body: Record<string, unknown> = {
     messages,
-    mode: 'intent',
+    mode: 'agent',
     stream: false, // Non-streaming for tool calling
     tools: SHERPA_TOOLS,
   };
