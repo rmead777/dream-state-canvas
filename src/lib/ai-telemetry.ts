@@ -17,6 +17,7 @@ export interface AICallEvent {
   toolCalls?: number;
   inputTokens?: number;
   outputTokens?: number;
+  requestPayload?: Record<string, unknown>;
 }
 
 const MAX_EVENTS = 100;

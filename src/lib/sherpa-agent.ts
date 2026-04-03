@@ -407,6 +407,7 @@ async function callAIWithTools(
       toolCalls: body.tools ? 1 : 0,
       inputTokens,
       outputTokens,
+      requestPayload: body,
     });
 
     // If the response is SSE format (edge function didn't respect stream:false),
