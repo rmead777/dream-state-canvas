@@ -22,6 +22,7 @@ import { PromptEditor } from './PromptEditor';
 import { MemoryPanel } from './MemoryPanel';
 import { RulesEditor } from './RulesEditor';
 import { AITelemetryPanel } from './AITelemetryPanel';
+import MarkdownRenderer from '../objects/MarkdownRenderer';
 
 const RAIL_MIN_WIDTH = 320;
 const RAIL_MAX_WIDTH = 800;
@@ -408,7 +409,7 @@ export function SherpaRail() {
                   {entry.response && (
                     <div className="flex justify-start">
                       <div className="max-w-[90%] rounded-2xl rounded-bl-md bg-white border border-workspace-border/40 px-3.5 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
-                        <p className="text-sm text-workspace-text leading-relaxed">{entry.response}</p>
+                        <MarkdownRenderer content={entry.response} />
                       </div>
                     </div>
                   )}

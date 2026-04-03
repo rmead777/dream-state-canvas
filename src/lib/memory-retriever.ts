@@ -28,6 +28,12 @@ function scoreRelevance(memory: SherpaMemory, ctx: RetrievalContext): number {
   // Always-on memories get base relevance
   if (trigger.always) return 0.8 + (memory.confidence * 0.2);
 
+  // Confirmed memories always get a strong base score — the user explicitly validated these
+  if (memory.source === 'confirmed') return 0.7 + (memory.confidence * 0.3);
+
+  // High-confidence memories with many hits have proven useful — always include
+  if (memory.confidence >= 0.9 && memory.hitCount >= 3) return 0.6 + (memory.confidence * 0.2);
+
   // Keyword match
   if (trigger.onQueryContains && trigger.onQueryContains.length > 0) {
     triggerCount++;
@@ -106,16 +112,17 @@ export async function retrieveRelevantMemories(
       relevance: scoreRelevance(m, ctx),
     }));
 
-    // Corrections ALWAYS get priority
+    // Corrections ALWAYS get priority (low threshold — better to over-include than miss)
     const corrections = scored
-      .filter(s => s.memory.type === 'correction' && s.relevance > 0.1)
+      .filter(s => s.memory.type === 'correction' && s.relevance > 0.05)
       .sort((a, b) => b.relevance - a.relevance)
-      .slice(0, 4);
+      .slice(0, 6);
 
     // Fill remaining slots with highest-relevance non-corrections
+    // Threshold lowered: confirmed/high-hit memories score 0.6+ from the new rules above
     const correctionIds = new Set(corrections.map(c => c.memory.id));
     const rest = scored
-      .filter(s => !correctionIds.has(s.memory.id) && s.relevance > 0.2)
+      .filter(s => !correctionIds.has(s.memory.id) && s.relevance > 0.1)
       .sort((a, b) => b.relevance - a.relevance)
       .slice(0, maxMemories - corrections.length);
 
