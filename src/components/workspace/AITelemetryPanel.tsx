@@ -169,8 +169,27 @@ export function AITelemetryPanel() {
         </div>
       </div>
 
-      {/* Clear button */}
-      <div className="flex justify-end">
+      {/* Clear / Copy All buttons */}
+      <div className="flex justify-end gap-3">
+        <button
+          onClick={() => {
+            const text = events.map(e => {
+              const time = new Date(e.timestamp).toLocaleTimeString('en-US', { hour12: false });
+              const lines = [
+                `[${time}] ${e.model} | ${e.provider} | ${e.authMode} | ${(e.durationMs/1000).toFixed(1)}s | in:${e.inputTokens??'?'} out:${e.outputTokens??'?'} | toolCalls:${e.toolCalls??0}`,
+              ];
+              if (e.requestPayload) {
+                lines.push('--- REQUEST ---');
+                lines.push(JSON.stringify(e.requestPayload, null, 2));
+              }
+              return lines.join('\n');
+            }).join('\n\n==========\n\n');
+            navigator.clipboard.writeText(text);
+          }}
+          className="text-[10px] text-workspace-text-secondary/40 hover:text-workspace-text-secondary transition-colors"
+        >
+          Copy all logs
+        </button>
         <button
           onClick={() => clearAITelemetry()}
           className="text-[10px] text-workspace-text-secondary/40 hover:text-workspace-text-secondary transition-colors"
@@ -236,11 +255,30 @@ export function AITelemetryPanel() {
                   {event.toolCalls === 0 && (
                     <span className="text-[9px] text-emerald-600/60">response</span>
                   )}
-                  {event.requestPayload && (
-                    <span className="ml-auto text-[9px] text-workspace-text-secondary/30">
-                      {isExpanded ? 'collapse' : 'expand payload'}
-                    </span>
-                  )}
+                  <span className="ml-auto flex items-center gap-2">
+                    <button
+                      onClick={e => {
+                        e.stopPropagation();
+                        const time = new Date(event.timestamp).toLocaleTimeString('en-US', { hour12: false });
+                        const lines = [
+                          `[${time}] ${event.model} | ${event.provider} | ${event.authMode} | ${(event.durationMs/1000).toFixed(1)}s | in:${event.inputTokens??'?'} out:${event.outputTokens??'?'} | toolCalls:${event.toolCalls??0}`,
+                        ];
+                        if (event.requestPayload) {
+                          lines.push('--- REQUEST ---');
+                          lines.push(JSON.stringify(event.requestPayload, null, 2));
+                        }
+                        navigator.clipboard.writeText(lines.join('\n'));
+                      }}
+                      className="text-[9px] text-workspace-text-secondary/30 hover:text-workspace-text-secondary transition-colors"
+                    >
+                      copy
+                    </button>
+                    {event.requestPayload && (
+                      <span className="text-[9px] text-workspace-text-secondary/30">
+                        {isExpanded ? 'collapse' : 'expand'}
+                      </span>
+                    )}
+                  </span>
                 </div>
               </div>
 
