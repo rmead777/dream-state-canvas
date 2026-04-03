@@ -272,27 +272,16 @@ export function SherpaRail() {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1.5">
-            {(lastResponse || observations.length > 0 || promptHistory.length > 0) && (
-              <button
-                onClick={handleClearSherpaFull}
-                className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] text-workspace-text-secondary/40 hover:bg-workspace-surface/60 hover:text-workspace-text-secondary transition-colors"
-                title="Clear conversation"
-              >
-                ⌫
-              </button>
-            )}
-            <button
-              onClick={() => setIsExpanded(false)}
-              className="flex h-6 w-6 items-center justify-center rounded-full text-xs text-workspace-text-secondary/40 hover:bg-workspace-surface/60 hover:text-workspace-text-secondary transition-colors"
-            >
-              ▸
-            </button>
-          </div>
+          <button
+            onClick={() => setIsExpanded(false)}
+            className="flex h-6 w-6 items-center justify-center rounded-full text-xs text-workspace-text-secondary/40 hover:bg-workspace-surface/60 hover:text-workspace-text-secondary transition-colors shrink-0"
+          >
+            ▸
+          </button>
         </div>
 
         {/* ═══ UTILITY TAB BAR ═══ */}
-        <div className="flex items-center gap-0.5 -mb-px overflow-x-auto">
+        <div className="flex items-center gap-0.5 -mb-px">
           {visibleTabs.map(tab => (
             <button
               key={tab.id}
@@ -304,15 +293,14 @@ export function SherpaRail() {
                 }`}
             >
               {tab.label}
-              {/* Active indicator */}
               {activeTab === tab.id && (
                 <span className="absolute inset-x-1 bottom-0 h-[2px] rounded-full bg-workspace-accent" />
               )}
             </button>
           ))}
 
-          {/* Model dropdown — right-aligned at end of tab bar */}
-          <div className="ml-auto relative" ref={modelDropdownRef}>
+          {/* Model dropdown — right-aligned */}
+          <div className="ml-auto" ref={modelDropdownRef}>
             <button
               onClick={() => adminUnlocked ? setShowModelDropdown(!showModelDropdown) : null}
               className={`flex items-center gap-1 rounded-md px-2 py-1 text-[10px] transition-colors
@@ -325,46 +313,52 @@ export function SherpaRail() {
               <span className="truncate max-w-[100px]">{modelLabel}</span>
               {adminUnlocked && <span className="text-[8px]">▾</span>}
             </button>
-
-            {/* Model dropdown panel */}
-            {showModelDropdown && adminUnlocked && (
-              <div className="absolute right-0 top-full mt-1 z-50 w-64 max-h-80 overflow-y-auto rounded-xl border border-workspace-border/45 bg-white shadow-lg animate-[materialize_0.15s_cubic-bezier(0.16,1,0.3,1)_forwards]">
-                {(['google', 'anthropic', 'xai', 'openai'] as const).map((provider) => {
-                  const providerModels = AVAILABLE_MODELS.filter(m => m.provider === provider);
-                  if (providerModels.length === 0) return null;
-                  const providerLabels: Record<string, string> = { google: 'Google', anthropic: 'Anthropic', xai: 'xAI', openai: 'OpenAI' };
-                  return (
-                    <div key={provider} className="py-1">
-                      <div className="px-3 py-1 text-[9px] uppercase tracking-wider text-workspace-text-secondary/40 font-medium">
-                        {providerLabels[provider]}
-                      </div>
-                      {providerModels.map((m) => (
-                        <button
-                          key={m.id}
-                          onClick={() => {
-                            setAdminModel(m.id);
-                            setAdminState(getAdminSettings());
-                            setShowModelDropdown(false);
-                            toast.success(`Model → ${m.label}`);
-                          }}
-                          className={`block w-full px-3 py-1.5 text-left text-[11px] transition-colors
-                            ${adminState.model === m.id
-                              ? 'bg-workspace-accent/5 text-workspace-accent font-medium'
-                              : 'text-workspace-text hover:bg-workspace-surface/50'
-                            }`}
-                        >
-                          {m.label}
-                          <span className="block text-[9px] text-workspace-text-secondary/50">{m.description}</span>
-                        </button>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </div>
         </div>
       </div>
+
+      {/* Model dropdown panel — rendered OUTSIDE header to avoid clipping */}
+      {showModelDropdown && adminUnlocked && (
+        <div className="absolute right-4 top-[72px] z-50 w-64 max-h-[70vh] overflow-y-auto rounded-xl border border-workspace-border/45 bg-white shadow-[0_20px_60px_rgba(0,0,0,0.15)] animate-[materialize_0.15s_cubic-bezier(0.16,1,0.3,1)_forwards]">
+          <div className="sticky top-0 z-10 bg-white border-b border-workspace-border/30 px-3 py-2">
+            <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-workspace-text-secondary/60">Switch Model</span>
+          </div>
+          {(['google', 'anthropic', 'xai', 'openai'] as const).map((provider) => {
+            const providerModels = AVAILABLE_MODELS.filter(m => m.provider === provider);
+            if (providerModels.length === 0) return null;
+            const providerLabels: Record<string, string> = { google: 'Google', anthropic: 'Anthropic', xai: 'xAI', openai: 'OpenAI' };
+            return (
+              <div key={provider} className="py-1">
+                <div className="px-3 py-1.5 text-[9px] uppercase tracking-wider text-workspace-text-secondary/40 font-medium">
+                  {providerLabels[provider]}
+                </div>
+                {providerModels.map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => {
+                      setAdminModel(m.id);
+                      setAdminState(getAdminSettings());
+                      setShowModelDropdown(false);
+                      toast.success(`Model → ${m.label}`);
+                    }}
+                    className={`block w-full px-3 py-2 text-left text-[11px] transition-colors
+                      ${adminState.model === m.id
+                        ? 'bg-workspace-accent/5 text-workspace-accent font-medium'
+                        : 'text-workspace-text hover:bg-workspace-surface/50'
+                      }`}
+                  >
+                    <span className="font-medium">{m.label}</span>
+                    <span className="block text-[9px] text-workspace-text-secondary/50 mt-0.5">{m.description}</span>
+                    {adminState.model === m.id && (
+                      <span className="text-[9px] text-workspace-accent/60 mt-0.5 block">Current</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* ═══ TAB CONTENT ═══ */}
       {activeTab === 'origin' ? (
@@ -554,6 +548,19 @@ export function SherpaRail() {
                     <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
                     <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
                     <line x1="12" x2="12" y1="19" y2="22" />
+                  </svg>
+                </button>
+              )}
+
+              {/* Clear conversation */}
+              {(lastResponse || promptHistory.length > 0) && (
+                <button
+                  onClick={handleClearSherpaFull}
+                  className="rounded-full p-1.5 text-workspace-text-secondary/30 hover:text-workspace-text-secondary/60 hover:bg-workspace-surface/50 transition-colors"
+                  title="Clear conversation"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
                   </svg>
                 </button>
               )}
