@@ -39,6 +39,15 @@ interface ToolCall {
   };
 }
 
+// Tools that indicate the AI is making forward progress (about to act, not just spinning on reads).
+// The stuck loop detector allows these to execute even when emptyTextStreak is high.
+const WRITE_TOOLS = new Set([
+  'createCard', 'updateCard', 'dissolveCard', 'focusCard',
+  'draftEmail', 'createCalendarEvent', 'runSimulation',
+  'exportWorkspace', 'createTrigger', 'showAutomations',
+  'rememberFact', 'setThreshold', 'suggestNextMoves',
+]);
+
 export interface AgentLoopParams {
   query: string;
   workspaceState: WorkspaceState;
@@ -217,10 +226,12 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
       };
     }
 
-    // Detect stuck loop: if 2+ consecutive iterations have empty text + only tool calls,
-    // the AI is spinning without making progress. Break out and return what we have.
-    if (emptyTextStreak >= 2 && iteration >= 2) {
-      console.warn('[sherpa-agent] Stuck loop detected: 2+ empty iterations, breaking out at iteration', iteration);
+    // Detect stuck loop: if 2+ consecutive iterations have empty text + only READ tool calls,
+    // the AI is spinning without making progress. But if the current iteration contains WRITE
+    // tools, the AI is about to act — let those execute (read → read → write is a valid pattern).
+    const hasWriteToolCall = toolCalls.some(tc => WRITE_TOOLS.has(tc.function.name));
+    if (emptyTextStreak >= 2 && iteration >= 2 && !hasWriteToolCall) {
+      console.warn('[sherpa-agent] Stuck loop detected: 2+ empty iterations with only read tools, breaking out at iteration', iteration);
       onStatusUpdate?.(null);
       const pendingActions = remapPendingActions();
       const finalResponse = bestText || (pendingActions.length > 0 ? 'Done.' : 'I wasn\'t able to complete that. Could you try rephrasing?');
