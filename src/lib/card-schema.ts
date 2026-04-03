@@ -112,7 +112,9 @@ export function validateSections(raw: unknown[]): CardSectionType[] {
   if (!Array.isArray(raw)) return [];
   const valid: CardSectionType[] = [];
   for (const item of raw) {
-    const result = CardSection.safeParse(item);
+    // Normalize common AI type aliases before validation
+    const normalized = normalizeSection(item);
+    const result = CardSection.safeParse(normalized);
     if (result.success) {
       valid.push(result.data);
     } else {
@@ -120,4 +122,19 @@ export function validateSections(raw: unknown[]): CardSectionType[] {
     }
   }
   return valid;
+}
+
+/** Map AI-generated type aliases to canonical section types */
+function normalizeSection(item: unknown): unknown {
+  if (typeof item !== 'object' || item === null) return item;
+  const s = item as Record<string, unknown>;
+  // 'text' and 'paragraph' → 'narrative'
+  if (s.type === 'text' || s.type === 'paragraph') {
+    return { ...s, type: 'narrative', text: s.content ?? s.text ?? '' };
+  }
+  // 'header' → 'summary'
+  if (s.type === 'header') {
+    return { ...s, type: 'summary', text: s.content ?? s.text ?? '' };
+  }
+  return item;
 }
