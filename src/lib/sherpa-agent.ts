@@ -450,31 +450,71 @@ async function callAIWithTools(
   }
 }
 
-/** Extract full text from SSE-formatted response */
+/**
+ * Extract text and tool calls from an SSE-formatted response.
+ *
+ * Tool call arguments arrive across multiple streaming delta chunks — we must
+ * accumulate all fragments before returning. Returning on the first delta chunk
+ * (the old behavior) gave parseAgentResponse empty/partial arguments, so
+ * executeTool was called with {} and produced useless results, ending the loop.
+ */
 function extractFromSSE(sse: string): string {
-  let result = '';
+  let textResult = '';
+  const toolCallAccumulator: Record<number, { id: string; name: string; arguments: string }> = {};
+  let hasStreamingToolCalls = false;
+
   for (const line of sse.split('\n')) {
     if (!line.startsWith('data: ')) continue;
     const json = line.slice(6).trim();
     if (json === '[DONE]') continue;
     try {
       const parsed = JSON.parse(json);
-
-      // Skip telemetry events in SSE stream
       if (parsed.__telemetry) continue;
 
-      const content = parsed.choices?.[0]?.delta?.content || parsed.choices?.[0]?.message?.content;
-      if (content) result += content;
+      // Accumulate text content
+      const content = parsed.choices?.[0]?.delta?.content ?? parsed.choices?.[0]?.message?.content;
+      if (content) textResult += content;
 
-      // Check for tool calls in the response
-      const toolCalls = parsed.choices?.[0]?.delta?.tool_calls || parsed.choices?.[0]?.message?.tool_calls;
-      if (toolCalls) {
-        // Return the full parsed object as JSON so parseAgentResponse can extract tool calls
-        return JSON.stringify(parsed);
+      // Complete tool calls in a single chunk (Anthropic-transformed format from provider-router)
+      const msgToolCalls = parsed.choices?.[0]?.message?.tool_calls;
+      if (Array.isArray(msgToolCalls) && msgToolCalls.length > 0) {
+        return JSON.stringify(parsed); // already fully assembled
+      }
+
+      // Streaming tool call deltas (Google/OpenAI streaming format) — accumulate across chunks
+      const deltaToolCalls = parsed.choices?.[0]?.delta?.tool_calls;
+      if (Array.isArray(deltaToolCalls)) {
+        hasStreamingToolCalls = true;
+        for (const tc of deltaToolCalls) {
+          const idx = tc.index ?? 0;
+          if (!toolCallAccumulator[idx]) {
+            toolCallAccumulator[idx] = { id: '', name: '', arguments: '' };
+          }
+          if (tc.id) toolCallAccumulator[idx].id = tc.id;
+          if (tc.function?.name) toolCallAccumulator[idx].name = tc.function.name;
+          if (tc.function?.arguments) toolCallAccumulator[idx].arguments += tc.function.arguments;
+        }
       }
     } catch {}
   }
-  return result;
+
+  // If we accumulated streaming tool calls, assemble and return them as a complete message
+  if (hasStreamingToolCalls && Object.keys(toolCallAccumulator).length > 0) {
+    const completedToolCalls = Object.values(toolCallAccumulator).map(tc => ({
+      id: tc.id,
+      type: 'function' as const,
+      function: { name: tc.name, arguments: tc.arguments },
+    }));
+    return JSON.stringify({
+      choices: [{
+        message: { role: 'assistant', content: textResult || null, tool_calls: completedToolCalls },
+        finish_reason: 'tool_calls',
+        index: 0,
+      }],
+    });
+  }
+
+  return textResult;
 }
 
 /** Strip markdown code fences (```json ... ```) that AI models love to add around JSON */
