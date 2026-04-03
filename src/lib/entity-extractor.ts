@@ -12,7 +12,8 @@ import type { EntityRef } from './workspace-types';
 import { getActiveDataset } from './active-dataset';
 
 // Heuristic column name patterns that suggest entity name columns
-const ENTITY_COLUMN_PATTERNS = [
+// Exported so AnalysisCard.tsx can use the same set for clickable cells — single source of truth
+export const ENTITY_COLUMN_PATTERNS = [
   /vendor/i, /company/i, /supplier/i, /client/i, /customer/i,
   /name/i, /entity/i, /payee/i, /recipient/i, /contact/i, /person/i,
 ];

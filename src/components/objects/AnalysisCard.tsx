@@ -15,6 +15,7 @@ import MarkdownRenderer from './MarkdownRenderer';
 import DOMPurify from 'dompurify';
 import { BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { ENTITY_COLUMN_PATTERNS } from '@/lib/entity-extractor';
 
 interface AnalysisCardProps {
   object: WorkspaceObject;
@@ -118,8 +119,6 @@ function MetricRenderer({ section }: { section: { label: string; value: string |
   );
 }
 
-// Column names that suggest entity names (mirrored from entity-extractor.ts)
-const ENTITY_COLUMN_PATTERNS = [/vendor/i, /company/i, /supplier/i, /client/i, /customer/i, /name/i, /entity/i, /payee/i, /recipient/i, /contact/i, /person/i];
 
 function TableRenderer({ section, highlightedEntity, onEntityClick }: {
   section: { columns: string[]; rows: (string | number | null)[][]; highlights?: { column: string; condition: string; style: string }[]; caption?: string };
