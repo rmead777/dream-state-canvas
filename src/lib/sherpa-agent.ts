@@ -364,6 +364,7 @@ async function callAIWithTools(
     let routeMeta = defaultRouteMeta();
     let inputTokens: number | undefined;
     let outputTokens: number | undefined;
+    let actualToolCallCount = 0;
 
     if (!resp.ok) return null;
 
@@ -391,6 +392,17 @@ async function callAIWithTools(
         inputTokens = bodyParsed.usage.input_tokens ?? bodyParsed.usage.prompt_tokens;
         outputTokens = bodyParsed.usage.output_tokens ?? bodyParsed.usage.completion_tokens;
       }
+      // Count actual tool calls the AI invoked in this response
+      const msgToolCalls = bodyParsed.choices?.[0]?.message?.tool_calls;
+      if (Array.isArray(msgToolCalls)) {
+        actualToolCallCount = msgToolCalls.length;
+      } else {
+        // Anthropic format: content blocks of type tool_use
+        const contentBlocks = bodyParsed.content;
+        if (Array.isArray(contentBlocks)) {
+          actualToolCallCount = contentBlocks.filter((b: any) => b.type === 'tool_use').length;
+        }
+      }
     } catch {
       // Not JSON — will be handled below as SSE
     }
@@ -404,7 +416,7 @@ async function callAIWithTools(
       fallback: routeMeta.fallback,
       durationMs: Date.now() - callStartTime,
       mode: 'intent',
-      toolCalls: body.tools ? 1 : 0,
+      toolCalls: actualToolCallCount,
       inputTokens,
       outputTokens,
       requestPayload: body,

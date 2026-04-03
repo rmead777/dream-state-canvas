@@ -231,7 +231,10 @@ export function AITelemetryPanel() {
                     </span>
                   )}
                   {event.toolCalls !== undefined && event.toolCalls > 0 && (
-                    <span className="text-[9px] text-workspace-accent/50">+ tools</span>
+                    <span className="text-[9px] text-workspace-accent/60 font-mono">{event.toolCalls} tool{event.toolCalls !== 1 ? 's' : ''}</span>
+                  )}
+                  {event.toolCalls === 0 && (
+                    <span className="text-[9px] text-emerald-600/60">response</span>
                   )}
                   {event.requestPayload && (
                     <span className="ml-auto text-[9px] text-workspace-text-secondary/30">
