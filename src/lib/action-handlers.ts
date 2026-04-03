@@ -593,7 +593,7 @@ async function applyUpdateToObject(params: {
       };
     }
     default: {
-      let context = { ...target.context, view: storedView };
+      let context: any = { ...target.context, view: storedView };
       // Apply chart styling from view state to chart sections
       if (Array.isArray(context.sections) && (view.chartColor !== undefined || view.chartColors !== undefined || view.chartFillOpacity !== undefined || view.chartHeight !== undefined)) {
         context.sections = (context.sections as any[]).map((s: any) => {
