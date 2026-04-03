@@ -178,6 +178,33 @@ export const SHERPA_TOOLS = [
       },
     },
   },
+
+  // NEXT MOVES tool
+  {
+    type: 'function' as const,
+    function: {
+      name: 'suggestNextMoves',
+      description: 'Suggest 2-3 follow-up actions the user might want to take next, based on what you just found or created. Call this as your FINAL action after any createCard or updateCard calls.',
+      parameters: {
+        type: 'object',
+        properties: {
+          moves: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                label: { type: 'string', description: 'Short button label (3-6 words, specific to the data)' },
+                query: { type: 'string', description: 'The full query to send when clicked' },
+              },
+              required: ['label', 'query'],
+            },
+            description: '2-3 specific, data-grounded follow-up actions',
+          },
+        },
+        required: ['moves'],
+      },
+    },
+  },
 ];
 
 // ─── Status Messages ────────────────────────────────────────────────────────
@@ -194,6 +221,7 @@ const TOOL_STATUS: Record<string, string> = {
   focusCard: 'Focusing card...',
   rememberFact: 'Saving to memory...',
   recallMemories: 'Checking memory...',
+  suggestNextMoves: '',
 };
 
 export function getToolStatus(toolName: string): string {
@@ -327,6 +355,9 @@ export async function executeTool(
         });
         return JSON.stringify({ memories: memories.map(m => ({ type: m.type, content: m.content, confidence: m.confidence })) });
       }
+
+      case 'suggestNextMoves':
+        return JSON.stringify({ action: 'nextMoves', moves: args.moves || [] });
 
       default:
         return JSON.stringify({ error: `Unknown tool: ${name}` });

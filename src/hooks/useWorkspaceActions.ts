@@ -115,6 +115,19 @@ export function useWorkspaceActions() {
         };
         const outcome = await applyResult(result, origin);
 
+        // Surface AI-generated next moves as suggestion chips
+        if (agentResult.nextMoves && agentResult.nextMoves.length > 0) {
+          dispatch({
+            type: 'SET_SHERPA_SUGGESTIONS',
+            payload: agentResult.nextMoves.map((m, i) => ({
+              id: `ai-nm-${Date.now()}-${i}`,
+              label: m.label,
+              query: m.query,
+              priority: i + 1,
+            })),
+          });
+        }
+
         // Progressive text reveal — simulated streaming for the response
         if (outcome.response) {
           // Stop the "Reasoning..." indicator before text starts appearing

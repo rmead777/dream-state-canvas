@@ -52,6 +52,7 @@ export interface AgentLoopResult {
   response: string;
   actions: any[];
   toolCallsUsed: number;
+  nextMoves?: { label: string; query: string }[];
 }
 
 /**
@@ -111,6 +112,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
 
   let toolCallsUsed = 0;
   const pendingWriteActions: any[] = [];
+  let capturedNextMoves: { label: string; query: string }[] = [];
 
   /** Remap tool executor output to applyResult format: { action: 'create' } → { type: 'create' } */
   function remapPendingActions(): any[] {
@@ -142,7 +144,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
     const response = await callAIWithTools(messages, documentIds, memories, iteration === 0);
 
     if (!response) {
-      return { response: bestText || 'Sherpa could not reach the AI service. Please try again.', actions: remapPendingActions(), toolCallsUsed };
+      return { response: bestText || 'Sherpa could not reach the AI service. Please try again.', actions: remapPendingActions(), toolCallsUsed, nextMoves: capturedNextMoves };
     }
 
     // Detect which provider responded (Anthropic starts with {"model":, Google with {"id":"gen-)
@@ -159,6 +161,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
         response: bestText || (pendingActions.length > 0 ? 'Done.' : 'The AI provider was rate-limited mid-task. Try again in a moment.'),
         actions: pendingActions,
         toolCallsUsed,
+        nextMoves: capturedNextMoves,
       };
     }
 
@@ -193,6 +196,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
         response: finalResponse,
         actions: [...rawActions, ...remapPendingActions()],
         toolCallsUsed,
+        nextMoves: capturedNextMoves,
       };
     }
 
@@ -209,6 +213,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
         response: finalResponse,
         actions: pendingActions,
         toolCallsUsed,
+        nextMoves: capturedNextMoves,
       };
     }
 
@@ -223,6 +228,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
         response: finalResponse,
         actions: pendingActions,
         toolCallsUsed,
+        nextMoves: capturedNextMoves,
       };
     }
 
@@ -250,10 +256,13 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
 
       const result = await executeTool(toolName, args, shadowState);
 
-      // Check if the tool returned a write action to queue
+      // Check if the tool returned a write action to queue (or next moves to capture)
       try {
         const parsed = JSON.parse(result);
-        if (parsed.action) {
+        if (parsed.action === 'nextMoves') {
+          // Not a write action — capture suggestions for the caller
+          capturedNextMoves = parsed.moves || [];
+        } else if (parsed.action) {
           pendingWriteActions.push(parsed);
 
           // Apply to shadow state so subsequent read tools see the change
@@ -310,6 +319,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
     response: bestText || maxIterFallback,
     actions: pendingActions,
     toolCallsUsed,
+    nextMoves: capturedNextMoves,
   };
 }
 
