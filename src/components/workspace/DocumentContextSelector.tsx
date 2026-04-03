@@ -27,7 +27,7 @@ export function DocumentContextSelector({
   onModeChange,
 }: DocumentContextSelectorProps) {
   const { documents } = useDocuments();
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
 
   const toggleDoc = useCallback(
     (docId: string) => {
