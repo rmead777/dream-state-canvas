@@ -53,7 +53,7 @@ const DEFAULT_SETTINGS: AdminSettings = {
   model: 'google/gemini-3-flash-preview',
   maxTokens: 16192,
   contextWindow: 10,
-  agentMaxIterations: 5,
+  agentMaxIterations: 8,
 };
 
 let _settings: AdminSettings = { ...DEFAULT_SETTINGS };
