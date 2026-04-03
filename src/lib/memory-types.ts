@@ -1,6 +1,6 @@
 import { ObjectType, WorkspaceActionType } from './workspace-types';
 
-export type MemoryType = 'correction' | 'preference' | 'entity' | 'pattern' | 'anti-pattern';
+export type MemoryType = 'correction' | 'preference' | 'entity' | 'pattern' | 'anti-pattern' | 'threshold';
 export type MemorySource = 'explicit' | 'inferred' | 'confirmed';
 export type MemoryTier = 'prompt' | 'override';
 

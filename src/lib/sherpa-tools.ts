@@ -179,6 +179,27 @@ export const SHERPA_TOOLS = [
     },
   },
 
+  // ALERT tools
+  {
+    type: 'function' as const,
+    function: {
+      name: 'setThreshold',
+      description: 'Create a persistent alert threshold. When the condition fires against the active dataset, Sherpa will notify the user automatically (checked every 60 seconds). Use this when the user says "alert me when...", "notify me if...", "watch for...".',
+      parameters: {
+        type: 'object',
+        properties: {
+          column: { type: 'string', description: 'Dataset column to monitor' },
+          operator: { type: 'string', description: 'gt|lt|gte|lte|eq|neq' },
+          value: { type: 'number', description: 'Threshold value to compare against' },
+          label: { type: 'string', description: 'Human-readable alert label, e.g. "High Balance Warning"' },
+          severity: { type: 'string', description: 'info|warning|danger' },
+          aggregation: { type: 'string', description: 'any (default)|count|sum — how to aggregate matching rows' },
+        },
+        required: ['column', 'operator', 'value', 'label'],
+      },
+    },
+  },
+
   // NEXT MOVES tool
   {
     type: 'function' as const,
@@ -221,6 +242,7 @@ const TOOL_STATUS: Record<string, string> = {
   focusCard: 'Focusing card...',
   rememberFact: 'Saving to memory...',
   recallMemories: 'Checking memory...',
+  setThreshold: 'Setting alert threshold...',
   suggestNextMoves: '',
 };
 
@@ -354,6 +376,32 @@ export async function executeTool(
           workspaceState: determineWorkspaceState(state),
         });
         return JSON.stringify({ memories: memories.map(m => ({ type: m.type, content: m.content, confidence: m.confidence })) });
+      }
+
+      case 'setThreshold': {
+        const thresholdData = {
+          column: args.column,
+          operator: args.operator,
+          value: Number(args.value),
+          label: args.label,
+          severity: args.severity ?? 'warning',
+          aggregation: args.aggregation ?? 'any',
+        };
+        const memory = await createMemory({
+          type: 'threshold',
+          trigger: { always: false },
+          content: JSON.stringify(thresholdData),
+          reasoning: `User-defined alert: ${args.label}`,
+          confidence: 0.9,
+          source: 'explicit',
+          tags: ['threshold', args.column?.toLowerCase() || ''],
+        });
+        return JSON.stringify({
+          saved: !!memory,
+          id: memory?.id,
+          threshold: thresholdData,
+          message: `Alert set: ${args.label}. I'll watch ${args.column} ${args.operator} ${args.value} every 60 seconds.`,
+        });
       }
 
       case 'suggestNextMoves':

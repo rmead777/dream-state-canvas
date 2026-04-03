@@ -2,6 +2,10 @@ import React, { createContext, useContext, useEffect, useRef, useCallback } from
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { generateSuggestions, generateObservations } from '@/lib/sherpa-engine';
 import { Suggestion } from '@/lib/workspace-types';
+import { getMemories } from '@/lib/memory-store';
+import { parseThreshold, checkAlertThresholds } from '@/lib/alert-monitor';
+import { getActiveDataset } from '@/lib/active-dataset';
+import { supabase } from '@/integrations/supabase/client';
 
 /**
  * SherpaContext — decoupled Sherpa intelligence layer.
@@ -50,6 +54,41 @@ export function SherpaProvider({ children }: { children: React.ReactNode }) {
 
     return () => clearInterval(timer);
   }, []); // Empty deps = runs once, stable interval
+
+  // Alert threshold scan — runs every 60 seconds.
+  // Retrieves threshold memories, evaluates against active dataset, fires observations.
+  useEffect(() => {
+    const runAlertScan = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const memories = await getMemories(user.id);
+        const thresholds = memories
+          .filter((m) => m.type === 'threshold')
+          .map((m) => {
+            const t = parseThreshold(m.content);
+            return t ? { ...t, id: m.id } : null;
+          })
+          .filter((t): t is NonNullable<typeof t> => t !== null);
+
+        if (thresholds.length === 0) return;
+
+        const { columns, rows } = getActiveDataset();
+        const firing = checkAlertThresholds(thresholds, columns, rows);
+
+        for (const alert of firing) {
+          const obs = `[Alert] ${alert.message}`;
+          dispatch({ type: 'ADD_SHERPA_OBSERVATION', payload: obs });
+        }
+      } catch (err) {
+        console.warn('[SherpaContext] Alert scan failed:', err);
+      }
+    };
+
+    const alertTimer = setInterval(runAlertScan, 60000);
+    return () => clearInterval(alertTimer);
+  }, [dispatch]); // dispatch is stable from useWorkspace
 
   // Compute a lightweight fingerprint of object state for reactivity.
   // Captures count, types, statuses, and pinned flags — not just count.
