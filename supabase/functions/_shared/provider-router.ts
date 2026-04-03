@@ -262,13 +262,25 @@ async function makeAnthropicRequest(
   const anthropicMessages = messages
     .filter(m => m.role !== 'system')
     .map(m => {
+      // Tool result → Anthropic user message with tool_result content block
       if ((m as any).role === 'tool') {
         return {
           role: 'user' as const,
-          content: [{ type: 'tool_result', tool_use_id: (m as any).tool_call_id, content: m.content }],
+          content: [{ type: 'tool_result', tool_use_id: (m as any).tool_call_id, content: m.content ?? '' }],
         };
       }
-      return { role: m.role as 'user' | 'assistant', content: m.content };
+      // Assistant message with tool_calls → Anthropic content block array
+      if (m.role === 'assistant' && (m as any).tool_calls?.length > 0) {
+        const blocks: any[] = [];
+        if (m.content) blocks.push({ type: 'text', text: m.content });
+        for (const tc of (m as any).tool_calls) {
+          let input: Record<string, unknown> = {};
+          try { input = JSON.parse(tc.function.arguments); } catch {}
+          blocks.push({ type: 'tool_use', id: tc.id, name: tc.function.name, input });
+        }
+        return { role: 'assistant' as const, content: blocks };
+      }
+      return { role: m.role as 'user' | 'assistant', content: m.content ?? '' };
     });
 
   // OAuth requires system as array with Claude Code identity as first block

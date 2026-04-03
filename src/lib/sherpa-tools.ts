@@ -40,7 +40,7 @@ export const SHERPA_TOOLS = [
         type: 'object',
         properties: {
           filter: { type: 'object', description: '{ column, operator, value }' },
-          filters: { type: 'array', description: 'Array of filter objects for multiple conditions' },
+          filters: { type: 'array', items: { type: 'object' }, description: 'Array of filter objects for multiple conditions' },
           columns: { type: 'array', items: { type: 'string' }, description: 'Which columns to return' },
           sort: { type: 'object', description: '{ column, direction: "asc"|"desc" }' },
           limit: { type: 'number', description: 'Max rows to return' },
@@ -98,7 +98,7 @@ export const SHERPA_TOOLS = [
         properties: {
           objectId: { type: 'string' },
           dataQuery: { type: 'object', description: 'New data query to apply' },
-          sections: { type: 'array', description: 'Replace card content with these sections' },
+          sections: { type: 'array', items: { type: 'object' }, description: 'Replace card content with these sections' },
           title: { type: 'string', description: 'New title' },
         },
         required: ['objectId'],
@@ -116,7 +116,7 @@ export const SHERPA_TOOLS = [
           objectType: { type: 'string', description: 'Card type (metric, alert, analysis, action-queue, etc.)' },
           title: { type: 'string' },
           dataQuery: { type: 'object' },
-          sections: { type: 'array' },
+          sections: { type: 'array', items: { type: 'object' } },
         },
         required: ['objectType', 'title'],
       },
