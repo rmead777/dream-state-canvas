@@ -136,33 +136,43 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
 
     // Parse the response — check for tool calls
     let { text, toolCalls, rawActions } = parseAgentResponse(response);
-    console.log('[sherpa-agent] Iteration', iteration, '| text:', text?.slice(0, 80), '| toolCalls:', toolCalls?.length || 0, '| rawActions:', rawActions?.length || 0, '| raw response length:', response.length);
+    console.log('[sherpa-agent] Iteration', iteration, '| text:', JSON.stringify(text?.slice(0, 120)), '| toolCalls:', toolCalls?.length || 0, '| rawActions:', rawActions?.length || 0, '| raw response length:', response.length);
 
     // Safety net: if text still contains leaked intent JSON, extract clean response
     const cleaned = cleanResponseText(text);
     if (cleaned.text !== text) {
+      console.log('[sherpa-agent] cleanResponseText changed text from', JSON.stringify(text?.slice(0, 80)), 'to', JSON.stringify(cleaned.text?.slice(0, 80)), '| extracted actions:', cleaned.actions?.length || 0);
       text = cleaned.text;
-      if (cleaned.actions && (!rawActions || rawActions.length === 0)) {
-        rawActions = cleaned.actions;
+      if (cleaned.actions && cleaned.actions.length > 0) {
+        // Merge: cleaned actions supplement (don't replace) already-parsed actions
+        rawActions = [...(rawActions || []), ...cleaned.actions];
       }
     }
 
     // If AI returned actions directly (the normal intent-parsing path), return them
     if (rawActions && rawActions.length > 0) {
       onStatusUpdate?.(null);
+      const finalResponse = text || (rawActions.some(a => a.type === 'update') ? 'Updated.' : 'Done.');
+      console.log('[sherpa-agent] Returning with', rawActions.length, 'actions, response:', JSON.stringify(finalResponse.slice(0, 80)));
       return {
-        response: text || 'Done.',
+        response: finalResponse,
         actions: [...rawActions, ...remapPendingActions()],
         toolCallsUsed,
       };
     }
 
-    // If no tool calls, we're done
+    // If no tool calls, we're done — never show a blank fallback if we can avoid it
     if (!toolCalls || toolCalls.length === 0) {
       onStatusUpdate?.(null);
+      const pendingActions = remapPendingActions();
+      const fallback = pendingActions.length > 0
+        ? (pendingActions.some(a => a.type === 'update') ? 'Updated.' : 'Done.')
+        : 'I processed your request.';
+      const finalResponse = text || fallback;
+      console.log('[sherpa-agent] Returning no-tool-call path, response:', JSON.stringify(finalResponse.slice(0, 80)), '| pendingActions:', pendingActions.length);
       return {
-        response: text || 'I processed your request.',
-        actions: remapPendingActions(),
+        response: finalResponse,
+        actions: pendingActions,
         toolCallsUsed,
       };
     }
@@ -398,7 +408,8 @@ function cleanResponseText(text: string): { text: string; actions: any[] | null 
   if (!text) return { text, actions: null };
 
   // Fast check: does it look like it might contain intent JSON?
-  if (!text.includes('"response"')) return { text, actions: null };
+  // Must have both "response" key AND "actions" key to be intent JSON
+  if (!text.includes('"response"') || !text.includes('"actions"')) return { text, actions: null };
 
   // Try to find intent JSON anywhere in the text (with or without code fences)
   const stripped = stripCodeFences(text);
@@ -549,6 +560,16 @@ function extractFromParsedJSON(parsed: any): {
       }
     }
 
+    // If inner JSON extraction failed but text still looks like intent JSON, try cleanResponseText
+    if (!rawActions && typeof text === 'string' && text.includes('"response"') && text.includes('"actions"')) {
+      const fallback = cleanResponseText(text);
+      if (fallback.text !== text) {
+        console.log('[extractFromParsedJSON] OpenAI: cleanResponseText recovered response');
+        text = fallback.text;
+        rawActions = fallback.actions;
+      }
+    }
+
     return {
       text,
       toolCalls: msg.tool_calls || null,
@@ -584,6 +605,16 @@ function extractFromParsedJSON(parsed: any): {
             }
           } catch {}
         }
+      }
+    }
+
+    // If inner JSON extraction failed but text still looks like intent JSON, try cleanResponseText
+    if (!rawActions && text.includes('"response"') && text.includes('"actions"')) {
+      const fallback = cleanResponseText(text);
+      if (fallback.text !== text) {
+        console.log('[extractFromParsedJSON] Anthropic: cleanResponseText recovered response');
+        text = fallback.text;
+        rawActions = fallback.actions;
       }
     }
 
