@@ -678,8 +678,12 @@ export async function executeTool(
         let dtEnd: string;
         if (allDay || !date.includes('T')) {
           const d = date.slice(0, 10).replace(/-/g, '');
+          // RFC 5545 §3.8.2.2: DTEND for VALUE=DATE is exclusive — next day for single-day events
+          const nextDay = new Date(date.slice(0, 10));
+          nextDay.setDate(nextDay.getDate() + 1);
+          const dEnd = nextDay.toISOString().slice(0, 10).replace(/-/g, '');
           dtStart = `DTSTART;VALUE=DATE:${d}`;
-          dtEnd = `DTEND;VALUE=DATE:${d}`;
+          dtEnd = `DTEND;VALUE=DATE:${dEnd}`;
         } else {
           const start = new Date(date);
           const end = new Date(start.getTime() + (durationMinutes || 60) * 60000);
