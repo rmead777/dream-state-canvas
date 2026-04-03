@@ -135,8 +135,17 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
     }
 
     // Parse the response — check for tool calls
-    const { text, toolCalls, rawActions } = parseAgentResponse(response);
+    let { text, toolCalls, rawActions } = parseAgentResponse(response);
     console.log('[sherpa-agent] Iteration', iteration, '| text:', text?.slice(0, 80), '| toolCalls:', toolCalls?.length || 0, '| rawActions:', rawActions?.length || 0, '| raw response length:', response.length);
+
+    // Safety net: if text still contains leaked intent JSON, extract clean response
+    const cleaned = cleanResponseText(text);
+    if (cleaned.text !== text) {
+      text = cleaned.text;
+      if (cleaned.actions && (!rawActions || rawActions.length === 0)) {
+        rawActions = cleaned.actions;
+      }
+    }
 
     // If AI returned actions directly (the normal intent-parsing path), return them
     if (rawActions && rawActions.length > 0) {
@@ -378,6 +387,62 @@ function extractFromSSE(sse: string): string {
 /** Strip markdown code fences (```json ... ```) that AI models love to add around JSON */
 function stripCodeFences(text: string): string {
   return text.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+}
+
+/**
+ * Final safety net: if the response text still contains intent JSON,
+ * extract the clean "response" field. Catches all edge cases where
+ * earlier parsing stages fail due to formatting variations.
+ */
+function cleanResponseText(text: string): { text: string; actions: any[] | null } {
+  if (!text) return { text, actions: null };
+
+  // Fast check: does it look like it might contain intent JSON?
+  if (!text.includes('"response"')) return { text, actions: null };
+
+  // Try to find intent JSON anywhere in the text (with or without code fences)
+  const stripped = stripCodeFences(text);
+
+  // Direct parse
+  try {
+    const parsed = JSON.parse(stripped);
+    if (parsed.response !== undefined) {
+      console.log('[cleanResponseText] Extracted response from direct JSON parse');
+      return { text: parsed.response, actions: parsed.actions || null };
+    }
+  } catch {}
+
+  // Find JSON object within the text
+  const jsonMatch = stripped.match(/\{[\s\S]*"response"\s*:\s*"[\s\S]*?\}/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (parsed.response !== undefined) {
+        console.log('[cleanResponseText] Extracted response via regex match');
+        return { text: parsed.response, actions: parsed.actions || null };
+      }
+    } catch {}
+  }
+
+  // Regex extraction of just the response field value
+  const responseMatch = text.match(/"response"\s*:\s*"((?:[^"\\]|\\[\s\S])*)"/);
+  if (responseMatch) {
+    const extracted = responseMatch[1]
+      .replace(/\\"/g, '"')
+      .replace(/\\n/g, '\n')
+      .replace(/\\t/g, '\t')
+      .replace(/\\\\/g, '\\');
+    // Also try to grab actions
+    const actionsMatch = text.match(/"actions"\s*:\s*(\[[\s\S]*?\])\s*\}?\s*(?:```)?$/);
+    let actions: any[] | null = null;
+    if (actionsMatch) {
+      try { actions = JSON.parse(actionsMatch[1]); } catch {}
+    }
+    console.log('[cleanResponseText] Extracted response via field regex');
+    return { text: extracted, actions };
+  }
+
+  return { text, actions: null };
 }
 
 /**
