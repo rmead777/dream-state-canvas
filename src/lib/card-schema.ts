@@ -170,6 +170,29 @@ function normalizeSection(item: unknown): unknown {
   if (s.type === 'vega' || s.type === 'vega-lite' || s.type === 'vegaLite') {
     return { ...s, type: 'vegalite' };
   }
+  // chart.chartType === 'heatmap' — recharts doesn't support heatmap.
+  // Remap to a vegalite rect spec using the data the AI already prepared.
+  if (s.type === 'chart' && s.chartType === 'heatmap') {
+    return {
+      type: 'vegalite',
+      caption: s.caption,
+      height: (s.height as number) || 320,
+      spec: {
+        $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
+        mark: 'rect',
+        encoding: {
+          x: { field: s.xAxis as string || 'x', type: 'ordinal' },
+          y: { field: s.yAxis as string || 'y', type: 'ordinal' },
+          color: {
+            field: (s.colorField as string) || (s.xAxis as string) || 'value',
+            type: 'quantitative',
+            scale: { scheme: 'orangered' },
+          },
+        },
+        data: { values: (s.data as unknown[]) || [] },
+      },
+    };
+  }
   // embed aliases — AI may say 'svg', 'html', 'html-embed'
   if (s.type === 'svg' || s.type === 'html' || s.type === 'html-embed') {
     return { ...s, type: 'embed' };
