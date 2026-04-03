@@ -7,7 +7,7 @@
  */
 import { WorkspaceObject, WorkspaceState } from './workspace-types';
 import { executeDataQuery } from './data-query';
-import { getActiveDataset } from './active-dataset';
+import { getActiveDataset, getDataset } from './active-dataset';
 import { getDocument } from './document-store';
 import { createMemory } from './memory-store';
 import { retrieveRelevantMemories, formatMemoriesForPrompt, determineWorkspaceState } from './memory-retriever';
@@ -35,7 +35,7 @@ export const SHERPA_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'queryDataset',
-      description: 'Run a filter/sort/limit query against the active dataset. Returns matching rows with selected columns. Use this to find specific data.',
+      description: 'Run a filter/sort/limit query against a dataset. Defaults to the active dataset. Pass documentId to query a specific uploaded document.',
       parameters: {
         type: 'object',
         properties: {
@@ -44,7 +44,27 @@ export const SHERPA_TOOLS = [
           columns: { type: 'array', items: { type: 'string' }, description: 'Which columns to return' },
           sort: { type: 'object', description: '{ column, direction: "asc"|"desc" }' },
           limit: { type: 'number', description: 'Max rows to return' },
+          documentId: { type: 'string', description: 'Optional: query a specific uploaded document instead of the active dataset' },
         },
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'joinDatasets',
+      description: 'JOIN two uploaded documents on a shared key column. Returns merged rows. Use when the user wants to cross-reference data from two different files (e.g., AP aging vs bank transactions on vendor name).',
+      parameters: {
+        type: 'object',
+        properties: {
+          leftDocumentId: { type: 'string', description: 'Document ID of the left table (or omit for active dataset)' },
+          rightDocumentId: { type: 'string', description: 'Document ID of the right table' },
+          leftKey: { type: 'string', description: 'Column name in the left table to join on' },
+          rightKey: { type: 'string', description: 'Column name in the right table to join on' },
+          columns: { type: 'array', items: { type: 'string' }, description: 'Columns to include in results (from either table)' },
+          limit: { type: 'number', description: 'Max rows to return (default 30)' },
+        },
+        required: ['rightDocumentId', 'leftKey', 'rightKey'],
       },
     },
   },
@@ -242,6 +262,7 @@ const TOOL_STATUS: Record<string, string> = {
   focusCard: 'Focusing card...',
   rememberFact: 'Saving to memory...',
   recallMemories: 'Checking memory...',
+  joinDatasets: 'Joining datasets...',
   setThreshold: 'Setting alert threshold...',
   suggestNextMoves: '',
 };
@@ -278,12 +299,17 @@ export async function executeTool(
       }
 
       case 'queryDataset': {
-        const result = executeDataQuery(args);
+        // Support optional documentId for multi-document queries
+        const ds = args.documentId
+          ? await getDataset(args.documentId)
+          : getActiveDataset();
+        const result = executeDataQuery({ ...args, _dataset: ds });
         return JSON.stringify({
           columns: result.columns,
-          rows: result.rows.slice(0, 30), // cap to avoid massive payloads
+          rows: result.rows.slice(0, 30),
           totalMatched: result.totalMatched,
           truncated: result.truncated || result.rows.length > 30,
+          sourceLabel: ds.sourceLabel,
         });
       }
 
@@ -330,6 +356,68 @@ export async function executeTool(
           fileType: doc.file_type,
           extractedText: doc.extracted_text?.slice(0, 3000) || '',
           metadata: doc.metadata,
+        });
+      }
+
+      case 'joinDatasets': {
+        const [leftDs, rightDs] = await Promise.all([
+          getDataset(args.leftDocumentId),
+          getDataset(args.rightDocumentId),
+        ]);
+
+        const leftKeyIdx = leftDs.columns.findIndex(
+          (c) => c.toLowerCase() === String(args.leftKey).toLowerCase()
+        );
+        const rightKeyIdx = rightDs.columns.findIndex(
+          (c) => c.toLowerCase() === String(args.rightKey).toLowerCase()
+        );
+
+        if (leftKeyIdx === -1) return JSON.stringify({ error: `Left key "${args.leftKey}" not found in ${leftDs.sourceLabel}` });
+        if (rightKeyIdx === -1) return JSON.stringify({ error: `Right key "${args.rightKey}" not found in ${rightDs.sourceLabel}` });
+
+        // Build hash map from right dataset keyed on join column
+        const rightMap = new Map<string, string[]>();
+        for (const row of rightDs.rows) {
+          const key = String(row[rightKeyIdx] ?? '').toLowerCase().trim();
+          if (!rightMap.has(key)) rightMap.set(key, row);
+        }
+
+        // Join: for each left row, look up matching right row
+        const joinedRows: (string | null)[][] = [];
+        for (const leftRow of leftDs.rows) {
+          const key = String(leftRow[leftKeyIdx] ?? '').toLowerCase().trim();
+          const rightRow = rightMap.get(key);
+          if (rightRow) {
+            joinedRows.push([...leftRow, ...rightRow]);
+          }
+        }
+
+        // Build merged column headers
+        const mergedColumns = [
+          ...leftDs.columns.map((c) => `${leftDs.sourceLabel}.${c}`),
+          ...rightDs.columns.map((c) => `${rightDs.sourceLabel}.${c}`),
+        ];
+
+        // Column filter if requested
+        let outColumns = mergedColumns;
+        let outRows = joinedRows;
+        if (args.columns?.length) {
+          const requestedLower = (args.columns as string[]).map((c: string) => c.toLowerCase());
+          const indices = mergedColumns
+            .map((c, i) => (requestedLower.some((r) => c.toLowerCase().includes(r)) ? i : -1))
+            .filter((i) => i !== -1);
+          outColumns = indices.map((i) => mergedColumns[i]);
+          outRows = joinedRows.map((row) => indices.map((i) => row[i] ?? null));
+        }
+
+        const limit = args.limit || 30;
+        return JSON.stringify({
+          columns: outColumns,
+          rows: outRows.slice(0, limit),
+          totalMatched: outRows.length,
+          truncated: outRows.length > limit,
+          leftSource: leftDs.sourceLabel,
+          rightSource: rightDs.sourceLabel,
         });
       }
 

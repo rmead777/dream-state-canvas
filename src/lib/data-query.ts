@@ -19,11 +19,13 @@ export interface QueryResult {
 }
 
 /**
- * Execute a DataQuery against the active dataset.
- * Returns filtered, sorted, column-projected, limited results.
+ * Execute a DataQuery against a dataset.
+ * If `_dataset` is provided in the query, uses that instead of the active dataset.
+ * The `_dataset` field is a runtime-only override — not part of the AI-visible schema.
  */
 export function executeDataQuery(query: DataQuery): QueryResult {
-  const { columns: allColumns, rows: allRows } = getActiveDataset();
+  const datasetOverride = (query as any)?._dataset as { columns: string[]; rows: string[][] } | undefined;
+  const { columns: allColumns, rows: allRows } = datasetOverride ?? getActiveDataset();
 
   if (!query) {
     return { columns: allColumns, rows: allRows, totalMatched: allRows.length, truncated: false };

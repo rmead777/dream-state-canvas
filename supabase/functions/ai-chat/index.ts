@@ -25,7 +25,8 @@ Use your tools — do NOT return JSON or code blocks as your response.
 READ first, then WRITE:
   getCardData(objectId)        → get a card's full sections and state — ALWAYS call this before updateCard
   getWorkspaceState()          → see all cards on the canvas
-  queryDataset(filter/sort/limit/columns) → query the active dataset
+  queryDataset(filter/sort/limit/columns, documentId?) → query active dataset or a specific document
+  joinDatasets(leftDocumentId?, rightDocumentId, leftKey, rightKey, columns?) → JOIN two docs on shared key
   searchData(query)            → full-text search across data rows
   getDocumentContent(id)       → read an uploaded document
 

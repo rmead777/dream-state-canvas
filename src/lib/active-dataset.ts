@@ -4,6 +4,7 @@
  * imports in non-React code (intent engine, sherpa engine, etc.)
  */
 import { CANONICAL_DATASET } from './seed-data';
+import { getDocument, extractDataset } from './document-store';
 
 interface Dataset {
   columns: string[];
@@ -25,6 +26,27 @@ const listeners = new Set<Listener>();
 
 export function getActiveDataset(): Dataset {
   return current;
+}
+
+/**
+ * Get dataset for a specific document ID, or the active dataset if no ID given.
+ * Used by queryDataset and joinDatasets tools to support multi-document queries.
+ */
+export async function getDataset(documentId?: string): Promise<Dataset> {
+  if (!documentId) return current;
+
+  const doc = await getDocument(documentId);
+  if (!doc) return current; // graceful fallback
+
+  const extracted = extractDataset(doc);
+  if (!extracted) return current;
+
+  return {
+    columns: extracted.columns,
+    rows: extracted.rows,
+    sourceLabel: doc.filename,
+    sourceDocId: doc.id,
+  };
 }
 
 export function setActiveDataset(ds: Dataset): void {
