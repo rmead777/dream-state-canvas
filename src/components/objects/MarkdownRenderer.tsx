@@ -171,7 +171,20 @@ function parseMarkdown(text: string): ParsedBlock[] {
       }
     } else if (inTable) { flushTable(); }
 
-    if (trimmed === "") { flushList(); continue; }
+    if (trimmed === "") {
+      // Don't break a numbered/bullet list for a single blank line if the next
+      // non-empty line continues the same list type (AI often double-spaces lists)
+      if (listType && i + 1 < lines.length) {
+        const nextNonEmpty = lines.slice(i + 1).find(l => l.trim() !== '');
+        if (nextNonEmpty) {
+          const continuesBullet = listType === 'bullet' && /^[\s]*[-*]\s+/.test(nextNonEmpty);
+          const continuesNumber = listType === 'number' && /^[\s]*\d+\.\s+/.test(nextNonEmpty);
+          if (continuesBullet || continuesNumber) continue;
+        }
+      }
+      flushList();
+      continue;
+    }
 
     const heading = parseHeadingLevel(line);
     if (heading) { flushList(); flushTable(); blocks.push({ type: "heading", content: heading.text, level: heading.level }); continue; }
