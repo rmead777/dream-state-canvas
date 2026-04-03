@@ -299,8 +299,9 @@ export function SherpaRail() {
             </button>
           ))}
 
-          {/* Model dropdown — right-aligned */}
-          <div className="ml-auto" ref={modelDropdownRef}>
+          {/* Model dropdown — next to tabs */}
+          <div className="h-4 w-px bg-workspace-border/30 mx-1 shrink-0" />
+          <div ref={modelDropdownRef} className="relative">
             <button
               onClick={() => adminUnlocked ? setShowModelDropdown(!showModelDropdown) : null}
               className={`flex items-center gap-1 rounded-md px-2 py-1 text-[10px] transition-colors
@@ -317,9 +318,10 @@ export function SherpaRail() {
         </div>
       </div>
 
-      {/* Model dropdown panel — rendered OUTSIDE header to avoid clipping */}
+      {/* Model dropdown panel — outside header/rail overflow, anchored below tab bar */}
       {showModelDropdown && adminUnlocked && (
-        <div className="absolute right-12 top-[72px] z-50 w-56 max-h-[70vh] overflow-y-auto rounded-xl border border-workspace-border/45 bg-white shadow-[0_20px_60px_rgba(0,0,0,0.15)] animate-[materialize_0.15s_cubic-bezier(0.16,1,0.3,1)_forwards]">
+        <div className="relative z-50 -mt-px">
+          <div className="absolute left-4 top-0 w-56 max-h-[70vh] overflow-y-auto rounded-xl border border-workspace-border/45 bg-white shadow-[0_20px_60px_rgba(0,0,0,0.15)] animate-[materialize_0.15s_cubic-bezier(0.16,1,0.3,1)_forwards]">
           <div className="sticky top-0 z-10 bg-white border-b border-workspace-border/30 px-3 py-2">
             <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-workspace-text-secondary/60">Switch Model</span>
           </div>
@@ -367,6 +369,7 @@ export function SherpaRail() {
               </div>
             );
           })}
+          </div>
         </div>
       )}
 
