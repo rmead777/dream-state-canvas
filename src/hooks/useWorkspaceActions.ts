@@ -5,7 +5,7 @@ import { WorkspaceObject, IntentOrigin, WorkspaceAction, WorkspaceReducerAction 
 import { computeFreeformPosition } from '@/lib/freeform-placement';
 import { handleUpdate, handleFuse, handleRefineRules, HandlerResult, DispatchInstruction } from '@/lib/action-handlers';
 import { toast } from '@/hooks/use-toast';
-import { buildDocumentObjectContext, resolveDocumentRecord } from '@/lib/document-store';
+import { buildDocumentObjectContext, resolveDocumentRecord, getDocument, extractDataset } from '@/lib/document-store';
 import { validateSections } from '@/lib/card-schema';
 import { executeDataQuery } from '@/lib/data-query';
 import { addQuery, updateLastResponse, updateLastOutcomeCards } from '@/lib/conversation-memory';
@@ -230,6 +230,67 @@ export function useWorkspaceActions() {
           outcome.affectedObjectIds = mergeUnique(outcome.affectedObjectIds, [action.objectId]);
           summaryParts.push(`Opened ${stateRef.current.objects[action.objectId]?.title || action.objectId} in immersive view.`);
           break;
+
+        case 'open-source-document': {
+          // Find existing source card on canvas by sourceDocId or documentId match
+          const existing = Object.values(stateRef.current.objects).find(
+            o => o.status !== 'dissolved' &&
+              (o.context?.sourceDocId === action.documentId || o.id === action.documentId)
+          );
+          if (existing) {
+            dispatch({ type: 'ENTER_IMMERSIVE', payload: { id: existing.id } });
+            dispatch({ type: 'TOUCH_OBJECT', payload: { id: existing.id } });
+            summaryParts.push(`Opened "${existing.title}" in immersive view.`);
+          } else {
+            // No card on canvas yet — fetch from Supabase and materialize it
+            try {
+              const doc = await getDocument(action.documentId);
+              if (!doc) { summaryParts.push('Source document not found.'); break; }
+
+              const isSpreadsheet = doc.file_type === 'xlsx' || doc.file_type === 'csv';
+              const id = `wo-${isSpreadsheet ? 'dataset' : 'document'}-${Date.now()}`;
+              const title = doc.filename.replace(/\.[^/.]+$/, '');
+
+              let context: Record<string, any>;
+              if (isSpreadsheet) {
+                const ds = extractDataset(doc);
+                context = {
+                  columns: ds?.columns || [],
+                  rows: ds?.rows || [],
+                  sourceDocId: doc.id,
+                  fileName: doc.filename,
+                  fileType: doc.file_type,
+                };
+              } else {
+                context = buildDocumentObjectContext(doc);
+              }
+
+              dispatch({
+                type: 'MATERIALIZE_OBJECT',
+                payload: {
+                  id,
+                  type: isSpreadsheet ? 'dataset' : 'document',
+                  title,
+                  pinned: false,
+                  origin,
+                  relationships: [],
+                  context,
+                  position: { zone: 'primary', order: 0 },
+                },
+              });
+              // Short delay to let the reducer process the new object before entering immersive
+              await new Promise(r => setTimeout(r, 80));
+              dispatch({ type: 'OPEN_OBJECT', payload: { id } });
+              dispatch({ type: 'ENTER_IMMERSIVE', payload: { id } });
+              outcome.createdObjectIds.push(id);
+              summaryParts.push(`Opened "${title}" in immersive view.`);
+            } catch (e) {
+              console.error('[applyResult] openSourceDocument failed:', e);
+              summaryParts.push('Could not open source document.');
+            }
+          }
+          break;
+        }
 
         case 'focus':
           dispatch({ type: 'FOCUS_OBJECT', payload: { id: action.objectId } });

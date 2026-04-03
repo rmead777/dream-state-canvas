@@ -64,7 +64,7 @@ export interface WorkspaceObject {
 
 // ─── Intent Engine Types ──────────────────────────────────────────────────────
 
-export type WorkspaceActionType = 'create' | 'focus' | 'dissolve' | 'respond' | 'fuse' | 'refine-rules' | 'update' | 'immersive';
+export type WorkspaceActionType = 'create' | 'focus' | 'dissolve' | 'respond' | 'fuse' | 'refine-rules' | 'update' | 'immersive' | 'open-source-document';
 
 export interface CreateAction {
   type: 'create';
@@ -111,7 +111,12 @@ export interface ImmersiveAction {
   objectId: string;
 }
 
-export type WorkspaceAction = CreateAction | FocusAction | DissolveAction | RespondAction | FuseAction | RefineRulesAction | UpdateAction | ImmersiveAction;
+export interface OpenSourceDocumentAction {
+  type: 'open-source-document';
+  documentId: string;
+}
+
+export type WorkspaceAction = CreateAction | FocusAction | DissolveAction | RespondAction | FuseAction | RefineRulesAction | UpdateAction | ImmersiveAction | OpenSourceDocumentAction;
 
 export interface IntentResult {
   actions: WorkspaceAction[];

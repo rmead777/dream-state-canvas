@@ -171,11 +171,25 @@ export const SHERPA_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'openInImmersive',
-      description: 'Open a card in full-screen immersive view. Use this when the user asks to "open", "view", "read", or "expand" a document, dataset, or any card in immersive/full-screen/reader mode.',
+      description: 'Open an existing workspace card in full-screen immersive view. Use this when the user asks to "open", "view", "read", or "expand" a card that is already on the canvas.',
       parameters: {
         type: 'object',
-        properties: { objectId: { type: 'string', description: 'ID of the card to open in immersive view' } },
+        properties: { objectId: { type: 'string', description: 'ID of the workspace card to open in immersive view' } },
         required: ['objectId'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'openSourceDocument',
+      description: 'Open an uploaded source file directly in its native immersive viewer — full spreadsheet table for XLSX/CSV, native PDF canvas for PDFs. Use this when the user says "open the source file", "open the tracker", "view the spreadsheet", "open the PDF", "read the document", or references a filename from the UPLOADED DOCUMENTS list. Automatically creates the source card if it is not already on the canvas.',
+      parameters: {
+        type: 'object',
+        properties: {
+          documentId: { type: 'string', description: 'The document ID from the UPLOADED DOCUMENTS list' },
+        },
+        required: ['documentId'],
       },
     },
   },
@@ -409,6 +423,7 @@ const TOOL_STATUS: Record<string, string> = {
   dissolveCard: 'Removing card...',
   focusCard: 'Focusing card...',
   openInImmersive: 'Opening in immersive view...',
+  openSourceDocument: 'Opening source file...',
   rememberFact: 'Saving to memory...',
   recallMemories: 'Checking memory...',
   joinDatasets: 'Joining datasets...',
@@ -602,6 +617,9 @@ export async function executeTool(
 
       case 'openInImmersive':
         return JSON.stringify({ action: 'immersive', objectId: args.objectId });
+
+      case 'openSourceDocument':
+        return JSON.stringify({ action: 'open-source-document', documentId: args.documentId });
 
       case 'rememberFact': {
         // Extract keywords from content for trigger matching
