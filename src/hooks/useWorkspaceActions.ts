@@ -1,4 +1,5 @@
 import { useCallback, useRef } from 'react';
+import { computeLayoutWithOverflow } from '@/lib/spatial-orchestrator';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { agentLoop, orchestratorLoop } from '@/lib/sherpa-agent';
 import { WorkspaceObject, IntentOrigin, WorkspaceAction, WorkspaceReducerAction } from '@/lib/workspace-types';
@@ -227,7 +228,7 @@ export function useWorkspaceActions() {
           summaryParts.push(`Created ${created.type} "${created.title}".`);
           // Ensure new card wins the layout sort even if other cards were touched during creation
           dispatch({ type: 'TOUCH_OBJECT', payload: { id: created.id } });
-          dispatch({ type: 'REFLOW_LAYOUT' });
+          dispatch({ type: 'REFLOW_LAYOUT', payload: computeLayoutWithOverflow(state.objects).layout });
           break;
         }
 
@@ -337,7 +338,7 @@ export function useWorkspaceActions() {
             summaryParts.push(...execution.summaryParts);
             // Float updated card to top — touch updates lastInteractedAt, reflow resorts layout
             dispatch({ type: 'TOUCH_OBJECT', payload: { id: action.objectId } });
-            dispatch({ type: 'REFLOW_LAYOUT' });
+            dispatch({ type: 'REFLOW_LAYOUT', payload: computeLayoutWithOverflow(state.objects).layout });
           } catch (e) {
             console.error('[applyResult] Update handler failed:', e);
             dispatch({ type: 'SET_SHERPA_RESPONSE', payload: `Could not update "${target.title}". Try a different instruction.` });
