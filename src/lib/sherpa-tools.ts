@@ -412,6 +412,34 @@ export const SHERPA_TOOLS = [
     },
   },
 
+  // COMPUTE STATS tool
+  {
+    type: 'function' as const,
+    function: {
+      name: 'computeStats',
+      description: 'Compute statistical analysis on dataset columns. Returns aggregates, distributions, percentiles, correlations, outliers, group-by summaries, and pivot tables. Use this BEFORE creating visualizations to understand the data shape, and when the user asks analytical questions like "what\'s the average", "show distribution", "find outliers", "compare groups", "correlate X with Y", "top N by", "year-over-year", etc.',
+      parameters: {
+        type: 'object',
+        properties: {
+          operation: {
+            type: 'string',
+            enum: ['summary', 'distribution', 'percentiles', 'correlation', 'groupBy', 'topN', 'outliers', 'pivot', 'timeSeries', 'frequency'],
+            description: 'Type of analysis. summary=descriptive stats for columns. distribution=histogram bins. percentiles=p10/25/50/75/90. correlation=pairwise r-values. groupBy=aggregate by category. topN=ranked items. outliers=IQR-based detection. pivot=cross-tab. timeSeries=period-over-period changes. frequency=value counts.',
+          },
+          columns: { type: 'array', items: { type: 'string' }, description: 'Column names to analyze' },
+          groupByColumn: { type: 'string', description: 'For groupBy/pivot: column to group rows by' },
+          aggregation: { type: 'string', description: 'sum|avg|count|min|max|median (default: sum)' },
+          n: { type: 'number', description: 'For topN: how many results (default 10). For distribution: number of bins (default 10).' },
+          sortDirection: { type: 'string', description: 'asc|desc (default: desc)' },
+          documentId: { type: 'string', description: 'Optional: analyze a specific document instead of active dataset' },
+          dateColumn: { type: 'string', description: 'For timeSeries: the column containing dates' },
+          periodGrouping: { type: 'string', description: 'For timeSeries: day|week|month|quarter|year' },
+        },
+        required: ['operation'],
+      },
+    },
+  },
+
   // NEXT MOVES tool
   {
     type: 'function' as const,
@@ -465,6 +493,7 @@ const TOOL_STATUS: Record<string, string> = {
   exportWorkspace: 'Generating PDF report...',
   runSimulation: 'Running simulation...',
   queryQuickBooks: 'Fetching QuickBooks data...',
+  computeStats: 'Analyzing data...',
   suggestNextMoves: '',
 };
 
@@ -891,6 +920,340 @@ export async function executeTool(
           type: resp.type,
           ...resp.data,
         });
+      }
+
+      case 'computeStats': {
+        const ds = args.documentId
+          ? await getDataset(args.documentId)
+          : getActiveDataset();
+        const { columns, rows } = ds;
+        const targetCols = (args.columns as string[]) || columns;
+
+        // Helper: parse numeric values from cells
+        const parseNum = (val: any): number | null => {
+          if (val == null) return null;
+          const s = String(val).replace(/[$,%,]/g, '').trim();
+          const n = parseFloat(s);
+          return isNaN(n) ? null : n;
+        };
+
+        // Helper: get column values as numbers
+        const getNumericValues = (colName: string): number[] => {
+          const idx = columns.findIndex((c: string) => c.toLowerCase() === colName.toLowerCase());
+          if (idx === -1) return [];
+          return rows.map((r: any[]) => parseNum(r[idx])).filter((v): v is number => v !== null);
+        };
+
+        // Helper: get column values as strings
+        const getStringValues = (colName: string): string[] => {
+          const idx = columns.findIndex((c: string) => c.toLowerCase() === colName.toLowerCase());
+          if (idx === -1) return [];
+          return rows.map((r: any[]) => String(r[idx] ?? ''));
+        };
+
+        const median = (arr: number[]): number => {
+          const sorted = [...arr].sort((a, b) => a - b);
+          const mid = Math.floor(sorted.length / 2);
+          return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+        };
+
+        const percentile = (arr: number[], p: number): number => {
+          const sorted = [...arr].sort((a, b) => a - b);
+          const idx = (p / 100) * (sorted.length - 1);
+          const lower = Math.floor(idx);
+          const frac = idx - lower;
+          return sorted[lower] + (sorted[Math.min(lower + 1, sorted.length - 1)] - sorted[lower]) * frac;
+        };
+
+        switch (args.operation) {
+          case 'summary': {
+            const stats = targetCols.map(col => {
+              const nums = getNumericValues(col);
+              if (nums.length === 0) {
+                const strs = getStringValues(col);
+                const uniqueCount = new Set(strs).size;
+                return { column: col, type: 'categorical', count: strs.length, unique: uniqueCount, topValues: [...new Set(strs)].slice(0, 8) };
+              }
+              const sum = nums.reduce((a, b) => a + b, 0);
+              const avg = sum / nums.length;
+              const sorted = [...nums].sort((a, b) => a - b);
+              const stddev = Math.sqrt(nums.reduce((acc, v) => acc + (v - avg) ** 2, 0) / nums.length);
+              return {
+                column: col, type: 'numeric', count: nums.length,
+                sum: Math.round(sum * 100) / 100, avg: Math.round(avg * 100) / 100,
+                min: sorted[0], max: sorted[sorted.length - 1],
+                median: Math.round(median(nums) * 100) / 100,
+                stddev: Math.round(stddev * 100) / 100,
+              };
+            });
+            return JSON.stringify({ operation: 'summary', stats, totalRows: rows.length });
+          }
+
+          case 'distribution': {
+            const col = targetCols[0];
+            const nums = getNumericValues(col);
+            if (nums.length === 0) return JSON.stringify({ error: `No numeric values in column "${col}"` });
+            const binCount = args.n || 10;
+            const min = Math.min(...nums);
+            const max = Math.max(...nums);
+            const binWidth = (max - min) / binCount || 1;
+            const bins = Array.from({ length: binCount }, (_, i) => ({
+              binStart: Math.round((min + i * binWidth) * 100) / 100,
+              binEnd: Math.round((min + (i + 1) * binWidth) * 100) / 100,
+              count: 0,
+            }));
+            for (const v of nums) {
+              const idx = Math.min(Math.floor((v - min) / binWidth), binCount - 1);
+              bins[idx].count++;
+            }
+            return JSON.stringify({ operation: 'distribution', column: col, bins, totalValues: nums.length });
+          }
+
+          case 'percentiles': {
+            const col = targetCols[0];
+            const nums = getNumericValues(col);
+            if (nums.length === 0) return JSON.stringify({ error: `No numeric values in column "${col}"` });
+            return JSON.stringify({
+              operation: 'percentiles', column: col, count: nums.length,
+              p10: Math.round(percentile(nums, 10) * 100) / 100,
+              p25: Math.round(percentile(nums, 25) * 100) / 100,
+              p50: Math.round(percentile(nums, 50) * 100) / 100,
+              p75: Math.round(percentile(nums, 75) * 100) / 100,
+              p90: Math.round(percentile(nums, 90) * 100) / 100,
+              min: Math.min(...nums), max: Math.max(...nums),
+            });
+          }
+
+          case 'correlation': {
+            if (targetCols.length < 2) return JSON.stringify({ error: 'Need at least 2 columns for correlation' });
+            const pairs: { col1: string; col2: string; r: number; strength: string }[] = [];
+            for (let i = 0; i < targetCols.length; i++) {
+              for (let j = i + 1; j < targetCols.length; j++) {
+                const xVals = getNumericValues(targetCols[i]);
+                const yVals = getNumericValues(targetCols[j]);
+                const n = Math.min(xVals.length, yVals.length);
+                if (n < 3) continue;
+                const xMean = xVals.slice(0, n).reduce((a, b) => a + b, 0) / n;
+                const yMean = yVals.slice(0, n).reduce((a, b) => a + b, 0) / n;
+                let num = 0, denX = 0, denY = 0;
+                for (let k = 0; k < n; k++) {
+                  const dx = xVals[k] - xMean;
+                  const dy = yVals[k] - yMean;
+                  num += dx * dy;
+                  denX += dx * dx;
+                  denY += dy * dy;
+                }
+                const r = denX && denY ? Math.round((num / Math.sqrt(denX * denY)) * 1000) / 1000 : 0;
+                const absR = Math.abs(r);
+                const strength = absR > 0.7 ? 'strong' : absR > 0.4 ? 'moderate' : 'weak';
+                pairs.push({ col1: targetCols[i], col2: targetCols[j], r, strength });
+              }
+            }
+            pairs.sort((a, b) => Math.abs(b.r) - Math.abs(a.r));
+            return JSON.stringify({ operation: 'correlation', pairs });
+          }
+
+          case 'groupBy': {
+            const groupCol = args.groupByColumn || targetCols[0];
+            const measureCol = targetCols.find(c => c.toLowerCase() !== groupCol.toLowerCase()) || targetCols[0];
+            const aggFn = args.aggregation || 'sum';
+            const groupIdx = columns.findIndex((c: string) => c.toLowerCase() === groupCol.toLowerCase());
+            const measureIdx = columns.findIndex((c: string) => c.toLowerCase() === measureCol.toLowerCase());
+            if (groupIdx === -1 || measureIdx === -1) return JSON.stringify({ error: `Column not found` });
+
+            const groups = new Map<string, number[]>();
+            for (const row of rows) {
+              const key = String(row[groupIdx] ?? '');
+              const val = parseNum(row[measureIdx]);
+              if (val !== null) {
+                const arr = groups.get(key) || [];
+                arr.push(val);
+                groups.set(key, arr);
+              }
+            }
+
+            const results = [...groups.entries()].map(([key, vals]) => {
+              const sum = vals.reduce((a, b) => a + b, 0);
+              let value: number;
+              switch (aggFn) {
+                case 'avg': value = sum / vals.length; break;
+                case 'count': value = vals.length; break;
+                case 'min': value = Math.min(...vals); break;
+                case 'max': value = Math.max(...vals); break;
+                case 'median': value = median(vals); break;
+                default: value = sum;
+              }
+              return { group: key, value: Math.round(value * 100) / 100, count: vals.length };
+            });
+
+            const dir = args.sortDirection || 'desc';
+            results.sort((a, b) => dir === 'desc' ? b.value - a.value : a.value - b.value);
+
+            return JSON.stringify({
+              operation: 'groupBy', groupColumn: groupCol, measureColumn: measureCol,
+              aggregation: aggFn, groups: results.slice(0, args.n || 50),
+            });
+          }
+
+          case 'topN': {
+            const measureCol = targetCols[0];
+            const n = args.n || 10;
+            const measureIdx = columns.findIndex((c: string) => c.toLowerCase() === measureCol.toLowerCase());
+            if (measureIdx === -1) return JSON.stringify({ error: `Column "${measureCol}" not found` });
+
+            const items = rows.map((row: any[]) => {
+              const val = parseNum(row[measureIdx]);
+              return { row: row.slice(0, 6), value: val };
+            }).filter((i: any) => i.value !== null);
+
+            const dir = args.sortDirection || 'desc';
+            items.sort((a: any, b: any) => dir === 'desc' ? b.value - a.value : a.value - b.value);
+
+            return JSON.stringify({
+              operation: 'topN', column: measureCol, direction: dir,
+              items: items.slice(0, n).map((i: any, rank: number) => ({
+                rank: rank + 1, value: i.value,
+                label: i.row[0], columns: columns.slice(0, 6), row: i.row,
+              })),
+            });
+          }
+
+          case 'outliers': {
+            const col = targetCols[0];
+            const nums = getNumericValues(col);
+            if (nums.length < 4) return JSON.stringify({ error: 'Need at least 4 values for outlier detection' });
+            const q1 = percentile(nums, 25);
+            const q3 = percentile(nums, 75);
+            const iqr = q3 - q1;
+            const lower = q1 - 1.5 * iqr;
+            const upper = q3 + 1.5 * iqr;
+            const colIdx = columns.findIndex((c: string) => c.toLowerCase() === col.toLowerCase());
+            const outlierRows = rows.filter((row: any[]) => {
+              const v = parseNum(row[colIdx]);
+              return v !== null && (v < lower || v > upper);
+            }).slice(0, 20).map((row: any[]) => ({ label: row[0], value: parseNum(row[colIdx]), row: row.slice(0, 6) }));
+
+            return JSON.stringify({
+              operation: 'outliers', column: col,
+              q1: Math.round(q1 * 100) / 100, q3: Math.round(q3 * 100) / 100,
+              iqr: Math.round(iqr * 100) / 100,
+              lowerBound: Math.round(lower * 100) / 100, upperBound: Math.round(upper * 100) / 100,
+              outlierCount: outlierRows.length, outliers: outlierRows,
+            });
+          }
+
+          case 'pivot': {
+            const groupCol = args.groupByColumn || targetCols[0];
+            const pivotCol = targetCols[1] || targetCols[0];
+            const measureCol = targetCols[2] || targetCols[0];
+            const aggFn = args.aggregation || 'sum';
+            const gIdx = columns.findIndex((c: string) => c.toLowerCase() === groupCol.toLowerCase());
+            const pIdx = columns.findIndex((c: string) => c.toLowerCase() === pivotCol.toLowerCase());
+            const mIdx = columns.findIndex((c: string) => c.toLowerCase() === measureCol.toLowerCase());
+            if (gIdx === -1 || pIdx === -1) return JSON.stringify({ error: 'Pivot columns not found' });
+
+            const pivotValues = [...new Set(rows.map((r: any[]) => String(r[pIdx] ?? '')))].slice(0, 20);
+            const pivotMap = new Map<string, Map<string, number[]>>();
+
+            for (const row of rows) {
+              const g = String(row[gIdx] ?? '');
+              const p = String(row[pIdx] ?? '');
+              const v = parseNum(row[mIdx]) ?? 0;
+              if (!pivotMap.has(g)) pivotMap.set(g, new Map());
+              const inner = pivotMap.get(g)!;
+              if (!inner.has(p)) inner.set(p, []);
+              inner.get(p)!.push(v);
+            }
+
+            const pivotRows = [...pivotMap.entries()].map(([group, inner]) => {
+              const entry: Record<string, any> = { group };
+              for (const pv of pivotValues) {
+                const vals = inner.get(pv) || [];
+                const sum = vals.reduce((a, b) => a + b, 0);
+                entry[pv] = aggFn === 'avg' ? Math.round((sum / (vals.length || 1)) * 100) / 100
+                  : aggFn === 'count' ? vals.length : Math.round(sum * 100) / 100;
+              }
+              return entry;
+            });
+
+            return JSON.stringify({
+              operation: 'pivot', groupColumn: groupCol, pivotColumn: pivotCol,
+              measureColumn: measureCol, aggregation: aggFn,
+              pivotValues, rows: pivotRows.slice(0, 50),
+            });
+          }
+
+          case 'timeSeries': {
+            const dateCol = args.dateColumn || targetCols[0];
+            const measureCol = targetCols.find(c => c.toLowerCase() !== dateCol.toLowerCase()) || targetCols[0];
+            const period = args.periodGrouping || 'month';
+            const dIdx = columns.findIndex((c: string) => c.toLowerCase() === dateCol.toLowerCase());
+            const mIdx = columns.findIndex((c: string) => c.toLowerCase() === measureCol.toLowerCase());
+            if (dIdx === -1 || mIdx === -1) return JSON.stringify({ error: 'Column not found' });
+
+            const periodMap = new Map<string, number[]>();
+            for (const row of rows) {
+              const dateStr = String(row[dIdx] ?? '');
+              const val = parseNum(row[mIdx]);
+              if (val === null) continue;
+              const d = new Date(dateStr);
+              if (isNaN(d.getTime())) continue;
+              let key: string;
+              switch (period) {
+                case 'day': key = d.toISOString().slice(0, 10); break;
+                case 'week': { const w = new Date(d); w.setDate(w.getDate() - w.getDay()); key = w.toISOString().slice(0, 10); break; }
+                case 'quarter': key = `${d.getFullYear()}-Q${Math.floor(d.getMonth() / 3) + 1}`; break;
+                case 'year': key = String(d.getFullYear()); break;
+                default: key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+              }
+              const arr = periodMap.get(key) || [];
+              arr.push(val);
+              periodMap.set(key, arr);
+            }
+
+            const aggFn = args.aggregation || 'sum';
+            const series = [...periodMap.entries()]
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([period, vals]) => {
+                const sum = vals.reduce((a, b) => a + b, 0);
+                const value = aggFn === 'avg' ? sum / vals.length : aggFn === 'count' ? vals.length : sum;
+                return { period, value: Math.round(value * 100) / 100, count: vals.length };
+              });
+
+            // Add period-over-period change
+            const withChange = series.map((s, i) => ({
+              ...s,
+              change: i > 0 ? Math.round((s.value - series[i - 1].value) * 100) / 100 : 0,
+              changePct: i > 0 && series[i - 1].value ? Math.round(((s.value - series[i - 1].value) / series[i - 1].value) * 10000) / 100 : 0,
+            }));
+
+            return JSON.stringify({
+              operation: 'timeSeries', dateColumn: dateCol, measureColumn: measureCol,
+              periodGrouping: period, aggregation: aggFn, series: withChange,
+            });
+          }
+
+          case 'frequency': {
+            const col = targetCols[0];
+            const vals = getStringValues(col);
+            const freqMap = new Map<string, number>();
+            for (const v of vals) {
+              freqMap.set(v, (freqMap.get(v) || 0) + 1);
+            }
+            const items = [...freqMap.entries()]
+              .map(([value, count]) => ({ value, count, pct: Math.round((count / vals.length) * 10000) / 100 }))
+              .sort((a, b) => b.count - a.count)
+              .slice(0, args.n || 30);
+
+            return JSON.stringify({
+              operation: 'frequency', column: col, totalValues: vals.length,
+              uniqueValues: freqMap.size, items,
+            });
+          }
+
+          default:
+            return JSON.stringify({ error: `Unknown stats operation: ${args.operation}` });
+        }
       }
 
       case 'suggestNextMoves':

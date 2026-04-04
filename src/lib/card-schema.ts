@@ -59,9 +59,9 @@ export const MetricsRowSection = z.object({
 
 export const ChartSection = z.object({
   type: z.literal('chart'),
-  chartType: z.enum(['bar', 'line', 'area']),
-  xAxis: z.string(),
-  yAxis: z.string(),
+  chartType: z.enum(['bar', 'line', 'area', 'pie', 'donut', 'scatter', 'radialBar', 'radial', 'funnel', 'treemap', 'composed']),
+  xAxis: z.string().optional(),
+  yAxis: z.string().optional(),
   data: z.array(z.record(z.union([z.string(), z.number()]))),
   caption: z.string().optional(),
   color: z.string().optional(),
@@ -69,6 +69,20 @@ export const ChartSection = z.object({
   fillOpacity: z.number().optional(),
   height: z.number().optional(),
   theme: z.string().optional(),
+  // Scatter-specific
+  zAxis: z.string().optional(),
+  // Pie/donut specific
+  nameKey: z.string().optional(),
+  valueKey: z.string().optional(),
+  innerRadius: z.number().optional(),
+  outerRadius: z.number().optional(),
+  // Composed chart series definitions
+  series: z.array(z.object({
+    dataKey: z.string(),
+    name: z.string().optional(),
+    color: z.string().optional(),
+    type: z.enum(['bar', 'line', 'area']).optional(),
+  })).optional(),
 }).passthrough();
 
 export const VegaLiteSection = z.object({
@@ -170,6 +184,22 @@ function normalizeSection(item: unknown): unknown {
   if (s.type === 'vega' || s.type === 'vega-lite' || s.type === 'vegaLite') {
     return { ...s, type: 'vegalite' };
   }
+  // chart.chartType aliases — normalize AI naming variations
+  if (s.type === 'chart') {
+    const typeMap: Record<string, string> = {
+      'doughnut': 'donut', 'ring': 'donut',
+      'bubble': 'scatter', 'point': 'scatter',
+      'radial-bar': 'radialBar', 'radial_bar': 'radialBar', 'gauge': 'radialBar',
+      'tree-map': 'treemap', 'tree_map': 'treemap',
+      'mixed': 'composed', 'combo': 'composed', 'combined': 'composed',
+      'stacked-bar': 'bar', 'stackedBar': 'bar', 'stacked_bar': 'bar',
+      'horizontal-bar': 'bar', 'horizontalBar': 'bar',
+    };
+    if (s.chartType && typeMap[s.chartType as string]) {
+      return { ...s, chartType: typeMap[s.chartType as string] };
+    }
+  }
+
   // chart.chartType === 'heatmap' — recharts doesn't support heatmap.
   // Remap to a vegalite rect spec using the data the AI already prepared.
   if (s.type === 'chart' && s.chartType === 'heatmap') {

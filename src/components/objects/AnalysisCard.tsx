@@ -13,7 +13,12 @@ import { CardSectionType } from '@/lib/card-schema';
 import { CHART_THEMES } from '@/lib/chart-themes';
 import MarkdownRenderer from './MarkdownRenderer';
 import DOMPurify from 'dompurify';
-import { BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
+import {
+  BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip,
+  ResponsiveContainer, CartesianGrid, Cell, Legend, PieChart, Pie,
+  ScatterChart, Scatter, ZAxis, ComposedChart, RadialBarChart, RadialBar,
+  Treemap, FunnelChart, Funnel, LabelList,
+} from 'recharts';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { ENTITY_COLUMN_PATTERNS } from '@/lib/entity-extractor';
 
@@ -317,14 +322,203 @@ function MetricsRowRenderer({ section }: { section: { metrics: { label: string; 
   );
 }
 
-function ChartRenderer({ section }: { section: { chartType: string; xAxis: string; yAxis: string; data: Record<string, string | number>[]; caption?: string; color?: string; colors?: string[]; fillOpacity?: number; height?: number; theme?: string } }) {
-  const ChartComponent = section.chartType === 'line' ? LineChart : section.chartType === 'area' ? AreaChart : BarChart;
-  const DataComponent: React.ElementType = section.chartType === 'line' ? Line : section.chartType === 'area' ? Area : Bar;
-
+function ChartRenderer({ section }: { section: { chartType: string; xAxis: string; yAxis: string; data: Record<string, string | number>[]; caption?: string; color?: string; colors?: string[]; fillOpacity?: number; height?: number; theme?: string; zAxis?: string; innerRadius?: number; outerRadius?: number; nameKey?: string; valueKey?: string; series?: { dataKey: string; name?: string; color?: string; type?: string }[] } }) {
   // Resolve named color theme if provided, then fall back to explicit colors, then workspace accent
   const resolvedTheme = section.theme ? CHART_THEMES[section.theme] : null;
   const primaryColor = resolvedTheme?.colors[0] || section.color || 'hsl(var(--workspace-accent))';
   const chartHeight = section.height || 192;
+  const defaultPalette = resolvedTheme?.colors || ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#14b8a6'];
+
+  const tooltipStyle = {
+    background: 'white',
+    border: '1px solid hsl(var(--workspace-border))',
+    borderRadius: '8px',
+    fontSize: '11px',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+  };
+
+  const formatValue = (value: number) => {
+    if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+    if (Math.abs(value) >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+    return typeof value === 'number' ? value.toLocaleString() : value;
+  };
+
+  // ─── PIE / DONUT ─────────────────────────────────────
+  if (section.chartType === 'pie' || section.chartType === 'donut') {
+    const nameKey = section.nameKey || section.xAxis || 'name';
+    const valueKey = section.valueKey || section.yAxis || 'value';
+    const innerRadius = section.chartType === 'donut' ? (section.innerRadius ?? 60) : (section.innerRadius ?? 0);
+    const colors = section.colors || defaultPalette;
+
+    return (
+      <div className="space-y-1">
+        <div className="w-full" style={{ height: chartHeight }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={section.data}
+                dataKey={valueKey}
+                nameKey={nameKey}
+                cx="50%" cy="50%"
+                innerRadius={innerRadius}
+                outerRadius={Math.min(chartHeight / 2 - 20, 120)}
+                strokeWidth={2}
+                stroke="hsl(var(--workspace-bg))"
+              >
+                {section.data.map((_, i) => (
+                  <Cell key={i} fill={colors[i % colors.length]} />
+                ))}
+                <LabelList dataKey={nameKey} position="outside" style={{ fontSize: 10, fill: 'hsl(var(--workspace-text-secondary))' }} />
+              </Pie>
+              <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => formatValue(value)} />
+              <Legend formatter={(value) => <span style={{ fontSize: 10, color: 'hsl(var(--workspace-text-secondary))' }}>{value}</span>} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        {section.caption && <p className="text-[10px] text-workspace-text-secondary/50 px-1">{section.caption}</p>}
+      </div>
+    );
+  }
+
+  // ─── SCATTER ──────────────────────────────────────────
+  if (section.chartType === 'scatter') {
+    const zKey = section.zAxis;
+    return (
+      <div className="space-y-1">
+        <div className="w-full" style={{ height: chartHeight }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <ScatterChart margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--workspace-border))" opacity={0.3} />
+              <XAxis dataKey={section.xAxis} name={section.xAxis} tick={{ fontSize: 10 }} stroke="hsl(var(--workspace-text-secondary))" />
+              <YAxis dataKey={section.yAxis} name={section.yAxis} tick={{ fontSize: 10 }} stroke="hsl(var(--workspace-text-secondary))" />
+              {zKey && <ZAxis dataKey={zKey} range={[40, 400]} name={zKey} />}
+              <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => formatValue(value)} />
+              <Scatter data={section.data} fill={primaryColor} fillOpacity={0.7} strokeWidth={1} stroke={primaryColor} />
+            </ScatterChart>
+          </ResponsiveContainer>
+        </div>
+        {section.caption && <p className="text-[10px] text-workspace-text-secondary/50 px-1">{section.caption}</p>}
+      </div>
+    );
+  }
+
+  // ─── RADIAL BAR ───────────────────────────────────────
+  if (section.chartType === 'radialBar' || section.chartType === 'radial') {
+    const colors = section.colors || defaultPalette;
+    const dataWithFill = section.data.map((d, i) => ({ ...d, fill: colors[i % colors.length] }));
+    return (
+      <div className="space-y-1">
+        <div className="w-full" style={{ height: chartHeight }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <RadialBarChart cx="50%" cy="50%" innerRadius="20%" outerRadius="90%" data={dataWithFill} startAngle={180} endAngle={0}>
+              <RadialBar background={{ fill: 'hsl(var(--workspace-surface))' }} dataKey={section.yAxis || 'value'} cornerRadius={4} />
+              <Legend
+                iconSize={10}
+                formatter={(value) => <span style={{ fontSize: 10 }}>{value}</span>}
+              />
+              <Tooltip contentStyle={tooltipStyle} />
+            </RadialBarChart>
+          </ResponsiveContainer>
+        </div>
+        {section.caption && <p className="text-[10px] text-workspace-text-secondary/50 px-1">{section.caption}</p>}
+      </div>
+    );
+  }
+
+  // ─── FUNNEL ───────────────────────────────────────────
+  if (section.chartType === 'funnel') {
+    const colors = section.colors || defaultPalette;
+    const dataWithFill = section.data.map((d, i) => ({ ...d, fill: colors[i % colors.length] }));
+    return (
+      <div className="space-y-1">
+        <div className="w-full" style={{ height: chartHeight }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <FunnelChart>
+              <Tooltip contentStyle={tooltipStyle} />
+              <Funnel dataKey={section.yAxis || 'value'} data={dataWithFill} isAnimationActive>
+                <LabelList position="right" fill="hsl(var(--workspace-text))" stroke="none" style={{ fontSize: 10 }} dataKey={section.xAxis || 'name'} />
+              </Funnel>
+            </FunnelChart>
+          </ResponsiveContainer>
+        </div>
+        {section.caption && <p className="text-[10px] text-workspace-text-secondary/50 px-1">{section.caption}</p>}
+      </div>
+    );
+  }
+
+  // ─── TREEMAP ──────────────────────────────────────────
+  if (section.chartType === 'treemap') {
+    const colors = section.colors || defaultPalette;
+    const treemapData = section.data.map((d, i) => ({
+      name: String(d[section.xAxis || 'name'] ?? `Item ${i + 1}`),
+      size: Number(d[section.yAxis || 'value'] ?? 0),
+      fill: colors[i % colors.length],
+    }));
+    return (
+      <div className="space-y-1">
+        <div className="w-full" style={{ height: chartHeight }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <Treemap
+              data={treemapData}
+              dataKey="size"
+              nameKey="name"
+              stroke="hsl(var(--workspace-bg))"
+              strokeWidth={2}
+              isAnimationActive
+              content={({ x, y, width, height, name, fill }: any) => {
+                if (width < 30 || height < 20) return null;
+                return (
+                  <g>
+                    <rect x={x} y={y} width={width} height={height} fill={fill} rx={4} opacity={0.85} />
+                    <text x={x + width / 2} y={y + height / 2} textAnchor="middle" dominantBaseline="central" fill="white" fontSize={Math.min(11, width / 6)} fontWeight={600}>
+                      {String(name).length > width / 7 ? String(name).slice(0, Math.floor(width / 7)) + '…' : name}
+                    </text>
+                  </g>
+                );
+              }}
+            />
+          </ResponsiveContainer>
+        </div>
+        {section.caption && <p className="text-[10px] text-workspace-text-secondary/50 px-1">{section.caption}</p>}
+      </div>
+    );
+  }
+
+  // ─── COMPOSED (multi-type chart — bars + lines on same axes) ──────────────
+  if (section.chartType === 'composed') {
+    const seriesDefs = section.series || [];
+    const colorPalette = section.colors || defaultPalette;
+    return (
+      <div className="space-y-1">
+        <div className="w-full" style={{ height: chartHeight }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={section.data} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--workspace-border))" opacity={0.3} />
+              <XAxis dataKey={section.xAxis} tick={{ fontSize: 10 }} stroke="hsl(var(--workspace-text-secondary))" />
+              <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--workspace-text-secondary))" />
+              <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => formatValue(value)} />
+              <Legend formatter={(value) => <span style={{ fontSize: 10 }}>{value}</span>} />
+              {seriesDefs.map((s, i) => {
+                const color = s.color || colorPalette[i % colorPalette.length];
+                switch (s.type || 'bar') {
+                  case 'line': return <Line key={s.dataKey} type="monotone" dataKey={s.dataKey} name={s.name || s.dataKey} stroke={color} strokeWidth={2} dot={{ r: 3 }} />;
+                  case 'area': return <Area key={s.dataKey} type="monotone" dataKey={s.dataKey} name={s.name || s.dataKey} fill={color} stroke={color} fillOpacity={0.15} />;
+                  default: return <Bar key={s.dataKey} dataKey={s.dataKey} name={s.name || s.dataKey} fill={color} fillOpacity={0.85} radius={[3, 3, 0, 0]} />;
+                }
+              })}
+              {/* Fallback: if no series defined, render yAxis as bar */}
+              {seriesDefs.length === 0 && <Bar dataKey={section.yAxis} fill={primaryColor} fillOpacity={0.85} radius={[3, 3, 0, 0]} />}
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+        {section.caption && <p className="text-[10px] text-workspace-text-secondary/50 px-1">{section.caption}</p>}
+      </div>
+    );
+  }
+
+  // ─── STANDARD: BAR / LINE / AREA ─────────────────────
+  const ChartComponent = section.chartType === 'line' ? LineChart : section.chartType === 'area' ? AreaChart : BarChart;
+  const DataComponent: React.ElementType = section.chartType === 'line' ? Line : section.chartType === 'area' ? Area : Bar;
 
   // Detect per-bar coloring: data items have a __color field, OR colors array matches data length
   const hasPerBarColors = section.data.some(d => '__color' in d);
@@ -353,16 +547,12 @@ function ChartRenderer({ section }: { section: { chartType: string; xAxis: strin
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--workspace-border))" opacity={0.3} />
             <XAxis dataKey={section.xAxis} tick={{ fontSize: 10 }} stroke="hsl(var(--workspace-text-secondary))" />
             <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--workspace-text-secondary))" />
-            <Tooltip
-              contentStyle={{
-                background: 'white',
-                border: '1px solid hsl(var(--workspace-border))',
-                borderRadius: '8px',
-                fontSize: '11px',
-              }}
-            />
+            <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => formatValue(value)} />
+            {yAxisKeys.length > 1 && (
+              <Legend formatter={(value) => <span style={{ fontSize: 10 }}>{value}</span>} />
+            )}
             {usePerBarColoring && barColors ? (
-              <Bar dataKey={section.yAxis} fillOpacity={section.fillOpacity ?? 0.85}>
+              <Bar dataKey={section.yAxis} fillOpacity={section.fillOpacity ?? 0.85} radius={[3, 3, 0, 0]}>
                 {barColors.map((color, i) => (
                   <Cell key={i} fill={color} stroke={color} />
                 ))}
@@ -375,6 +565,8 @@ function ChartRenderer({ section }: { section: { chartType: string; xAxis: strin
                   fill={colorPalette[i % colorPalette.length]}
                   stroke={colorPalette[i % colorPalette.length]}
                   fillOpacity={section.fillOpacity ?? (section.chartType === 'bar' ? 0.85 : 0.15)}
+                  {...(section.chartType === 'bar' ? { radius: [3, 3, 0, 0] } : {})}
+                  {...(section.chartType === 'line' ? { type: 'monotone', strokeWidth: 2, dot: { r: 3 } } : {})}
                 />
               ))
             )}
