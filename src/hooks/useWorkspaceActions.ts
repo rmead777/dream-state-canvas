@@ -227,7 +227,7 @@ export function useWorkspaceActions() {
           summaryParts.push(`Created ${created.type} "${created.title}".`);
           // Ensure new card wins the layout sort even if other cards were touched during creation
           dispatch({ type: 'TOUCH_OBJECT', payload: { id: created.id } });
-          dispatch({ type: 'REFLOW_LAYOUT' });
+          dispatch({ type: 'REFLOW_LAYOUT', payload: computeLayoutWithOverflow(Object.values(state.objects)) });
           break;
         }
 
