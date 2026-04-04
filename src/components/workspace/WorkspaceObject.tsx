@@ -25,6 +25,7 @@ import { ProductionRiskMap } from '@/components/objects/ProductionRiskMap';
 import { EmailDraft } from '@/components/objects/EmailDraft';
 import { SimulationCard } from '@/components/objects/SimulationCard';
 import { AutomationPanel } from '@/components/objects/AutomationPanel';
+import { DatasetEditPreview } from '@/components/objects/DatasetEditPreview';
 
 const typeLabels: Record<string, string> = {
   metric: 'Metric',
@@ -51,6 +52,11 @@ function ObjectContent({ object }: { object: WO }) {
   // Special flag: automation panel view
   if (object.context?.isAutomationPanel) {
     return <AutomationPanel object={object} />;
+  }
+
+  // Dataset edit preview gets its own renderer (before sections check)
+  if (object.context?.isDatasetEdit || object.type === 'dataset-edit-preview') {
+    return <DatasetEditPreview object={object} />;
   }
 
   // If any card type has AI-generated sections, use the universal renderer

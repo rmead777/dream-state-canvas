@@ -411,6 +411,44 @@ export const SHERPA_TOOLS = [
       },
     },
   },
+  // DATASET EDITING tool
+  {
+    type: 'function' as const,
+    function: {
+      name: 'editDataset',
+      description: 'Edit the source spreadsheet data — update cells, add/delete rows, add/rename columns. Use when the user asks to update the tracker, mark something as paid, change a status, add new entries, reconcile data with QuickBooks, or any request that requires modifying the underlying spreadsheet. Creates a preview card showing proposed changes for user confirmation before applying. NEVER use this to modify QuickBooks data — QB is read-only. This only modifies uploaded spreadsheets.',
+      parameters: {
+        type: 'object',
+        properties: {
+          operations: {
+            type: 'array',
+            description: 'Array of edit operations to apply in order',
+            items: {
+              type: 'object',
+              properties: {
+                type: {
+                  type: 'string',
+                  enum: ['updateCell', 'addRow', 'deleteRow', 'addColumn', 'renameColumn'],
+                  description: 'Operation type',
+                },
+                row: { type: 'number', description: 'Row index (0-based). Required for updateCell and deleteRow.' },
+                column: { type: 'string', description: 'Column name. Required for updateCell, addColumn, renameColumn.' },
+                value: { type: 'string', description: 'New cell value for updateCell, or default value for addColumn.' },
+                values: { type: 'object', description: 'For addRow: object mapping column names to values, e.g. {"Vendor": "Acme", "Amount": "5000"}' },
+                newName: { type: 'string', description: 'For renameColumn: the new column name.' },
+                afterColumn: { type: 'string', description: 'For addColumn: insert after this column (omit to append at end).' },
+              },
+              required: ['type'],
+            },
+          },
+          reason: { type: 'string', description: 'Brief explanation of why these changes are being made (shown to user in preview)' },
+          documentId: { type: 'string', description: 'Optional: edit a specific document by ID. Defaults to the active dataset.' },
+        },
+        required: ['operations', 'reason'],
+      },
+    },
+  },
+
   {
     type: 'function' as const,
     function: {
@@ -509,6 +547,7 @@ const TOOL_STATUS: Record<string, string> = {
   createCalendarEvent: 'Creating calendar event...',
   exportWorkspace: 'Generating PDF report...',
   runSimulation: 'Running simulation...',
+  editDataset: 'Preparing dataset changes...',
   queryQuickBooks: 'Fetching QuickBooks data...',
   refreshQuickBooks: 'Refreshing QuickBooks data...',
   computeStats: 'Analyzing data...',
@@ -937,6 +976,102 @@ export async function executeTool(
           company: resp.company,
           type: resp.type,
           ...resp.data,
+        });
+      }
+
+      case 'editDataset': {
+        // Get the target dataset
+        const targetDs = args.documentId
+          ? await getDataset(args.documentId)
+          : getActiveDataset();
+
+        const cols = [...targetDs.columns];
+        const rows = targetDs.rows.map(r => [...r]);
+        const ops = args.operations as Array<Record<string, any>>;
+        const changes: Array<{ type: string; description: string; before?: string; after?: string }> = [];
+        const errors: string[] = [];
+
+        for (const op of ops) {
+          switch (op.type) {
+            case 'updateCell': {
+              const colIdx = cols.findIndex(c => c.toLowerCase() === String(op.column).toLowerCase());
+              if (colIdx === -1) { errors.push(`Column "${op.column}" not found`); break; }
+              if (op.row < 0 || op.row >= rows.length) { errors.push(`Row ${op.row} out of range (0-${rows.length - 1})`); break; }
+              const before = rows[op.row][colIdx];
+              rows[op.row][colIdx] = String(op.value ?? '');
+              changes.push({ type: 'update', description: `Row ${op.row}, "${cols[colIdx]}": "${before}" → "${op.value}"`, before, after: String(op.value ?? '') });
+              break;
+            }
+            case 'addRow': {
+              const newRow = cols.map(c => {
+                const val = op.values?.[c] ?? op.values?.[c.toLowerCase()] ?? '';
+                return String(val);
+              });
+              rows.push(newRow);
+              const nonEmpty = Object.entries(op.values || {}).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join(', ');
+              changes.push({ type: 'add-row', description: `Add row ${rows.length - 1}: ${nonEmpty || '(empty row)'}` });
+              break;
+            }
+            case 'deleteRow': {
+              if (op.row < 0 || op.row >= rows.length) { errors.push(`Row ${op.row} out of range`); break; }
+              const deleted = rows[op.row];
+              const preview = cols.slice(0, 3).map((c, i) => `${c}=${deleted[i] || ''}`).join(', ');
+              rows.splice(op.row, 1);
+              changes.push({ type: 'delete-row', description: `Delete row ${op.row}: ${preview}` });
+              break;
+            }
+            case 'addColumn': {
+              if (cols.some(c => c.toLowerCase() === String(op.column).toLowerCase())) {
+                errors.push(`Column "${op.column}" already exists`);
+                break;
+              }
+              const insertIdx = op.afterColumn
+                ? cols.findIndex(c => c.toLowerCase() === String(op.afterColumn).toLowerCase()) + 1
+                : cols.length;
+              const defaultVal = String(op.value ?? '');
+              cols.splice(insertIdx, 0, op.column);
+              for (const row of rows) {
+                row.splice(insertIdx, 0, defaultVal);
+              }
+              changes.push({ type: 'add-column', description: `Add column "${op.column}"${op.afterColumn ? ` after "${op.afterColumn}"` : ' at end'}${defaultVal ? ` (default: "${defaultVal}")` : ''}` });
+              break;
+            }
+            case 'renameColumn': {
+              const renameIdx = cols.findIndex(c => c.toLowerCase() === String(op.column).toLowerCase());
+              if (renameIdx === -1) { errors.push(`Column "${op.column}" not found`); break; }
+              const oldName = cols[renameIdx];
+              cols[renameIdx] = op.newName;
+              changes.push({ type: 'rename-column', description: `Rename column "${oldName}" → "${op.newName}"` });
+              break;
+            }
+            default:
+              errors.push(`Unknown operation type: ${op.type}`);
+          }
+        }
+
+        if (errors.length > 0 && changes.length === 0) {
+          return JSON.stringify({ error: `All operations failed: ${errors.join('; ')}` });
+        }
+
+        // Return a preview card — the actual edit is applied when user clicks "Apply"
+        return JSON.stringify({
+          action: 'create',
+          objectType: 'dataset-edit-preview',
+          title: `Proposed Changes: ${targetDs.sourceLabel}`,
+          data: {
+            isDatasetEdit: true,
+            reason: args.reason || 'AI-proposed dataset changes',
+            changes,
+            errors,
+            // Store the full new state so Apply can use it directly
+            newColumns: cols,
+            newRows: rows,
+            sourceDocId: args.documentId || targetDs.sourceDocId,
+            sourceLabel: targetDs.sourceLabel,
+            originalColumns: targetDs.columns,
+            originalRows: targetDs.rows,
+            operationCount: changes.length,
+          },
         });
       }
 

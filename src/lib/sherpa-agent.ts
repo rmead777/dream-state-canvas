@@ -121,12 +121,22 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
 Use this data when the user asks about cash flow, bills, invoices, working capital, vendor performance, customer analysis, or any financial question. Prefer "summary" for broad financial questions. Cross-reference QB data with uploaded spreadsheets when both are relevant.
 If the user asks to refresh or update QB data, use the refreshQuickBooks tool to clear the cache and pull fresh data.`;
 
+  const editHint = `\nDATASET EDITING: You can modify uploaded spreadsheets using the editDataset tool. Operations: updateCell, addRow, deleteRow, addColumn, renameColumn.
+WORKFLOW: Use queryDataset to read current data → compare with QuickBooks data → use editDataset to propose changes → user confirms via Apply button.
+KEY RULES:
+  - QuickBooks is ALWAYS READ-ONLY. Never attempt to write to QB.
+  - editDataset creates a preview card — changes only apply when the user clicks "Apply Changes".
+  - You can add columns the AI finds useful (e.g., "Last QB Sync", "AI Notes", "Payment Status").
+  - When reconciling QB data with spreadsheets, always explain what changed and why.
+  - Use row indices from queryDataset results. Query first to find the right rows, then edit.`;
+
   const textContent = [
     `User query: "${query}"`,
     focusedHint,
     `\nWorkspace state:\n${structuredContext}`,
     documentsHint,
     qboHint,
+    editHint,
     // NOTE: memories are sent separately as body.memories to the edge function
     // and injected into the system prompt. Don't duplicate them in the user message.
   ].filter(Boolean).join('\n');
