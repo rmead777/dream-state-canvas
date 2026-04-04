@@ -465,18 +465,7 @@ function ChartRenderer({ section }: { section: { chartType: string; xAxis: strin
               stroke="hsl(var(--workspace-bg))"
               strokeWidth={2}
               isAnimationActive
-              content={(props: any) => {
-                const { x, y, width, height, name, fill } = props;
-                if (width < 30 || height < 20) return null;
-                return (
-                  <g>
-                    <rect x={x} y={y} width={width} height={height} fill={fill} rx={4} opacity={0.85} />
-                    <text x={x + width / 2} y={y + height / 2} textAnchor="middle" dominantBaseline="central" fill="white" fontSize={Math.min(11, width / 6)} fontWeight={600}>
-                      {String(name).length > width / 7 ? String(name).slice(0, Math.floor(width / 7)) + '…' : name}
-                    </text>
-                  </g>
-                );
-              }}
+              content={<TreemapCell />}
             />
           </ResponsiveContainer>
         </div>
