@@ -49,12 +49,15 @@ serve(async (req) => {
       case 'customers':
         result = await fetchCustomers(token, connection);
         break;
+      case 'bill_payments':
+        result = await fetchBillPayments(token, connection, options);
+        break;
       case 'summary':
         result = await fetchFinancialSummary(token, connection);
         break;
       default:
         return new Response(
-          JSON.stringify({ error: `Unknown data type: ${type}. Use: ap, ar, bank, pnl, vendors, customers, summary` }),
+          JSON.stringify({ error: `Unknown data type: ${type}. Use: ap, ar, bank, pnl, vendors, customers, bill_payments, summary` }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
     }
@@ -382,6 +385,86 @@ async function fetchFinancialSummary(token: string, connection: any) {
       netWorkingCapital: bank.totalCash + ar.totalOpenAR - ap.totalAP,
       currentRatio: ap.totalAP > 0 ? (bank.totalCash + ar.totalOpenAR) / ap.totalAP : null,
     },
+  };
+}
+
+// ─── Bill Payments ─────────────────────────────────────────────────────────
+
+async function fetchBillPayments(token: string, connection: any, options?: any) {
+  // Default to last 6 months if no date range specified
+  const startDate = options?.startDate
+    || (() => { const d = new Date(); d.setMonth(d.getMonth() - 6); return d.toISOString().split('T')[0]; })();
+
+  // Paginate — BillPayment can be large
+  const allPayments: any[] = [];
+  let startPosition = 1;
+  const pageSize = 500;
+
+  while (true) {
+    const data = await queryQBO(token, connection,
+      `SELECT * FROM BillPayment WHERE TxnDate >= '${startDate}' ORDER BY TxnDate DESC STARTPOSITION ${startPosition} MAXRESULTS ${pageSize}`);
+    const page = data.QueryResponse?.BillPayment || [];
+    allPayments.push(...page);
+    if (page.length < pageSize) break;
+    startPosition += pageSize;
+  }
+
+  const transformed = allPayments.map((bp: any) => {
+    // Determine payment method and account
+    let paymentMethod = bp.PayType || 'Unknown';
+    let accountName: string | null = null;
+    let checkNum: string | null = null;
+
+    if (bp.PayType === 'Check' && bp.CheckPayment) {
+      accountName = bp.CheckPayment.BankAccountRef?.name || null;
+      checkNum = bp.CheckPayment.PrintStatus === 'NeedToPrint' ? null : (bp.DocNumber || null);
+    } else if (bp.PayType === 'CreditCard' && bp.CreditCardPayment) {
+      accountName = bp.CreditCardPayment.CCAccountRef?.name || null;
+      paymentMethod = 'Credit Card';
+    }
+
+    // Extract which bills were paid
+    const billsPaid = (bp.Line || [])
+      .filter((line: any) => line.LinkedTxn?.length > 0)
+      .map((line: any) => ({
+        amount: line.Amount,
+        billIds: line.LinkedTxn?.filter((t: any) => t.TxnType === 'Bill').map((t: any) => t.TxnId) || [],
+      }));
+
+    return {
+      id: bp.Id,
+      date: bp.TxnDate,
+      vendor: bp.VendorRef?.name || 'Unknown',
+      vendorId: bp.VendorRef?.value,
+      amount: bp.TotalAmt,
+      paymentMethod,
+      accountName,
+      checkNum,
+      docNumber: bp.DocNumber || null,
+      memo: bp.PrivateNote || null,
+      billsPaid,
+    };
+  });
+
+  // Summary by vendor
+  const byVendor: Record<string, number> = {};
+  for (const p of transformed) {
+    byVendor[p.vendor] = (byVendor[p.vendor] || 0) + p.amount;
+  }
+
+  // Summary by payment method
+  const byMethod: Record<string, number> = {};
+  for (const p of transformed) {
+    byMethod[p.paymentMethod] = (byMethod[p.paymentMethod] || 0) + p.amount;
+  }
+
+  return {
+    payments: transformed,
+    totalPaid: transformed.reduce((s: number, p: any) => s + p.amount, 0),
+    paymentCount: transformed.length,
+    dateRange: { from: startDate, to: new Date().toISOString().split('T')[0] },
+    byVendor,
+    byMethod,
   };
 }
 

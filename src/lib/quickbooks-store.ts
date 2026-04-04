@@ -13,7 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
-export type QBODataType = 'ap' | 'ar' | 'bank' | 'pnl' | 'vendors' | 'customers' | 'summary';
+export type QBODataType = 'ap' | 'ar' | 'bank' | 'pnl' | 'vendors' | 'customers' | 'bill_payments' | 'summary';
 
 export interface QBOResponse {
   success: boolean;

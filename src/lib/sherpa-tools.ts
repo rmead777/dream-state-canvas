@@ -388,14 +388,14 @@ export const SHERPA_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'queryQuickBooks',
-      description: 'Fetch live financial data from the company\'s QuickBooks Online account. Returns AP (accounts payable/bills), AR (accounts receivable/invoices), bank balances, P&L, vendor list, customer list, or a full financial summary. Use when the user asks about cash flow, accounts payable, accounts receivable, invoices, bills, vendors, customers, bank balances, working capital, or any financial analysis that would benefit from live accounting data.',
+      description: 'Fetch live financial data from the company\'s QuickBooks Online account. Returns AP (accounts payable/bills), AR (accounts receivable/invoices), bank balances, P&L, bill payments, vendor list, customer list, or a full financial summary. Use when the user asks about cash flow, accounts payable, accounts receivable, invoices, bills, payments, vendors, customers, bank balances, working capital, or any financial analysis that would benefit from live accounting data.',
       parameters: {
         type: 'object',
         properties: {
           dataType: {
             type: 'string',
-            enum: ['ap', 'ar', 'bank', 'pnl', 'vendors', 'customers', 'summary'],
-            description: 'What to fetch. "summary" returns cash + AR + AP + working capital in one call. "ap" = unpaid bills by vendor with aging. "ar" = open + recent invoices by customer with aging. "bank" = bank account balances. "pnl" = profit & loss report. "vendors" = vendor list. "customers" = customer list.',
+            enum: ['ap', 'ar', 'bank', 'pnl', 'vendors', 'customers', 'bill_payments', 'summary'],
+            description: 'What to fetch. "summary" returns cash + AR + AP + working capital in one call. "ap" = unpaid bills by vendor with aging. "ar" = open + recent invoices by customer with aging. "bank" = bank account balances. "pnl" = profit & loss report. "bill_payments" = bill payment history with vendor, method, and which bills were paid. "vendors" = vendor list. "customers" = customer list.',
           },
           options: {
             type: 'object',
@@ -421,7 +421,7 @@ export const SHERPA_TOOLS = [
         properties: {
           dataType: {
             type: 'string',
-            enum: ['ap', 'ar', 'bank', 'pnl', 'vendors', 'customers', 'summary', 'all'],
+            enum: ['ap', 'ar', 'bank', 'pnl', 'vendors', 'customers', 'bill_payments', 'summary', 'all'],
             description: 'Which data to refresh. Use "all" to clear everything and re-fetch a fresh summary. Default: "all".',
           },
         },

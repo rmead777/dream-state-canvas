@@ -115,6 +115,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
   - "ar" — accounts receivable: open invoices by customer with aging + recent paid history
   - "bank" — bank account and credit card balances
   - "pnl" — profit & loss report (with optional date range)
+  - "bill_payments" — bill payment history: vendor, amount, payment method (Check/ACH/CC), which bills paid, with date range option
   - "vendors" — vendor master list
   - "customers" — customer master list
 Use this data when the user asks about cash flow, bills, invoices, working capital, vendor performance, customer analysis, or any financial question. Prefer "summary" for broad financial questions. Cross-reference QB data with uploaded spreadsheets when both are relevant.

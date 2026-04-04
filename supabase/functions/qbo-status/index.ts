@@ -89,6 +89,14 @@ serve(async (req) => {
           return { ok: true, count: data.QueryResponse?.totalCount ?? 0 };
         },
       },
+      bill_payments: {
+        label: 'Bill Payments',
+        query: async () => {
+          const data = await queryQBO(token, connection,
+            "SELECT Id FROM BillPayment MAXRESULTS 1");
+          return { ok: true, count: -1 };
+        },
+      },
       pnl: {
         label: 'Profit & Loss',
         query: async () => {
