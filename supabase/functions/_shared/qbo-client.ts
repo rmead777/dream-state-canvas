@@ -86,13 +86,9 @@ export async function getQBOToken(): Promise<{ token: string; connection: QBOCon
     const errorText = await tokenResponse.text();
     console.error('Token refresh failed:', errorText);
 
-    // Mark connection as expired in WCW
-    await wcw
-      .from('qbo_connections')
-      .update({ is_active: false, last_error: 'Token refresh failed (from DSC)' })
-      .eq('id', connection.id);
-
-    throw new Error('QuickBooks token refresh failed. Reconnect in Working Capital Wizard.');
+    // DO NOT modify WCW's connection status — that's WCW's responsibility.
+    // DSC is a guest reading WCW's token. If refresh fails, just report the error.
+    throw new Error('QuickBooks token refresh failed. The refresh token may be expired — reconnect in Working Capital Wizard.');
   }
 
   const tokens = await tokenResponse.json();
