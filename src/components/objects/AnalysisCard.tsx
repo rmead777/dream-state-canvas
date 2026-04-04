@@ -475,6 +475,7 @@ function ChartRenderer({ section }: { section: { chartType: string; xAxis: strin
                   </g>
                 );
               } as any}
+            />
           </ResponsiveContainer>
         </div>
         {section.caption && <p className="text-[10px] text-workspace-text-secondary/50 px-1">{section.caption}</p>}
