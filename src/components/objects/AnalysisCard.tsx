@@ -463,10 +463,18 @@ function ChartRenderer({ section }: { section: { chartType: string; xAxis: strin
               dataKey="size"
               nameKey="name"
               stroke="hsl(var(--workspace-bg))"
-              strokeWidth={2}
               isAnimationActive
-              content={<TreemapCell />}
-            />
+              content={({ x, y, width, height, name, fill }: any) => {
+                if (width < 30 || height < 20) return null;
+                return (
+                  <g>
+                    <rect x={x} y={y} width={width} height={height} fill={fill} rx={4} opacity={0.85} />
+                    <text x={x + width / 2} y={y + height / 2} textAnchor="middle" dominantBaseline="central" fill="white" fontSize={Math.min(11, width / 6)} fontWeight={600}>
+                      {String(name).length > width / 7 ? String(name).slice(0, Math.floor(width / 7)) + '…' : name}
+                    </text>
+                  </g>
+                );
+              } as any}
           </ResponsiveContainer>
         </div>
         {section.caption && <p className="text-[10px] text-workspace-text-secondary/50 px-1">{section.caption}</p>}
