@@ -8,6 +8,7 @@ import { AlertRiskPanel } from '@/components/objects/AlertRiskPanel';
 import { AIBrief } from '@/components/objects/AIBrief';
 import { Timeline } from '@/components/objects/Timeline';
 import { DataInspector } from '@/components/objects/DataInspector';
+import { DatasetEditPreview } from '@/components/objects/DatasetEditPreview';
 import { getObjectTypeToken } from '@/lib/design-tokens';
 import MarkdownRenderer from '@/components/objects/MarkdownRenderer';
 
@@ -103,7 +104,13 @@ function ImmersiveContent({ object }: { object: any }) {
       return <DataInspector object={object} />;
     case 'analysis':
       return <AnalysisCard object={object} />;
+    case 'dataset-edit-preview':
+      return <DatasetEditPreview object={object} />;
     default:
+      // Dataset edit preview (by flag, in case type doesn't match)
+      if (object.context?.isDatasetEdit) {
+        return <DatasetEditPreview object={object} />;
+      }
       // Fallback: sections → AnalysisCard, content → Markdown, otherwise raw
       if (object.context?.sections?.length > 0) {
         return <AnalysisCard object={object} />;
