@@ -2,9 +2,11 @@
  * QBOStatusPanel — shows QuickBooks data source connection status
  * in the Context tab of the Sherpa rail.
  *
- * Green = connected (synced within 24h)
- * Yellow = stale (synced > 24h ago)
- * Red = not connected (never synced or error)
+ * DSC fetches live from QuickBooks API every time — data is always fresh.
+ * This panel probes QB directly to show whether each source is reachable.
+ *
+ * Green = connected (QB API responds, data available)
+ * Red = not connected (QB API error, token expired, or not configured)
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -12,9 +14,9 @@ import { supabase } from '@/integrations/supabase/client';
 
 interface SourceStatus {
   label: string;
-  status: 'connected' | 'stale' | 'not_connected';
-  lastSync: string | null;
-  recordCount: number;
+  status: 'connected' | 'not_connected';
+  recordCount?: number;
+  error?: string;
 }
 
 interface QBOStatus {
@@ -22,22 +24,15 @@ interface QBOStatus {
   company?: string;
   realmId?: string;
   tokenHealthy?: boolean;
-  tokenExpiresAt?: string;
-  lastSync?: string;
   sources: Record<string, SourceStatus>;
   error?: string;
 }
 
-const STATUS_COLORS: Record<string, { dot: string; text: string; bg: string }> = {
+const STATUS_COLORS = {
   connected: {
     dot: 'bg-emerald-400',
     text: 'text-emerald-400/80',
     bg: 'bg-emerald-400/5',
-  },
-  stale: {
-    dot: 'bg-amber-400',
-    text: 'text-amber-400/80',
-    bg: 'bg-amber-400/5',
   },
   not_connected: {
     dot: 'bg-red-400',
@@ -45,23 +40,6 @@ const STATUS_COLORS: Record<string, { dot: string; text: string; bg: string }> =
     bg: 'bg-red-400/5',
   },
 };
-
-const STATUS_LABELS: Record<string, string> = {
-  connected: 'Connected',
-  stale: 'Stale',
-  not_connected: 'Not Connected',
-};
-
-function formatRelativeTime(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
 
 export function QBOStatusPanel() {
   const [status, setStatus] = useState<QBOStatus | null>(null);
@@ -109,16 +87,13 @@ export function QBOStatusPanel() {
     return () => clearInterval(interval);
   }, [fetchStatus]);
 
-  // Overall status: worst of all sources
-  const overallStatus = status?.connected
-    ? Object.values(status.sources).some(s => s.status === 'not_connected')
-      ? 'not_connected'
-      : Object.values(status.sources).some(s => s.status === 'stale')
-        ? 'stale'
-        : 'connected'
-    : 'not_connected';
+  const connectedCount = status
+    ? Object.values(status.sources).filter(s => s.status === 'connected').length
+    : 0;
+  const totalCount = status ? Object.keys(status.sources).length : 0;
+  const allConnected = connectedCount === totalCount && totalCount > 0;
 
-  const overallColors = STATUS_COLORS[overallStatus];
+  const overallColors = STATUS_COLORS[allConnected ? 'connected' : 'not_connected'];
 
   return (
     <div className="border-b border-workspace-border/30 mb-3">
@@ -140,7 +115,7 @@ export function QBOStatusPanel() {
           {loading ? (
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-workspace-text-secondary/30 animate-pulse" />
           ) : (
-            <span className={`inline-block h-1.5 w-1.5 rounded-full ${overallColors.dot} ${overallStatus === 'connected' ? '' : 'animate-pulse'}`} />
+            <span className={`inline-block h-1.5 w-1.5 rounded-full ${overallColors.dot} ${allConnected ? '' : 'animate-pulse'}`} />
           )}
           {status?.company && (
             <span className="text-[9px] text-workspace-accent/50 truncate max-w-[120px]">
@@ -165,12 +140,12 @@ export function QBOStatusPanel() {
             <div className="px-2 py-2 rounded-md bg-red-400/5 border border-red-400/10">
               <p className="text-[10px] text-red-400/80 font-medium">Not Connected</p>
               <p className="text-[9px] text-workspace-text-secondary/50 mt-0.5">
-                {status?.error || 'QuickBooks integration not configured. Set WCW_SUPABASE_URL and related env vars in Supabase edge functions.'}
+                {status?.error || 'QuickBooks integration not configured.'}
               </p>
             </div>
           ) : (
             <div className="space-y-0.5">
-              {/* Token health */}
+              {/* Token health warning */}
               {status.tokenHealthy === false && (
                 <div className="px-2 py-1.5 mb-1 rounded-md bg-red-400/5 border border-red-400/10">
                   <p className="text-[9px] text-red-400/70">OAuth token expired — reconnect in Working Capital Wizard</p>
@@ -189,10 +164,10 @@ export function QBOStatusPanel() {
                     <span className="text-[10px] text-workspace-text flex-1 truncate">
                       {source.label}
                     </span>
-                    {source.lastSync ? (
-                      <span className={`text-[8px] shrink-0 tabular-nums ${colors.text}`}>
-                        {formatRelativeTime(source.lastSync)}
-                        {source.recordCount > 0 && (
+                    {source.status === 'connected' ? (
+                      <span className="text-[8px] text-emerald-400/60 shrink-0 tabular-nums">
+                        Live
+                        {source.recordCount != null && source.recordCount > 0 && (
                           <span className="text-workspace-text-secondary/30 ml-1">
                             ({source.recordCount})
                           </span>
@@ -200,19 +175,24 @@ export function QBOStatusPanel() {
                       </span>
                     ) : (
                       <span className="text-[8px] text-red-400/50 shrink-0">
-                        {STATUS_LABELS[source.status]}
+                        Error
                       </span>
                     )}
                   </div>
                 );
               })}
 
-              {/* Last global sync */}
-              {status.lastSync && (
-                <p className="text-[8px] text-workspace-text-secondary/30 mt-1.5 px-1">
-                  Last sync: {formatRelativeTime(status.lastSync)}
-                </p>
-              )}
+              {/* Refresh button */}
+              <button
+                onClick={() => { setLoading(true); fetchStatus(); }}
+                className="w-full mt-2 rounded px-2 py-1 text-[9px] text-workspace-text-secondary/50 hover:text-workspace-accent border border-workspace-border/20 hover:border-workspace-accent/20 transition-colors"
+              >
+                Refresh Status
+              </button>
+
+              <p className="text-[8px] text-workspace-text-secondary/30 mt-1 px-1">
+                Data is fetched live from QuickBooks on every query
+              </p>
             </div>
           )}
         </div>

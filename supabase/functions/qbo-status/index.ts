@@ -1,17 +1,25 @@
 /**
  * QuickBooks Connection Status — lightweight health check endpoint.
  *
- * Reads qbo_connections and sync_log from WCW's Supabase to report
- * connection health and data freshness per data type.
+ * Probes the live QuickBooks API to verify each data source is reachable.
+ * Reads the OAuth token from WCW's Supabase (same as qbo-data), then
+ * fires lightweight queries against QB to confirm each source works.
+ *
+ * DSC always fetches live from QB — no dependency on WCW sync schedules.
  */
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { getQBOToken, queryQBO, fetchQBOReport } from '../_shared/qbo-client.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+interface SourceProbe {
+  label: string;
+  query: () => Promise<{ ok: boolean; count: number }>;
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -19,117 +27,115 @@ serve(async (req) => {
   }
 
   try {
-    const wcwUrl = Deno.env.get('WCW_SUPABASE_URL');
-    const wcwKey = Deno.env.get('WCW_SUPABASE_SERVICE_ROLE_KEY');
-
-    if (!wcwUrl || !wcwKey) {
+    // Step 1: Can we get a valid token?
+    let token: string;
+    let connection: any;
+    try {
+      const result = await getQBOToken();
+      token = result.token;
+      connection = result.connection;
+    } catch (tokenErr) {
       return new Response(
         JSON.stringify({
           connected: false,
-          error: 'QuickBooks integration not configured',
+          error: (tokenErr as Error).message,
           sources: {},
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
 
-    const wcw = createClient(wcwUrl, wcwKey);
+    // Step 2: Probe each data source with a lightweight query (COUNT or MAXRESULTS 1)
+    const probes: Record<string, SourceProbe> = {
+      ap: {
+        label: 'Accounts Payable',
+        query: async () => {
+          const data = await queryQBO(token, connection,
+            "SELECT COUNT(*) FROM Bill WHERE Balance > '0'");
+          return { ok: true, count: data.QueryResponse?.totalCount ?? 0 };
+        },
+      },
+      ar: {
+        label: 'Accounts Receivable',
+        query: async () => {
+          const data = await queryQBO(token, connection,
+            "SELECT COUNT(*) FROM Invoice WHERE Balance > '0'");
+          return { ok: true, count: data.QueryResponse?.totalCount ?? 0 };
+        },
+      },
+      bank: {
+        label: 'Bank Balances',
+        query: async () => {
+          const data = await queryQBO(token, connection,
+            "SELECT Id FROM Account WHERE AccountType = 'Bank' AND Active = true MAXRESULTS 1");
+          const accounts = data.QueryResponse?.Account || [];
+          return { ok: true, count: accounts.length > 0 ? -1 : 0 }; // -1 = "available, count unknown"
+        },
+      },
+      vendors: {
+        label: 'Vendors',
+        query: async () => {
+          const data = await queryQBO(token, connection,
+            "SELECT COUNT(*) FROM Vendor WHERE Active = true");
+          return { ok: true, count: data.QueryResponse?.totalCount ?? 0 };
+        },
+      },
+      customers: {
+        label: 'Customers',
+        query: async () => {
+          const data = await queryQBO(token, connection,
+            "SELECT COUNT(*) FROM Customer WHERE Active = true");
+          return { ok: true, count: data.QueryResponse?.totalCount ?? 0 };
+        },
+      },
+      pnl: {
+        label: 'Profit & Loss',
+        query: async () => {
+          // Just verify the report endpoint responds
+          await fetchQBOReport(token, connection, 'ProfitAndLoss', {
+            start_date: new Date().toISOString().split('T')[0],
+            end_date: new Date().toISOString().split('T')[0],
+          });
+          return { ok: true, count: -1 };
+        },
+      },
+    };
 
-    // Get active connection
-    const { data: connection, error: connError } = await wcw
-      .from('qbo_connections')
-      .select('id, realm_id, company_name, is_active, connection_status, token_expires_at, last_sync_at, last_error, updated_at')
-      .eq('is_active', true)
-      .eq('connection_status', 'active')
-      .single();
+    // Run all probes in parallel
+    const probeEntries = Object.entries(probes);
+    const results = await Promise.allSettled(
+      probeEntries.map(([, probe]) => probe.query()),
+    );
 
-    if (connError || !connection) {
-      return new Response(
-        JSON.stringify({
-          connected: false,
-          error: 'No active QuickBooks connection',
-          sources: {},
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      );
-    }
+    const sources: Record<string, any> = {};
+    for (let i = 0; i < probeEntries.length; i++) {
+      const [key, probe] = probeEntries[i];
+      const result = results[i];
 
-    // Get latest sync log per sync type
-    const { data: syncLogs } = await wcw
-      .from('sync_log')
-      .select('sync_type, sync_status, completed_at, records_synced, error_message')
-      .eq('sync_status', 'completed')
-      .order('completed_at', { ascending: false })
-      .limit(50);
-
-    // Build per-type freshness map (latest completed sync per type)
-    const latestByType: Record<string, { completedAt: string; recordsSynced: number }> = {};
-    for (const log of syncLogs || []) {
-      if (!latestByType[log.sync_type]) {
-        latestByType[log.sync_type] = {
-          completedAt: log.completed_at,
-          recordsSynced: log.records_synced || 0,
+      if (result.status === 'fulfilled' && result.value.ok) {
+        sources[key] = {
+          label: probe.label,
+          status: 'connected',
+          recordCount: result.value.count,
+        };
+      } else {
+        const errorMsg = result.status === 'rejected'
+          ? (result.reason as Error).message
+          : 'Query returned no data';
+        sources[key] = {
+          label: probe.label,
+          status: 'not_connected',
+          error: errorMsg,
         };
       }
     }
-
-    // Map WCW sync types to DSC data source labels
-    const sourceMap: Record<string, { label: string; wcwTypes: string[] }> = {
-      ap: { label: 'Accounts Payable', wcwTypes: ['ap_detail', 'ap_aging'] },
-      ar: { label: 'Accounts Receivable', wcwTypes: ['ar_detail', 'ar_aging'] },
-      bank: { label: 'Bank Balances', wcwTypes: ['bank_balances'] },
-      vendors: { label: 'Vendors', wcwTypes: ['entities'] },
-      customers: { label: 'Customers', wcwTypes: ['entities'] },
-      payments: { label: 'Bill Payments', wcwTypes: ['bill_payments'] },
-    };
-
-    const now = Date.now();
-    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-
-    const sources: Record<string, any> = {};
-    for (const [key, { label, wcwTypes }] of Object.entries(sourceMap)) {
-      // Find the most recent sync across all related WCW sync types
-      let latestSync: string | null = null;
-      let totalRecords = 0;
-      for (const wcwType of wcwTypes) {
-        const entry = latestByType[wcwType];
-        if (entry) {
-          if (!latestSync || new Date(entry.completedAt) > new Date(latestSync)) {
-            latestSync = entry.completedAt;
-          }
-          totalRecords += entry.recordsSynced;
-        }
-      }
-
-      let status: 'connected' | 'stale' | 'not_connected';
-      if (!latestSync) {
-        status = 'not_connected';
-      } else if (now - new Date(latestSync).getTime() > ONE_DAY_MS) {
-        status = 'stale';
-      } else {
-        status = 'connected';
-      }
-
-      sources[key] = {
-        label,
-        status,
-        lastSync: latestSync,
-        recordCount: totalRecords,
-      };
-    }
-
-    // Token health
-    const tokenExpiresAt = new Date(connection.token_expires_at);
-    const tokenHealthy = tokenExpiresAt.getTime() > now;
 
     return new Response(
       JSON.stringify({
         connected: true,
         company: connection.company_name,
         realmId: connection.realm_id,
-        tokenHealthy,
-        tokenExpiresAt: connection.token_expires_at,
-        lastSync: connection.last_sync_at,
+        tokenHealthy: true,
         sources,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
@@ -137,7 +143,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('qbo-status error:', error);
     return new Response(
-      JSON.stringify({ connected: false, error: error.message, sources: {} }),
+      JSON.stringify({ connected: false, error: (error as Error).message, sources: {} }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   }
