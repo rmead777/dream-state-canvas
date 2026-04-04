@@ -66,9 +66,9 @@ export function ImmersiveOverlay() {
 
       {/* Immersive content — full width for data, constrained for reading */}
       <div className={`relative z-10 flex-1 overflow-y-auto pt-6 pb-8 ${
-        object.type === 'dataset' || object.type === 'inspector' ? 'px-4' : 'px-8'
+        object.type === 'dataset' || object.type === 'inspector' || object.type === 'dataset-edit-preview' || object.context?.isDatasetEdit ? 'px-4' : 'px-8'
       }`}>
-        <div className={object.type === 'dataset' || object.type === 'inspector' ? '' : 'mx-auto max-w-4xl'}>
+        <div className={object.type === 'dataset' || object.type === 'inspector' || object.type === 'dataset-edit-preview' || object.context?.isDatasetEdit ? '' : 'mx-auto max-w-4xl'}>
           <ImmersiveContent object={object} />
         </div>
       </div>

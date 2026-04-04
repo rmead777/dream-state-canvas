@@ -84,7 +84,7 @@ export function DatasetEditPreview({ object }: DatasetEditPreviewProps) {
       </div>
 
       {/* Changes list */}
-      <div className="space-y-0.5 max-h-[300px] overflow-y-auto">
+      <div className="space-y-0.5 max-h-[60vh] overflow-y-auto">
         {changes.map((change, i) => (
           <div
             key={i}
