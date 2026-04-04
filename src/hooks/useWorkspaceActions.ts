@@ -337,7 +337,7 @@ export function useWorkspaceActions() {
             summaryParts.push(...execution.summaryParts);
             // Float updated card to top — touch updates lastInteractedAt, reflow resorts layout
             dispatch({ type: 'TOUCH_OBJECT', payload: { id: action.objectId } });
-            dispatch({ type: 'REFLOW_LAYOUT' });
+            dispatch({ type: 'REFLOW_LAYOUT', payload: computeLayoutWithOverflow(Object.values(state.objects)) });
           } catch (e) {
             console.error('[applyResult] Update handler failed:', e);
             dispatch({ type: 'SET_SHERPA_RESPONSE', payload: `Could not update "${target.title}". Try a different instruction.` });

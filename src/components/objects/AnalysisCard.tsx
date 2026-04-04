@@ -102,7 +102,7 @@ function SectionRenderer({ section, highlightedEntity, onEntityClick }: {
     case 'table': return <TableRenderer section={section} highlightedEntity={highlightedEntity} onEntityClick={onEntityClick} />;
     case 'callout': return <CalloutRenderer section={section} />;
     case 'metrics-row': return <MetricsRowRenderer section={section} />;
-    case 'chart': return <ChartRenderer section={section} />;
+    case 'chart': return <ChartRenderer section={section as any} />;
     case 'vegalite': return <VegaLiteRenderer section={section as any} />;
     case 'chart-grid': return <ChartGridRenderer section={section as any} />;
     case 'embed': return <EmbedRenderer section={section as any} />;
