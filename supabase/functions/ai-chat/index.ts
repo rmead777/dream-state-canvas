@@ -172,9 +172,9 @@ chart → { type: "chart", chartType: "<TYPE>", xAxis: "field", yAxis: "field",
            data: [{...}, ...], caption: "...", height: 300, theme: "frosted" }
 
   Shared options for ALL chart types:
-    theme: "frosted"|"corporate"|"neon"|"midnight"|"earth"|"ocean"|"sunset"|"forest"|"royal"|"warm"|"monochrome"|"candy"|"finance"
-    color: "#hex"                    ← single color (overridden by theme)
-    colors: ["#ef4444", ...]         ← per-item colors or multi-series palette
+    theme: "frosted" (DEFAULT — use this unless you have a reason not to) |"corporate"|"neon"|"midnight"|"earth"|"ocean"|"sunset"|"forest"|"royal"|"warm"|"monochrome"|"candy"|"finance"
+    color: "#hex"                    ← single color (overrides theme primary)
+    colors: ["#ef4444", ...]         ← per-item colors or multi-series palette (overrides theme)
     fillOpacity: 0.85                ← 0-1 (default 0.85 for bar, 0.15 for area)
     height: 300                      ← pixels (default 192, use 280-350 for main charts)
     caption: "description"           ← ALWAYS include

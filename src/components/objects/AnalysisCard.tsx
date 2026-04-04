@@ -323,11 +323,11 @@ function MetricsRowRenderer({ section }: { section: { metrics: { label: string; 
 }
 
 function ChartRenderer({ section }: { section: { chartType: string; xAxis: string; yAxis: string; data: Record<string, string | number>[]; caption?: string; color?: string; colors?: string[]; fillOpacity?: number; height?: number; theme?: string; zAxis?: string; innerRadius?: number; outerRadius?: number; nameKey?: string; valueKey?: string; series?: { dataKey: string; name?: string; color?: string; type?: string }[] } }) {
-  // Resolve named color theme if provided, then fall back to explicit colors, then workspace accent
-  const resolvedTheme = section.theme ? CHART_THEMES[section.theme] : null;
-  const primaryColor = resolvedTheme?.colors[0] || section.color || 'hsl(var(--workspace-accent))';
+  // Resolve named color theme if provided, default to frosted, then fall back to explicit colors
+  const resolvedTheme = CHART_THEMES[section.theme || 'frosted'];
+  const primaryColor = section.color || resolvedTheme.colors[0] || 'hsl(var(--workspace-accent))';
   const chartHeight = section.height || 192;
-  const defaultPalette = resolvedTheme?.colors || ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#14b8a6'];
+  const defaultPalette = section.colors || resolvedTheme.colors;
 
   const tooltipStyle = {
     background: 'white',
