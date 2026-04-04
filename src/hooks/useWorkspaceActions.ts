@@ -241,8 +241,11 @@ export function useWorkspaceActions() {
 
         case 'open-source-document': {
           // Find existing source card on canvas by sourceDocId or documentId match
+          // Exclude dataset-edit-preview cards — those share sourceDocId but aren't the source viewer
           const existing = Object.values(stateRef.current.objects).find(
             o => o.status !== 'dissolved' &&
+              o.type !== 'dataset-edit-preview' &&
+              !o.context?.isDatasetEdit &&
               (o.context?.sourceDocId === action.documentId || o.id === action.documentId)
           );
           if (existing) {
