@@ -593,7 +593,7 @@ async function callAIWithTools(
   if (promptOverride) body.promptOverride = promptOverride;
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 60000); // 60s for agent calls
+  const timeout = setTimeout(() => controller.abort(), 180000); // 180s for agent calls (QB queries add latency)
   const callStartTime = Date.now();
 
   try {
