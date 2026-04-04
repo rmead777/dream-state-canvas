@@ -458,13 +458,8 @@ function ChartRenderer({ section }: { section: { chartType: string; xAxis: strin
       <div className="space-y-1">
         <div className="w-full" style={{ height: chartHeight }}>
           <ResponsiveContainer width="100%" height="100%">
-            <Treemap
-              data={treemapData}
-              dataKey="size"
-              nameKey="name"
-              stroke="hsl(var(--workspace-bg))"
-              isAnimationActive
-              content={({ x, y, width, height, name, fill }: any) => {
+            {(() => {
+              const renderContent: any = ({ x, y, width, height, name, fill }: any) => {
                 if (width < 30 || height < 20) return null;
                 return (
                   <g>
@@ -474,8 +469,18 @@ function ChartRenderer({ section }: { section: { chartType: string; xAxis: strin
                     </text>
                   </g>
                 );
-              } as any}
-            />
+              };
+              return (
+                <Treemap
+                  data={treemapData}
+                  dataKey="size"
+                  nameKey="name"
+                  stroke="hsl(var(--workspace-bg))"
+                  isAnimationActive
+                  content={renderContent}
+                />
+              );
+            })()}
           </ResponsiveContainer>
         </div>
         {section.caption && <p className="text-[10px] text-workspace-text-secondary/50 px-1">{section.caption}</p>}
