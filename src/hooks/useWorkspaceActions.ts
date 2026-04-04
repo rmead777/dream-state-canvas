@@ -1,4 +1,5 @@
 import { useCallback, useRef } from 'react';
+import { computeLayoutWithOverflow } from '@/lib/spatial-orchestrator';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { agentLoop, orchestratorLoop } from '@/lib/sherpa-agent';
 import { WorkspaceObject, IntentOrigin, WorkspaceAction, WorkspaceReducerAction } from '@/lib/workspace-types';

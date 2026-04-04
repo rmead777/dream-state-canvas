@@ -465,7 +465,8 @@ function ChartRenderer({ section }: { section: { chartType: string; xAxis: strin
               stroke="hsl(var(--workspace-bg))"
               strokeWidth={2}
               isAnimationActive
-              content={({ x, y, width, height, name, fill }: any) => {
+              content={(props: any) => {
+                const { x, y, width, height, name, fill } = props;
                 if (width < 30 || height < 20) return null;
                 return (
                   <g>
