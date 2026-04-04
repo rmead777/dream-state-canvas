@@ -109,7 +109,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
   } catch {}
 
   // QuickBooks integration hint
-  const qboHint = `\nQUICKBOOKS INTEGRATION: Live QuickBooks Online data is available via the queryQuickBooks tool. You can fetch:
+  const qboHint = `\nQUICKBOOKS INTEGRATION: QuickBooks Online data is available via the queryQuickBooks tool. Data is cached for the session — repeated calls are instant (no API delay). Available data types:
   - "summary" — full financial snapshot (cash + AR + AP + working capital) in one call
   - "ap" — accounts payable: unpaid bills by vendor with aging buckets
   - "ar" — accounts receivable: open invoices by customer with aging + recent paid history
@@ -117,7 +117,8 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
   - "pnl" — profit & loss report (with optional date range)
   - "vendors" — vendor master list
   - "customers" — customer master list
-Use this data when the user asks about cash flow, bills, invoices, working capital, vendor performance, customer analysis, or any financial question. Prefer "summary" for broad financial questions. Cross-reference QB data with uploaded spreadsheets when both are relevant.`;
+Use this data when the user asks about cash flow, bills, invoices, working capital, vendor performance, customer analysis, or any financial question. Prefer "summary" for broad financial questions. Cross-reference QB data with uploaded spreadsheets when both are relevant.
+If the user asks to refresh or update QB data, use the refreshQuickBooks tool to clear the cache and pull fresh data.`;
 
   const textContent = [
     `User query: "${query}"`,

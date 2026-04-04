@@ -2,7 +2,11 @@
  * QuickBooks Data Store — client-side module for fetching QB data.
  *
  * Calls the qbo-data edge function and caches results in memory
- * with a short TTL so repeated AI queries don't hammer the API.
+ * for the entire browser session (SPA lifetime). Data is only
+ * re-fetched when the user explicitly requests a refresh.
+ *
+ * Warm fetch: call warmQBOCache() on app load to pre-populate
+ * the summary so Sherpa has instant access on the first query.
  */
 
 import { supabase } from '@/integrations/supabase/client';
@@ -45,35 +49,55 @@ export interface QBOFinancialSummary {
   };
 }
 
-// ─── Cache ─────────────────────────────────────────────────────────────────
+// ─── Session Cache (lives for entire SPA lifetime) ─────────────────────────
 
-const cache = new Map<string, { data: any; fetchedAt: number }>();
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const cache = new Map<string, { data: QBOResponse; fetchedAt: number }>();
 
-function getCached(key: string): any | null {
+/** Listeners notified when cache is cleared (used by UI to re-check status). */
+const refreshListeners = new Set<() => void>();
+
+function getCached(key: string): QBOResponse | null {
   const entry = cache.get(key);
-  if (!entry) return null;
-  if (Date.now() - entry.fetchedAt > CACHE_TTL_MS) {
-    cache.delete(key);
-    return null;
-  }
-  return entry.data;
+  return entry?.data ?? null;
 }
 
-function setCache(key: string, data: any): void {
+function setCache(key: string, data: QBOResponse): void {
   cache.set(key, { data, fetchedAt: Date.now() });
 }
 
-/** Clear the QB cache (e.g. after a manual sync). */
+/**
+ * Clear the entire QB cache. Next fetch for each data type
+ * will hit the QB API fresh. Call this when the user says
+ * "refresh quickbooks" or clicks the Refresh button.
+ */
 export function clearQBOCache(): void {
   cache.clear();
+  refreshListeners.forEach(fn => fn());
+}
+
+/** Subscribe to cache-clear events. Returns an unsubscribe function. */
+export function onQBOCacheCleared(fn: () => void): () => void {
+  refreshListeners.add(fn);
+  return () => refreshListeners.delete(fn);
+}
+
+/** Check if a specific data type is already cached. */
+export function isQBOCached(type: QBODataType): boolean {
+  return cache.has(`${type}:{}`);
+}
+
+/** Get the timestamp when data was last fetched (null if not cached). */
+export function getQBOFetchedAt(type: QBODataType): number | null {
+  const entry = cache.get(`${type}:{}`);
+  return entry?.fetchedAt ?? null;
 }
 
 // ─── Core Fetch ────────────────────────────────────────────────────────────
 
 /**
  * Fetch QuickBooks data via the qbo-data edge function.
- * Results are cached for 5 minutes.
+ * Returns from session cache if available. Only hits QB API
+ * on the first call per data type (or after clearQBOCache).
  */
 export async function fetchQBOData(
   type: QBODataType,
@@ -142,15 +166,20 @@ export async function getProfitAndLoss(startDate?: string, endDate?: string) {
   return resp.data;
 }
 
+// ─── Warm Fetch ────────────────────────────────────────────────────────────
+
 /**
- * Check if QuickBooks integration is available.
- * Returns true if the edge function responds successfully.
+ * Pre-populate the cache with the financial summary so Sherpa
+ * has instant access on the first query. Call this on app load
+ * after confirming the QB connection is healthy.
+ *
+ * Runs silently in the background — never throws.
  */
-export async function isQBOAvailable(): Promise<boolean> {
+export async function warmQBOCache(): Promise<void> {
   try {
-    const resp = await fetchQBOData('bank');
-    return resp.success;
-  } catch {
-    return false;
+    await fetchQBOData('summary');
+    console.log('[QBO] Warm fetch complete — summary cached');
+  } catch (err) {
+    console.warn('[QBO] Warm fetch failed (will retry on first query):', err);
   }
 }

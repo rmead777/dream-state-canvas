@@ -13,7 +13,7 @@ import { createMemory } from './memory-store';
 import { retrieveRelevantMemories, formatMemoriesForPrompt, determineWorkspaceState } from './memory-retriever';
 import { supabase } from '@/integrations/supabase/client';
 import { createTrigger as saveTrigger } from './automation-triggers';
-import { fetchQBOData, type QBODataType } from './quickbooks-store';
+import { fetchQBOData, clearQBOCache, type QBODataType } from './quickbooks-store';
 
 // ─── Tool Definitions (OpenAI function-calling format) ──────────────────────
 
@@ -411,6 +411,23 @@ export const SHERPA_TOOLS = [
       },
     },
   },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'refreshQuickBooks',
+      description: 'Clear the cached QuickBooks data and fetch fresh data from the live QB API. Use when the user says "refresh quickbooks", "pull fresh QB data", "update the financials", "get latest from quickbooks", etc. After clearing, the next queryQuickBooks call will hit the live API.',
+      parameters: {
+        type: 'object',
+        properties: {
+          dataType: {
+            type: 'string',
+            enum: ['ap', 'ar', 'bank', 'pnl', 'vendors', 'customers', 'summary', 'all'],
+            description: 'Which data to refresh. Use "all" to clear everything and re-fetch a fresh summary. Default: "all".',
+          },
+        },
+      },
+    },
+  },
 
   // COMPUTE STATS tool
   {
@@ -493,6 +510,7 @@ const TOOL_STATUS: Record<string, string> = {
   exportWorkspace: 'Generating PDF report...',
   runSimulation: 'Running simulation...',
   queryQuickBooks: 'Fetching QuickBooks data...',
+  refreshQuickBooks: 'Refreshing QuickBooks data...',
   computeStats: 'Analyzing data...',
   suggestNextMoves: '',
 };
@@ -918,6 +936,24 @@ export async function executeTool(
         return JSON.stringify({
           company: resp.company,
           type: resp.type,
+          ...resp.data,
+        });
+      }
+
+      case 'refreshQuickBooks': {
+        clearQBOCache();
+        const refreshType = (args.dataType && args.dataType !== 'all')
+          ? args.dataType as QBODataType
+          : 'summary';
+        const resp = await fetchQBOData(refreshType);
+        if (!resp.success) {
+          return JSON.stringify({ refreshed: false, error: resp.error || 'QuickBooks fetch failed' });
+        }
+        return JSON.stringify({
+          refreshed: true,
+          company: resp.company,
+          type: resp.type,
+          message: `Fresh ${refreshType} data pulled from QuickBooks.`,
           ...resp.data,
         });
       }

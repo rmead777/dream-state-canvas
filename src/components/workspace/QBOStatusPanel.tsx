@@ -11,6 +11,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { clearQBOCache, warmQBOCache, getQBOFetchedAt } from '@/lib/quickbooks-store';
 
 interface SourceStatus {
   label: string;
@@ -77,12 +78,24 @@ export function QBOStatusPanel() {
     }
   }, []);
 
+  // Track whether we've already triggered the warm fetch this session
+  const [warmed, setWarmed] = useState(false);
+
   useEffect(() => {
     fetchStatus();
     // Re-check every 10 minutes (not too aggressive)
     const interval = setInterval(fetchStatus, 10 * 60 * 1000);
     return () => clearInterval(interval);
   }, [fetchStatus]);
+
+  // Warm fetch: once we confirm QB is connected, pre-load the summary
+  // so Sherpa has instant access on the user's first question
+  useEffect(() => {
+    if (status?.connected && !warmed) {
+      setWarmed(true);
+      warmQBOCache();
+    }
+  }, [status?.connected, warmed]);
 
   const connectedCount = status
     ? Object.values(status.sources).filter(s => s.status === 'connected').length
@@ -180,16 +193,22 @@ export function QBOStatusPanel() {
                 );
               })}
 
-              {/* Refresh button */}
+              {/* Refresh button — clears session cache AND re-checks connection */}
               <button
-                onClick={() => { setLoading(true); fetchStatus(); }}
+                onClick={() => {
+                  clearQBOCache();
+                  setLoading(true);
+                  fetchStatus();
+                  // Re-warm the cache with fresh data in the background
+                  warmQBOCache();
+                }}
                 className="w-full mt-2 rounded px-2 py-1 text-[9px] text-workspace-text-secondary/50 hover:text-workspace-accent border border-workspace-border/20 hover:border-workspace-accent/20 transition-colors"
               >
-                Refresh Status
+                Pull Fresh Data
               </button>
 
               <p className="text-[8px] text-workspace-text-secondary/30 mt-1 px-1">
-                Data is fetched live from QuickBooks on every query
+                QB data is cached for the session. Click above or say "refresh quickbooks" to pull fresh.
               </p>
             </div>
           )}
