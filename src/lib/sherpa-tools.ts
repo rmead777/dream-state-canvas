@@ -13,6 +13,7 @@ import { createMemory } from './memory-store';
 import { retrieveRelevantMemories, formatMemoriesForPrompt, determineWorkspaceState } from './memory-retriever';
 import { supabase } from '@/integrations/supabase/client';
 import { createTrigger as saveTrigger } from './automation-triggers';
+import { fetchQBOData, type QBODataType } from './quickbooks-store';
 
 // ─── Tool Definitions (OpenAI function-calling format) ──────────────────────
 
@@ -382,6 +383,35 @@ export const SHERPA_TOOLS = [
     },
   },
 
+  // QUICKBOOKS tool
+  {
+    type: 'function' as const,
+    function: {
+      name: 'queryQuickBooks',
+      description: 'Fetch live financial data from the company\'s QuickBooks Online account. Returns AP (accounts payable/bills), AR (accounts receivable/invoices), bank balances, P&L, vendor list, customer list, or a full financial summary. Use when the user asks about cash flow, accounts payable, accounts receivable, invoices, bills, vendors, customers, bank balances, working capital, or any financial analysis that would benefit from live accounting data.',
+      parameters: {
+        type: 'object',
+        properties: {
+          dataType: {
+            type: 'string',
+            enum: ['ap', 'ar', 'bank', 'pnl', 'vendors', 'customers', 'summary'],
+            description: 'What to fetch. "summary" returns cash + AR + AP + working capital in one call. "ap" = unpaid bills by vendor with aging. "ar" = open + recent invoices by customer with aging. "bank" = bank account balances. "pnl" = profit & loss report. "vendors" = vendor list. "customers" = customer list.',
+          },
+          options: {
+            type: 'object',
+            description: 'Optional parameters. For pnl: { startDate, endDate, summarizeBy }. Dates are YYYY-MM-DD.',
+            properties: {
+              startDate: { type: 'string' },
+              endDate: { type: 'string' },
+              summarizeBy: { type: 'string', description: 'Month, Quarter, or Year' },
+            },
+          },
+        },
+        required: ['dataType'],
+      },
+    },
+  },
+
   // NEXT MOVES tool
   {
     type: 'function' as const,
@@ -434,6 +464,7 @@ const TOOL_STATUS: Record<string, string> = {
   createCalendarEvent: 'Creating calendar event...',
   exportWorkspace: 'Generating PDF report...',
   runSimulation: 'Running simulation...',
+  queryQuickBooks: 'Fetching QuickBooks data...',
   suggestNextMoves: '',
 };
 
@@ -847,6 +878,18 @@ export async function executeTool(
             scenarioB: { label: scenarioB?.label || 'Scenario B', assumption: scenarioB?.assumption || '', adjustmentPct: scenarioB?.adjustmentPct || 0 },
             simRows,
           },
+        });
+      }
+
+      case 'queryQuickBooks': {
+        const resp = await fetchQBOData(args.dataType as QBODataType, args.options);
+        if (!resp.success) {
+          return JSON.stringify({ error: resp.error || 'QuickBooks fetch failed' });
+        }
+        return JSON.stringify({
+          company: resp.company,
+          type: resp.type,
+          ...resp.data,
         });
       }
 
