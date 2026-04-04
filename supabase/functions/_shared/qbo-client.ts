@@ -21,7 +21,7 @@ interface QBOConnection {
   company_name: string;
   is_sandbox: boolean;
   is_active: boolean;
-  connection_status: string;
+  connection_status?: string;
   last_error: string | null;
 }
 
@@ -44,7 +44,6 @@ export async function getQBOToken(): Promise<{ token: string; connection: QBOCon
     .from('qbo_connections')
     .select('*')
     .eq('is_active', true)
-    .eq('connection_status', 'active')
     .single();
 
   if (error || !connection) {
@@ -90,7 +89,7 @@ export async function getQBOToken(): Promise<{ token: string; connection: QBOCon
     // Mark connection as expired in WCW
     await wcw
       .from('qbo_connections')
-      .update({ connection_status: 'expired', is_active: false, last_error: 'Token refresh failed (from DSC)' })
+      .update({ is_active: false, last_error: 'Token refresh failed (from DSC)' })
       .eq('id', connection.id);
 
     throw new Error('QuickBooks token refresh failed. Reconnect in Working Capital Wizard.');
