@@ -51,30 +51,27 @@ export function QBOStatusPanel() {
       const session = (await supabase.auth.getSession()).data.session;
       const token = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
+      // Use GET to avoid CORS preflight issues with Content-Type header
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/qbo-status`,
         {
-          method: 'POST',
+          method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
           },
-          body: '{}',
         },
       );
 
       if (!response.ok) {
-        setStatus({ connected: false, error: 'Status check failed', sources: {} });
+        // Don't treat as hard error — just show not configured
+        setStatus({ connected: false, sources: {} });
         return;
       }
 
       setStatus(await response.json());
-    } catch (err) {
-      setStatus({
-        connected: false,
-        error: err instanceof Error ? err.message : 'Connection failed',
-        sources: {},
-      });
+    } catch {
+      // Silently show not configured — don't spam console
+      setStatus({ connected: false, sources: {} });
     } finally {
       setLoading(false);
     }
@@ -82,8 +79,8 @@ export function QBOStatusPanel() {
 
   useEffect(() => {
     fetchStatus();
-    // Re-check every 5 minutes
-    const interval = setInterval(fetchStatus, 5 * 60 * 1000);
+    // Re-check every 10 minutes (not too aggressive)
+    const interval = setInterval(fetchStatus, 10 * 60 * 1000);
     return () => clearInterval(interval);
   }, [fetchStatus]);
 
@@ -92,8 +89,7 @@ export function QBOStatusPanel() {
     : 0;
   const totalCount = status ? Object.keys(status.sources).length : 0;
   const allConnected = connectedCount === totalCount && totalCount > 0;
-
-  const overallColors = STATUS_COLORS[allConnected ? 'connected' : 'not_connected'];
+  const notConfigured = !status?.connected && totalCount === 0;
 
   return (
     <div className="border-b border-workspace-border/30 mb-3">
@@ -114,8 +110,10 @@ export function QBOStatusPanel() {
           </span>
           {loading ? (
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-workspace-text-secondary/30 animate-pulse" />
+          ) : notConfigured ? (
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-workspace-text-secondary/30" />
           ) : (
-            <span className={`inline-block h-1.5 w-1.5 rounded-full ${overallColors.dot} ${allConnected ? '' : 'animate-pulse'}`} />
+            <span className={`inline-block h-1.5 w-1.5 rounded-full ${allConnected ? 'bg-emerald-400' : 'bg-red-400 animate-pulse'}`} />
           )}
           {status?.company && (
             <span className="text-[9px] text-workspace-accent/50 truncate max-w-[120px]">
@@ -134,13 +132,13 @@ export function QBOStatusPanel() {
           {loading ? (
             <div className="flex items-center gap-2 px-2 py-2">
               <span className="inline-block h-3 w-3 rounded-full border-2 border-workspace-accent/30 border-t-workspace-accent animate-spin" />
-              <span className="text-[10px] text-workspace-text-secondary/50">Checking QuickBooks connection...</span>
+              <span className="text-[10px] text-workspace-text-secondary/50">Checking QuickBooks...</span>
             </div>
           ) : !status?.connected ? (
-            <div className="px-2 py-2 rounded-md bg-red-400/5 border border-red-400/10">
-              <p className="text-[10px] text-red-400/80 font-medium">Not Connected</p>
-              <p className="text-[9px] text-workspace-text-secondary/50 mt-0.5">
-                {status?.error || 'QuickBooks integration not configured.'}
+            <div className="px-2 py-1.5 rounded-md bg-workspace-surface/30 border border-workspace-border/20">
+              <p className="text-[10px] text-workspace-text-secondary/60">Not configured</p>
+              <p className="text-[8px] text-workspace-text-secondary/30 mt-0.5">
+                Set WCW env vars in Supabase to enable live QuickBooks data.
               </p>
             </div>
           ) : (

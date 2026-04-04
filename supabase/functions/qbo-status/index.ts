@@ -22,6 +22,7 @@ interface SourceProbe {
 }
 
 serve(async (req) => {
+  // Handle CORS preflight and accept both GET and POST
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
