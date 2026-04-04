@@ -10,13 +10,9 @@ import { DocumentUpload } from './DocumentUpload';
 import { WorkspaceRadar } from './WorkspaceRadar';
 import { toast } from 'sonner';
 import { ActivityTicker } from './ActivityTicker';
+import { getObjectTypeToken, getFamilyTokens } from '@/lib/design-tokens';
 
 type UtilityPanel = 'upload' | 'health' | null;
-
-const TYPE_ICONS: Record<string, string> = {
-  metric: '◈', alert: '◆', comparison: '⇄', inspector: '▤',
-  brief: '✦', timeline: '◷', document: '▨', dataset: '▥', monitor: '◎',
-};
 
 export function WorkspaceBar() {
   const { state, dispatch } = useWorkspace();
@@ -148,22 +144,26 @@ export function WorkspaceBar() {
               <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-workspace-accent/10 px-1.5 text-[10px] font-medium text-workspace-accent tabular-nums flex-shrink-0">
                 {collapsed.length}
               </span>
-              {collapsed.map((obj) => (
-                <button
-                  key={obj.id}
-                  onClick={() => restoreObject(obj.id)}
-                  className="flex-shrink-0 rounded-full border border-workspace-border/70 bg-white/85 px-3 py-1.5
-                    text-xs text-workspace-text transition-all duration-200
-                    hover:-translate-y-0.5 hover:border-workspace-accent/30 hover:shadow-[0_10px_26px_rgba(99,102,241,0.12)]
-                    active:translate-y-0 active:scale-[0.985]"
-                >
-                  <span className="text-workspace-accent mr-1.5 text-[10px]">
-                    {TYPE_ICONS[obj.type] || '◇'}
-                  </span>
-                  {obj.title}
-                  {obj.pinned && <span className="ml-1 text-workspace-accent">•</span>}
-                </button>
-              ))}
+              {collapsed.map((obj) => {
+                const familyToken = getFamilyTokens(obj.type);
+                const typeToken = getObjectTypeToken(obj.type);
+                return (
+                  <button
+                    key={obj.id}
+                    onClick={() => restoreObject(obj.id)}
+                    className="flex-shrink-0 rounded-full border border-workspace-border/70 bg-white/85 px-3 py-1.5
+                      text-xs text-workspace-text transition-all duration-200
+                      hover:-translate-y-0.5 hover:border-workspace-accent/30 hover:shadow-[0_10px_26px_rgba(99,102,241,0.12)]
+                      active:translate-y-0 active:scale-[0.985]"
+                  >
+                    <span className={`${familyToken.collapsedAccent} mr-1.5 text-[10px]`}>
+                      {typeToken.icon || '◇'}
+                    </span>
+                    {obj.title}
+                    {obj.pinned && <span className="ml-1 text-workspace-accent">•</span>}
+                  </button>
+                );
+              })}
             </>
           ) : (
             <ActivityTicker />

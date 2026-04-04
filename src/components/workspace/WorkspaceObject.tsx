@@ -26,27 +26,7 @@ import { EmailDraft } from '@/components/objects/EmailDraft';
 import { SimulationCard } from '@/components/objects/SimulationCard';
 import { AutomationPanel } from '@/components/objects/AutomationPanel';
 import { DatasetEditPreview } from '@/components/objects/DatasetEditPreview';
-
-const typeLabels: Record<string, string> = {
-  metric: 'Metric',
-  comparison: 'Comparison',
-  alert: 'Alert',
-  inspector: 'Data',
-  brief: 'Brief',
-  timeline: 'Timeline',
-  monitor: 'Monitor',
-  document: 'Document',
-  dataset: 'Dataset',
-  analysis: 'Analysis',
-  'action-queue': 'Action Queue',
-  'vendor-dossier': 'Dossier',
-  'cash-planner': 'Cash Planner',
-  'escalation-tracker': 'Escalation',
-  'outreach-tracker': 'Outreach',
-  'production-risk': 'Production Risk',
-  'email-draft': 'Email Draft',
-  'simulation': 'Simulation',
-};
+import { getObjectTypeToken, getFamilyTokens, derivePosture, POSTURE_LABELS } from '@/lib/design-tokens';
 
 function ObjectContent({ object }: { object: WO }) {
   // Special flag: automation panel view
@@ -157,7 +137,7 @@ export function WorkspaceObjectWrapper({ object, dragHandleProps }: { object: WO
       `}
       tabIndex={0}
       role="group"
-      aria-label={`${typeLabels[object.type] || object.type} ${object.title}`}
+      aria-label={`${getObjectTypeToken(object.type).label || object.type} ${object.title}`}
       style={{
         ...(size.width ? { width: size.width } : {}),
         ...(size.height ? { height: size.height } : {}),
@@ -176,7 +156,8 @@ export function WorkspaceObjectWrapper({ object, dragHandleProps }: { object: WO
         }
       }}
     >
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-[linear-gradient(to_bottom,rgba(99,102,241,0.06),transparent)] opacity-80" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-16 opacity-80"
+        style={{ background: `linear-gradient(to bottom, ${getFamilyTokens(object.type).gradient}, transparent)` }} />
 
       {/* Relationship highlight pulse */}
       {isHighlighted && (
@@ -188,28 +169,47 @@ export function WorkspaceObjectWrapper({ object, dragHandleProps }: { object: WO
         <div className="pointer-events-none absolute inset-0 rounded-xl border border-workspace-accent/30 bg-workspace-accent-subtle/40 animate-enter" />
       )}
 
-      {/* Header — actions appear on hover only (anti-drift: no always-visible action bars) */}
+      {/* Header — family-colored type pill, posture badge, actions on hover */}
       <div className="relative z-10 flex items-center justify-between px-5 pt-4 pb-3">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2 min-w-0">
           {/* Drag handle */}
           <span
             {...dragHandleProps}
             onClick={(e) => e.stopPropagation()}
-            className="workspace-focus-ring flex h-7 w-7 items-center justify-center rounded-full border border-transparent cursor-grab text-workspace-text-secondary/35 transition-all duration-200 workspace-spring active:cursor-grabbing group-hover:border-workspace-border/70 group-hover:bg-white/85 group-hover:text-workspace-text-secondary/70 group-focus-within:border-workspace-border/70 group-focus-within:bg-white/85 group-focus-within:text-workspace-text-secondary/70"
+            className="workspace-focus-ring flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-transparent cursor-grab text-workspace-text-secondary/35 transition-all duration-200 workspace-spring active:cursor-grabbing group-hover:border-workspace-border/70 group-hover:bg-white/85 group-hover:text-workspace-text-secondary/70 group-focus-within:border-workspace-border/70 group-focus-within:bg-white/85 group-focus-within:text-workspace-text-secondary/70"
             title="Drag to reorder. Press space, then arrow keys to move."
             aria-label={`Reorder ${object.title}`}
           >
             ⠿
           </span>
-          <span className="rounded-full border border-workspace-accent/10 bg-workspace-accent/6 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.22em] text-workspace-accent/80">
-            {typeLabels[object.type] || object.type}
-          </span>
-          <h3 className="text-sm font-semibold tracking-[-0.01em] text-workspace-text">{object.title}</h3>
-          {object.relationships.length > 0 && (
-            <span className="rounded-full border border-workspace-accent/10 bg-workspace-accent/5 px-2 py-1 text-[9px] text-workspace-accent/55 tabular-nums" title="Has relationships">
-              ◈ {object.relationships.length}
-            </span>
-          )}
+          {/* Type pill — family-colored. Hidden when label is empty (e.g. generic analysis) */}
+          {(() => {
+            const typeToken = getObjectTypeToken(object.type);
+            const familyToken = getFamilyTokens(object.type);
+            return typeToken.label ? (
+              <span className={`shrink-0 rounded-full border ${familyToken.pillBorder} ${familyToken.pillBg} ${familyToken.pillText} px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.18em]`}>
+                {typeToken.label}
+              </span>
+            ) : null;
+          })()}
+          {/* Title */}
+          <h3 className="text-sm font-semibold tracking-[-0.01em] text-workspace-text truncate">{object.title}</h3>
+          {/* Metadata badges — posture + relationships, subdued */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {(() => {
+              const posture = derivePosture(object);
+              return posture ? (
+                <span className="rounded-full border border-workspace-border/40 bg-white/60 px-1.5 py-0.5 text-[9px] text-workspace-text-secondary/55 tabular-nums">
+                  {POSTURE_LABELS[posture]}
+                </span>
+              ) : null;
+            })()}
+            {object.relationships.length > 0 && (
+              <span className="rounded-full border border-workspace-border/40 bg-white/60 px-1.5 py-0.5 text-[9px] text-workspace-text-secondary/55 tabular-nums" title="Has relationships">
+                ◈ {object.relationships.length}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Contextual actions — visible on hover */}
