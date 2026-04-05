@@ -313,6 +313,22 @@
     min-height: 44px;
     min-width: 44px;
   }
+
+  /* Reduce chart heights on small screens */
+  .recharts-responsive-container {
+    max-height: 160px !important;
+  }
+
+  /* Tighter card padding */
+  .workspace-card-surface {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  /* Smaller type pill text */
+  .workspace-section-label {
+    font-size: 9px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

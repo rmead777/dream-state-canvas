@@ -103,7 +103,7 @@ export function SherpaRail() {
     document.body.style.userSelect = 'none';
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
-  }, [railWidth]);
+  }, [railWidth, maxWidth]);
 
   const [adminUnlocked, setAdminUnlocked] = useState(isAdminUnlocked());
   const [adminState, setAdminState] = useState(getAdminSettings());
