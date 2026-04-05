@@ -150,23 +150,14 @@ export function getOutlookAccount(): AccountInfo | null {
   return msalInstance.getAllAccounts()[0] || null;
 }
 
-/** Trigger MSAL login — tries popup first, falls back to redirect */
+/** Trigger MSAL login via redirect (page navigates to Microsoft login, then back) */
 export async function signInToOutlook(): Promise<boolean> {
   if (!msalInstance) return false;
   try {
-    const result = await msalInstance.loginPopup(loginRequest);
-    if (result?.account) {
-      msalInstance.setActiveAccount(result.account);
-    }
-    return msalInstance.getAllAccounts().length > 0;
-  } catch (popupErr) {
-    // Popup blocked or failed — try redirect flow
-    try {
-      await msalInstance.loginRedirect(loginRequest);
-      return true; // Won't reach here — page redirects
-    } catch {
-      return false;
-    }
+    await msalInstance.loginRedirect(loginRequest);
+    return true; // Won't reach here — page redirects to Microsoft
+  } catch {
+    return false;
   }
 }
 
