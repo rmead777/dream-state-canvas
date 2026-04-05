@@ -130,6 +130,15 @@ KEY RULES:
   - When reconciling QB data with spreadsheets, always explain what changed and why.
   - Use row indices from queryDataset results. Query first to find the right rows, then edit.`;
 
+  const emailHint = `\nOUTLOOK INTEGRATION: AP email data available via queryEmails tool (requires Outlook sign-in from Context tab).
+  - "recent" — latest emails from the Incoa AP Automated folder (vendor invoices, past-due notices, lien threats, payment demands)
+  - "search" — search by vendor name, invoice number, or keyword across the mailbox
+  - "read" — get full email body by ID (use after recent/search to read a specific email)
+Use when the user asks about vendor communications, escalations, "what did [vendor] say?", invoice status, correspondence history, etc.
+Cross-reference email data with QuickBooks AP data and the vendor tracker for complete vendor intelligence.
+Emails from this folder are auto-forwarded from ap@incoa.com — the actual sender info is often in the forwarded body, not the envelope "from".
+Use refreshEmails to clear the cache and pull fresh emails.`;
+
   const textContent = [
     `User query: "${query}"`,
     focusedHint,
@@ -137,6 +146,7 @@ KEY RULES:
     documentsHint,
     qboHint,
     editHint,
+    emailHint,
     // NOTE: memories are sent separately as body.memories to the edge function
     // and injected into the system prompt. Don't duplicate them in the user message.
   ].filter(Boolean).join('\n');

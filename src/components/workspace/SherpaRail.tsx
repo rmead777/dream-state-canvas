@@ -10,6 +10,7 @@ import { MODE_LABELS } from '@/lib/cognitive-modes';
 import { VoiceIndicator } from './VoiceIndicator';
 import { DocumentContextSelector, ContextMode } from './DocumentContextSelector';
 import { QBOStatusPanel } from './QBOStatusPanel';
+import { OutlookStatusPanel } from './OutlookStatusPanel';
 import { useDocuments } from '@/contexts/DocumentContext';
 import { setActiveDataset } from '@/lib/active-dataset';
 import { invalidateProfileCache } from '@/lib/intent-engine';
@@ -810,6 +811,7 @@ export function SherpaRail() {
                 onModeChange={setContextMode}
               />
               <QBOStatusPanel />
+              <OutlookStatusPanel />
             </div>
           )}
 

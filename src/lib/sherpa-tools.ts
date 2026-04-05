@@ -14,6 +14,7 @@ import { retrieveRelevantMemories, formatMemoriesForPrompt, determineWorkspaceSt
 import { supabase } from '@/integrations/supabase/client';
 import { createTrigger as saveTrigger } from './automation-triggers';
 import { fetchQBOData, clearQBOCache, type QBODataType } from './quickbooks-store';
+import { fetchRecentEmails, searchEmails, readEmail, clearEmailCache, isOutlookConnected } from './email-store';
 
 // ─── Tool Definitions (OpenAI function-calling format) ──────────────────────
 
@@ -506,6 +507,41 @@ export const SHERPA_TOOLS = [
     },
   },
 
+  // EMAIL tools
+  {
+    type: 'function' as const,
+    function: {
+      name: 'queryEmails',
+      description: 'Fetch or search AP emails from the Incoa AP Automated Outlook folder. Use when the user asks about vendor communications, escalations, "what did [vendor] say?", "check AP emails", "latest from [vendor]", invoice correspondence, lien threats, payment demands, etc. Requires Outlook sign-in (check if connected first).',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['recent', 'search', 'read'],
+            description: '"recent" = latest emails from AP folder. "search" = full-text search by vendor name, invoice number, or keyword. "read" = get full email body by ID (use after recent/search to read a specific email).',
+          },
+          query: { type: 'string', description: 'Search query — vendor name, invoice number, keyword. Required for "search" action.' },
+          limit: { type: 'number', description: 'Max emails to return (default 20, max 50).' },
+          afterDate: { type: 'string', description: 'Only return emails after this ISO date (e.g. "2026-03-01"). Used with "recent" action.' },
+          emailId: { type: 'string', description: 'Email ID to read full body. Required for "read" action.' },
+        },
+        required: ['action'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'refreshEmails',
+      description: 'Clear the cached email data and re-fetch from Outlook. Use when the user says "refresh emails", "check for new emails", "update AP inbox", etc.',
+      parameters: {
+        type: 'object',
+        properties: {},
+      },
+    },
+  },
+
   // COMPUTE STATS tool
   {
     type: 'function' as const,
@@ -590,6 +626,8 @@ const TOOL_STATUS: Record<string, string> = {
   editDataset: 'Preparing dataset changes...',
   queryQuickBooks: 'Fetching QuickBooks data...',
   refreshQuickBooks: 'Refreshing QuickBooks data...',
+  queryEmails: 'Fetching AP emails...',
+  refreshEmails: 'Refreshing AP emails...',
   computeStats: 'Analyzing data...',
   suggestNextMoves: '',
 };
@@ -1160,6 +1198,77 @@ export async function executeTool(
           type: resp.type,
           message: `Fresh ${refreshType} data pulled from QuickBooks.`,
           ...resp.data,
+        });
+      }
+
+      case 'queryEmails': {
+        if (!isOutlookConnected()) {
+          return JSON.stringify({ error: 'Not signed in to Outlook. Ask the user to sign in via the Context tab.' });
+        }
+        const action = args.action as string;
+        if (action === 'recent') {
+          const emails = await fetchRecentEmails(args.limit || 20, args.afterDate);
+          return JSON.stringify({
+            emails: emails.map(e => ({
+              id: e.id,
+              subject: e.subject,
+              from: `${e.from.name} <${e.from.address}>`,
+              date: e.receivedDateTime,
+              preview: e.bodyPreview?.slice(0, 200),
+              hasAttachments: e.hasAttachments,
+              importance: e.importance,
+            })),
+            count: emails.length,
+          });
+        }
+        if (action === 'search') {
+          if (!args.query) return JSON.stringify({ error: 'query is required for search action' });
+          const emails = await searchEmails(args.query, args.limit || 20);
+          return JSON.stringify({
+            emails: emails.map(e => ({
+              id: e.id,
+              subject: e.subject,
+              from: `${e.from.name} <${e.from.address}>`,
+              date: e.receivedDateTime,
+              preview: e.bodyPreview?.slice(0, 200),
+              hasAttachments: e.hasAttachments,
+            })),
+            count: emails.length,
+            query: args.query,
+          });
+        }
+        if (action === 'read') {
+          if (!args.emailId) return JSON.stringify({ error: 'emailId is required for read action' });
+          const email = await readEmail(args.emailId);
+          if (!email) return JSON.stringify({ error: 'Email not found' });
+          // Strip HTML tags for plain text — AI doesn't need HTML
+          const bodyText = email.body.contentType === 'html'
+            ? email.body.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 3000)
+            : email.body.content.slice(0, 3000);
+          return JSON.stringify({
+            id: email.id,
+            subject: email.subject,
+            from: `${email.from.name} <${email.from.address}>`,
+            to: email.toRecipients.map(r => `${r.emailAddress.name} <${r.emailAddress.address}>`),
+            date: email.receivedDateTime,
+            body: bodyText,
+            hasAttachments: email.hasAttachments,
+            importance: email.importance,
+          });
+        }
+        return JSON.stringify({ error: `Unknown action: ${action}. Use: recent, search, read` });
+      }
+
+      case 'refreshEmails': {
+        clearEmailCache();
+        if (!isOutlookConnected()) {
+          return JSON.stringify({ refreshed: false, error: 'Not signed in to Outlook' });
+        }
+        const emails = await fetchRecentEmails(10);
+        return JSON.stringify({
+          refreshed: true,
+          message: `Email cache cleared. Fetched ${emails.length} recent emails.`,
+          count: emails.length,
         });
       }
 
