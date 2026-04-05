@@ -20,6 +20,7 @@ const initialState: WorkspaceState = {
     suggestions: [],
     lastResponse: null,
     observations: [],
+    dismissedObservations: [],
     isProcessing: false,
     lastAISuggestionsAt: 0,
   },
@@ -184,11 +185,23 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
       return { ...state, sherpa: { ...state.sherpa, suggestions: action.payload, lastAISuggestionsAt: Date.now() } };
 
     case 'ADD_SHERPA_OBSERVATION':
+      // Deduplicate at the reducer level — belt + suspenders
+      if (state.sherpa.observations.includes(action.payload)) return state;
       return {
         ...state,
         sherpa: {
           ...state.sherpa,
-          observations: [...state.sherpa.observations, action.payload],
+          observations: [...state.sherpa.observations, action.payload].slice(-20),
+        },
+      };
+
+    case 'DISMISS_SHERPA_OBSERVATION':
+      return {
+        ...state,
+        sherpa: {
+          ...state.sherpa,
+          observations: state.sherpa.observations.filter(o => o !== action.payload),
+          dismissedObservations: [...(state.sherpa.dismissedObservations || []), action.payload],
         },
       };
 
@@ -284,7 +297,11 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
     case 'CLEAR_SHERPA':
       return {
         ...state,
-        sherpa: { ...initialState.sherpa },
+        sherpa: {
+          ...initialState.sherpa,
+          // Preserve dismissed observations so they don't regenerate after clear
+          dismissedObservations: state.sherpa.dismissedObservations || [],
+        },
       };
 
     case 'COLLAPSE_ALL_OBJECTS': {

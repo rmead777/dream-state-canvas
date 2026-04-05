@@ -550,12 +550,21 @@ export function SherpaRail() {
                 </div>
               ))}
 
-              {/* Proactive observations — compact, below chat */}
+              {/* Proactive observations — compact, below chat, dismissable */}
               {observations.length > 0 && (
                 <div className="mt-4 space-y-1.5 border-t border-workspace-border/30 pt-3">
                   <span className="text-[9px] uppercase tracking-widest text-workspace-accent/50">Noticed</span>
                   {observations.slice(-2).map((obs, i) => (
-                    <p key={i} className="text-[11px] text-workspace-text-secondary/60 leading-relaxed px-1">{obs}</p>
+                    <div key={i} className="group/obs flex items-start gap-1.5 px-1">
+                      <p className="flex-1 text-[11px] text-workspace-text-secondary/60 leading-relaxed">{obs}</p>
+                      <button
+                        onClick={() => dispatch({ type: 'DISMISS_SHERPA_OBSERVATION', payload: obs })}
+                        className="shrink-0 mt-0.5 rounded p-0.5 text-[9px] text-workspace-text-secondary/30 opacity-0 transition-all group-hover/obs:opacity-100 hover:text-red-400"
+                        title="Dismiss"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}

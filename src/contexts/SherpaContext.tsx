@@ -34,18 +34,21 @@ export function SherpaProvider({ children }: { children: React.ReactNode }) {
   // Ref to current observations — allows async alert scan to dedup without stale closure
   const observationsRef = useRef<string[]>(state.sherpa.observations);
   observationsRef.current = state.sherpa.observations;
+  const dismissedRef = useRef<string[]>(state.sherpa.dismissedObservations || []);
+  dismissedRef.current = state.sherpa.dismissedObservations || [];
 
   // Proactive observation scanning — runs periodically
   const triggerObservationScan = useCallback(() => {
     const newObservations = generateObservations(state.objects);
+    const dismissed = state.sherpa.dismissedObservations || [];
 
-    // Only dispatch truly new observations
+    // Only dispatch truly new observations — skip duplicates AND dismissed ones
     for (const obs of newObservations) {
-      if (!state.sherpa.observations.includes(obs)) {
+      if (!state.sherpa.observations.includes(obs) && !dismissed.includes(obs)) {
         dispatch({ type: 'ADD_SHERPA_OBSERVATION', payload: obs });
       }
     }
-  }, [state.objects, state.sherpa.observations, dispatch]);
+  }, [state.objects, state.sherpa.observations, state.sherpa.dismissedObservations, dispatch]);
 
   // Keep the ref pointing to the latest scan function
   scanRef.current = triggerObservationScan;
@@ -84,8 +87,8 @@ export function SherpaProvider({ children }: { children: React.ReactNode }) {
 
         for (const alert of firing) {
           const obs = `[Alert] ${alert.message}`;
-          // Dedup — observationsRef always reflects current state, no stale closure
-          if (!observationsRef.current.includes(obs)) {
+          // Dedup + skip dismissed
+          if (!observationsRef.current.includes(obs) && !dismissedRef.current.includes(obs)) {
             dispatch({ type: 'ADD_SHERPA_OBSERVATION', payload: obs });
           }
         }
@@ -109,7 +112,7 @@ export function SherpaProvider({ children }: { children: React.ReactNode }) {
         const firings = checkTriggers(triggers);
         for (const firing of firings) {
           const obs = firing.observation;
-          if (!observationsRef.current.includes(obs)) {
+          if (!observationsRef.current.includes(obs) && !dismissedRef.current.includes(obs)) {
             dispatch({ type: 'ADD_SHERPA_OBSERVATION', payload: obs });
           }
           // For create_card actions, emit a synthetic sherpa-query event

@@ -135,6 +135,8 @@ export interface SherpaState {
   suggestions: Suggestion[];
   lastResponse: string | null;
   observations: string[];
+  /** Observation strings the user has dismissed — prevents re-generation */
+  dismissedObservations: string[];
   isProcessing: boolean;
   /** Timestamp of last AI-dispatched nextMoves — SherpaContext won't overwrite for 30s after this */
   lastAISuggestionsAt: number;
@@ -192,6 +194,7 @@ export type WorkspaceReducerAction =
   | { type: 'UPDATE_OBJECT'; payload: { id: string; title?: string; context?: Record<string, any> } }
   | { type: 'ENTER_IMMERSIVE'; payload: { id: string } }
   | { type: 'EXIT_IMMERSIVE' }
+  | { type: 'DISMISS_SHERPA_OBSERVATION'; payload: string }
   | { type: 'CLEAR_SHERPA' }
   | { type: 'COLLAPSE_ALL_OBJECTS' }
   | { type: 'DISSOLVE_ALL_OBJECTS' }
