@@ -36,6 +36,7 @@ export const CARD_FAMILY: Record<string, CardFamily> = {
   document: 'source',
   'document-viewer': 'source',
   'dataset-edit-preview': 'source',
+  'memory-cleanup-preview': 'thinking',
   // ACTION — execution objects
   'email-draft': 'action',
   simulation: 'action',
@@ -112,6 +113,7 @@ export const tokens = {
     'email-draft':       { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', icon: '✉', label: 'Draft' },
     'simulation':        { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', icon: '◎', label: 'Simulation' },
     'dataset-edit-preview': { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', icon: '✏', label: 'Proposed Edit' },
+    'memory-cleanup-preview': { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', icon: '🧹', label: 'Cleanup' },
   } as Record<string, { bg: string; text: string; border: string; icon: string; label: string }>,
 
   // Status/severity colors (NEVER for identity)

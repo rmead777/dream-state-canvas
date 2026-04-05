@@ -9,6 +9,7 @@ import { AIBrief } from '@/components/objects/AIBrief';
 import { Timeline } from '@/components/objects/Timeline';
 import { DataInspector } from '@/components/objects/DataInspector';
 import { DatasetEditPreview } from '@/components/objects/DatasetEditPreview';
+import { MemoryCleanupPreview } from '@/components/objects/MemoryCleanupPreview';
 import { getObjectTypeToken } from '@/lib/design-tokens';
 import MarkdownRenderer from '@/components/objects/MarkdownRenderer';
 
@@ -66,9 +67,9 @@ export function ImmersiveOverlay() {
 
       {/* Immersive content — full width for data, constrained for reading */}
       <div className={`relative z-10 flex-1 overflow-y-auto pt-6 pb-8 ${
-        object.type === 'dataset' || object.type === 'inspector' || object.type === 'dataset-edit-preview' || object.context?.isDatasetEdit ? 'px-4' : 'px-8'
+        object.type === 'dataset' || object.type === 'inspector' || object.type === 'dataset-edit-preview' || object.type === 'memory-cleanup-preview' || object.context?.isDatasetEdit || object.context?.isMemoryCleanup ? 'px-4' : 'px-8'
       }`}>
-        <div className={object.type === 'dataset' || object.type === 'inspector' || object.type === 'dataset-edit-preview' || object.context?.isDatasetEdit ? '' : 'mx-auto max-w-4xl'}>
+        <div className={object.type === 'dataset' || object.type === 'inspector' || object.type === 'dataset-edit-preview' || object.type === 'memory-cleanup-preview' || object.context?.isDatasetEdit || object.context?.isMemoryCleanup ? '' : 'mx-auto max-w-4xl'}>
           <ImmersiveContent object={object} />
         </div>
       </div>
@@ -106,10 +107,15 @@ function ImmersiveContent({ object }: { object: any }) {
       return <AnalysisCard object={object} />;
     case 'dataset-edit-preview':
       return <DatasetEditPreview object={object} />;
+    case 'memory-cleanup-preview':
+      return <MemoryCleanupPreview object={object} />;
     default:
       // Dataset edit preview (by flag, in case type doesn't match)
       if (object.context?.isDatasetEdit) {
         return <DatasetEditPreview object={object} />;
+      }
+      if (object.context?.isMemoryCleanup) {
+        return <MemoryCleanupPreview object={object} />;
       }
       // Fallback: sections → AnalysisCard, content → Markdown, otherwise raw
       if (object.context?.sections?.length > 0) {

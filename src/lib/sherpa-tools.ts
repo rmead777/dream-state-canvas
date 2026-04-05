@@ -9,7 +9,7 @@ import { WorkspaceObject, WorkspaceState } from './workspace-types';
 import { executeDataQuery } from './data-query';
 import { getActiveDataset, getDataset } from './active-dataset';
 import { getDocument } from './document-store';
-import { createMemory } from './memory-store';
+import { createMemory, deleteMemory, getMemories } from './memory-store';
 import { retrieveRelevantMemories, formatMemoriesForPrompt, determineWorkspaceState } from './memory-retriever';
 import { supabase } from '@/integrations/supabase/client';
 import { createTrigger as saveTrigger } from './automation-triggers';
@@ -223,6 +223,45 @@ export const SHERPA_TOOLS = [
           query: { type: 'string' },
         },
         required: ['query'],
+      },
+    },
+  },
+
+  // MEMORY CLEANUP tool
+  {
+    type: 'function' as const,
+    function: {
+      name: 'consolidateMemories',
+      description: 'Clean up, consolidate, and deduplicate Sherpa memories. Use when the user says "clean up memories", "consolidate memories", "too many memories", "memory cleanup", etc. Reads all stored memories, identifies redundant/duplicate/obsolete entries, and proposes: deletions (with reason) and optional merged replacements. The user confirms before any changes are applied.',
+      parameters: {
+        type: 'object',
+        properties: {
+          deleteIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'IDs of memories to delete (redundant, obsolete, or being merged into a consolidated entry)',
+          },
+          deleteReasons: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Reason for each deletion (same order as deleteIds)',
+          },
+          newMemories: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                type: { type: 'string', description: 'correction | preference | pattern | anti-pattern' },
+                content: { type: 'string', description: 'The consolidated memory content' },
+                reasoning: { type: 'string', description: 'What this replaces and why' },
+              },
+              required: ['type', 'content'],
+            },
+            description: 'New consolidated memories to create (replacing the deleted redundant ones)',
+          },
+          summary: { type: 'string', description: 'Human-readable summary of all changes proposed' },
+        },
+        required: ['deleteIds', 'summary'],
       },
     },
   },
@@ -547,6 +586,7 @@ const TOOL_STATUS: Record<string, string> = {
   createCalendarEvent: 'Creating calendar event...',
   exportWorkspace: 'Generating PDF report...',
   runSimulation: 'Running simulation...',
+  consolidateMemories: 'Cleaning up memories...',
   editDataset: 'Preparing dataset changes...',
   queryQuickBooks: 'Fetching QuickBooks data...',
   refreshQuickBooks: 'Refreshing QuickBooks data...',
@@ -766,6 +806,28 @@ export async function executeTool(
           workspaceState: determineWorkspaceState(state),
         });
         return JSON.stringify({ memories: memories.map(m => ({ type: m.type, content: m.content, confidence: m.confidence })) });
+      }
+
+      case 'consolidateMemories': {
+        const deleteIds = (args.deleteIds || []) as string[];
+        const deleteReasons = (args.deleteReasons || []) as string[];
+        const newMems = (args.newMemories || []) as Array<{ type: string; content: string; reasoning?: string }>;
+        const summary = args.summary || '';
+
+        // Return a preview card — changes apply when user clicks "Apply"
+        return JSON.stringify({
+          action: 'create',
+          objectType: 'memory-cleanup-preview',
+          title: 'Memory Cleanup',
+          data: {
+            isMemoryCleanup: true,
+            deleteIds,
+            deleteReasons,
+            newMemories: newMems,
+            summary,
+            operationCount: deleteIds.length + newMems.length,
+          },
+        });
       }
 
       case 'setThreshold': {

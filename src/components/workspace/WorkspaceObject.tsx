@@ -26,6 +26,7 @@ import { EmailDraft } from '@/components/objects/EmailDraft';
 import { SimulationCard } from '@/components/objects/SimulationCard';
 import { AutomationPanel } from '@/components/objects/AutomationPanel';
 import { DatasetEditPreview } from '@/components/objects/DatasetEditPreview';
+import { MemoryCleanupPreview } from '@/components/objects/MemoryCleanupPreview';
 import { getObjectTypeToken, getFamilyTokens, derivePosture, POSTURE_LABELS } from '@/lib/design-tokens';
 
 function ObjectContent({ object }: { object: WO }) {
@@ -37,6 +38,11 @@ function ObjectContent({ object }: { object: WO }) {
   // Dataset edit preview gets its own renderer (before sections check)
   if (object.context?.isDatasetEdit || object.type === 'dataset-edit-preview') {
     return <DatasetEditPreview object={object} />;
+  }
+
+  // Memory cleanup preview
+  if (object.context?.isMemoryCleanup || object.type === 'memory-cleanup-preview') {
+    return <MemoryCleanupPreview object={object} />;
   }
 
   // If any card type has AI-generated sections, use the universal renderer

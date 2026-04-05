@@ -18,10 +18,15 @@ const TYPE_CONFIG: Record<string, { icon: string; label: string; color: string }
   'anti-pattern': { icon: '✕', label: 'Avoid', color: 'text-amber-500' },
 };
 
-export function MemoryPanel() {
+interface MemoryPanelProps {
+  onSendToSherpa?: (message: string) => void;
+}
+
+export function MemoryPanel({ onSendToSherpa }: MemoryPanelProps) {
   const [memories, setMemories] = useState<SherpaMemory[]>([]);
   const [pending, setPending] = useState<SherpaMemory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cleaningUp, setCleaningUp] = useState(false);
 
   const loadMemories = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -76,6 +81,21 @@ export function MemoryPanel() {
             {pending.length > 0 && ` · ${pending.length} pending`}
           </p>
         </div>
+        {totalCount > 3 && onSendToSherpa && (
+          <button
+            onClick={() => {
+              setCleaningUp(true);
+              onSendToSherpa(
+                `Review ALL of my stored memories (use recallMemories with a broad query to see them all). Identify redundant, duplicate, or obsolete entries. Then use consolidateMemories to propose: (1) which memories to delete and why, (2) consolidated replacements that merge redundant entries into clean, non-repetitive preferences. Be aggressive — if 5 memories say the same thing about frosted charts, merge them into one.`
+              );
+              setTimeout(() => setCleaningUp(false), 3000);
+            }}
+            disabled={cleaningUp}
+            className="rounded-full border border-purple-200/50 bg-purple-50/30 px-2.5 py-1 text-[10px] font-medium text-purple-600 transition-colors hover:bg-purple-100/40 disabled:opacity-50"
+          >
+            {cleaningUp ? 'Cleaning...' : 'Clean Up'}
+          </button>
+        )}
       </div>
 
       {/* Pending confirmation */}

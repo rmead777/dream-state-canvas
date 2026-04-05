@@ -791,7 +791,7 @@ export function SherpaRail() {
       ) : (
         /* ═══ NON-ORIGIN TAB CONTENT ═══ */
         <div className="relative z-10 flex-1 overflow-y-auto px-4 py-4">
-          {activeTab === 'memory' && <MemoryPanel />}
+          {activeTab === 'memory' && <MemoryPanel onSendToSherpa={trackAndProcess} />}
 
           {activeTab === 'rules' && (
             <RulesEditor onClose={() => setActiveTab('origin')} />
