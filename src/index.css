@@ -296,3 +296,59 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* ── Print styles — clean PDF export from immersive view ── */
+@media print {
+  /* Hide everything except the immersive overlay */
+  body > * { display: none !important; }
+
+  /* The immersive overlay is rendered via a portal or at body level —
+     find and show only the immersive container */
+  [class*="fixed inset-0 z-[60]"],
+  #root {
+    display: block !important;
+  }
+
+  /* Hide UI chrome: header buttons, back button, close button */
+  .print\:hidden { display: none !important; }
+
+  /* Remove fixed positioning so content flows for print */
+  [class*="fixed inset-0 z-[60]"] {
+    position: static !important;
+    overflow: visible !important;
+    height: auto !important;
+    background: white !important;
+    backdrop-filter: none !important;
+  }
+
+  /* Remove gradient overlays */
+  [class*="pointer-events-none absolute inset-x-0 top-0"] {
+    display: none !important;
+  }
+
+  /* Make content area flow naturally */
+  [class*="overflow-y-auto"] {
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+  }
+
+  /* Clean backgrounds */
+  .workspace-card-surface {
+    box-shadow: none !important;
+    background: white !important;
+  }
+
+  /* Ensure charts and tables render fully */
+  svg { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  table { page-break-inside: avoid; }
+
+  /* Page setup */
+  @page {
+    size: A4 landscape;
+    margin: 1.5cm;
+  }
+
+  /* Preserve colored backgrounds in print */
+  * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
