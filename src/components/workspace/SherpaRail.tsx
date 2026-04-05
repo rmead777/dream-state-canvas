@@ -6,6 +6,7 @@ import { useVoiceInput } from '@/hooks/useVoiceInput';
 import { useAmbientAudio } from '@/hooks/useAmbientAudio';
 import { useCognitiveMode } from '@/hooks/useCognitiveMode';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { MODE_LABELS } from '@/lib/cognitive-modes';
 import { VoiceIndicator } from './VoiceIndicator';
 import { DocumentContextSelector, ContextMode } from './DocumentContextSelector';
@@ -25,34 +26,13 @@ import { MemoryPanel } from './MemoryPanel';
 import { RulesEditor } from './RulesEditor';
 import { AITelemetryPanel } from './AITelemetryPanel';
 import MarkdownRenderer from '../objects/MarkdownRenderer';
+import { compressImage } from '@/lib/image-utils';
 
-async function compressImage(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      const MAX = 1024;
-      let { width, height } = img;
-      if (width > MAX || height > MAX) {
-        if (width > height) { height = Math.round(height * MAX / width); width = MAX; }
-        else { width = Math.round(width * MAX / height); height = MAX; }
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = width; canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) { reject(new Error('No canvas context')); return; }
-      ctx.drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL('image/jpeg', 0.85));
-    };
-    img.onerror = reject;
-    img.src = objectUrl;
-  });
-}
-
-const RAIL_MIN_WIDTH = 320;
+const RAIL_MIN_WIDTH = 280;
 const RAIL_MAX_WIDTH = 800;
 const RAIL_DEFAULT_WIDTH = 440;
+const RAIL_TABLET_DEFAULT = 280;
+const RAIL_TABLET_MAX = 360;
 const RAIL_WIDTH_KEY = 'sherpa-rail-width';
 
 type RailTab = 'origin' | 'memory' | 'rules' | 'context' | 'admin' | 'log';
@@ -73,17 +53,27 @@ export function SherpaRail() {
   const cognitiveMode = useCognitiveMode();
   const { play } = useAmbientAudio();
   const { user, signOut } = useAuth();
+  const { isTablet } = useIsMobile();
   const [input, setInput] = useState('');
   const [isExpanded, setIsExpanded] = useState(true);
   const [activeTab, setActiveTab] = useState<RailTab>('origin');
 
-  // Resizable width
+  // Resizable width — narrower defaults on tablet
+  const maxWidth = isTablet ? RAIL_TABLET_MAX : RAIL_MAX_WIDTH;
+  const defaultWidth = isTablet ? RAIL_TABLET_DEFAULT : RAIL_DEFAULT_WIDTH;
   const [railWidth, setRailWidth] = useState(() => {
     try {
       const stored = localStorage.getItem(RAIL_WIDTH_KEY);
-      return stored ? Math.max(RAIL_MIN_WIDTH, Math.min(RAIL_MAX_WIDTH, parseInt(stored))) : RAIL_DEFAULT_WIDTH;
-    } catch { return RAIL_DEFAULT_WIDTH; }
+      return stored ? Math.max(RAIL_MIN_WIDTH, Math.min(maxWidth, parseInt(stored))) : defaultWidth;
+    } catch { return defaultWidth; }
   });
+
+  // Adjust width when switching between tablet and desktop
+  useEffect(() => {
+    if (isTablet && railWidth > RAIL_TABLET_MAX) {
+      setRailWidth(RAIL_TABLET_DEFAULT);
+    }
+  }, [isTablet]);
   const isDraggingRef = useRef(false);
 
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
@@ -96,7 +86,7 @@ export function SherpaRail() {
 
     const onMouseMove = (e: MouseEvent) => {
       const delta = startX - e.clientX;
-      currentWidth = Math.max(RAIL_MIN_WIDTH, Math.min(RAIL_MAX_WIDTH, startWidth + delta));
+      currentWidth = Math.max(RAIL_MIN_WIDTH, Math.min(maxWidth, startWidth + delta));
       setRailWidth(currentWidth);
     };
 

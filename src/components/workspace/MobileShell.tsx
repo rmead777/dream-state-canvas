@@ -15,30 +15,11 @@ import { QBOStatusPanel } from './QBOStatusPanel';
 import { OutlookStatusPanel } from './OutlookStatusPanel';
 import { MemoryPanel } from './MemoryPanel';
 import MarkdownRenderer from '../objects/MarkdownRenderer';
-
-async function compressImage(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      const MAX = 1024;
-      let { width, height } = img;
-      if (width > MAX || height > MAX) {
-        if (width > height) { height = Math.round(height * MAX / width); width = MAX; }
-        else { width = Math.round(width * MAX / height); height = MAX; }
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = width; canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) { reject(new Error('No canvas context')); return; }
-      ctx.drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL('image/jpeg', 0.85));
-    };
-    img.onerror = reject;
-    img.src = objectUrl;
-  });
-}
+import { compressImage } from '@/lib/image-utils';
+import {
+  checkPassphrase, unlockAdmin, lockAdmin, isAdminUnlocked,
+} from '@/lib/admin-settings';
+import { toast } from 'sonner';
 
 export function MobileShell() {
   const { state, dispatch } = useWorkspace();
@@ -55,6 +36,7 @@ export function MobileShell() {
   const [pendingImages, setPendingImages] = useState<string[]>([]);
   const [contextMode, setContextMode] = useState<ContextMode>('auto');
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
+  const [adminUnlocked, setAdminUnlocked] = useState(isAdminUnlocked());
   const inputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -119,11 +101,29 @@ export function MobileShell() {
   const handleSubmit = useCallback(() => {
     const trimmed = input.trim();
     if (!trimmed && pendingImages.length === 0) return;
+
+    // Admin passphrase check
+    if (trimmed && checkPassphrase(trimmed)) {
+      if (!adminUnlocked) {
+        unlockAdmin();
+        setAdminUnlocked(true);
+        dispatch({ type: 'SET_SHERPA_RESPONSE', payload: 'Admin mode activated.' });
+        toast.success('Admin mode unlocked');
+      } else {
+        lockAdmin();
+        setAdminUnlocked(false);
+        dispatch({ type: 'SET_SHERPA_RESPONSE', payload: 'Admin mode deactivated.' });
+        toast.success('Admin mode locked');
+      }
+      setInput('');
+      return;
+    }
+
     const images = pendingImages.length > 0 ? pendingImages : undefined;
     trackAndProcess(trimmed || 'What do you see in this image?', images);
     setInput('');
     setPendingImages([]);
-  }, [input, pendingImages, trackAndProcess]);
+  }, [input, pendingImages, trackAndProcess, adminUnlocked, dispatch]);
 
   const handleVoiceResult = useCallback((transcript: string) => {
     play('focus');
@@ -368,7 +368,7 @@ export function MobileShell() {
 
                   <button
                     onClick={handleSubmit}
-                    disabled={!input.trim() || isProcessing}
+                    disabled={(!input.trim() && pendingImages.length === 0) || isProcessing}
                     className="rounded-full bg-workspace-accent/10 px-3 py-1.5 text-[11px] font-medium text-workspace-accent transition-all active:scale-[0.95] disabled:opacity-40"
                   >
                     {isProcessing ? '...' : 'Send'}

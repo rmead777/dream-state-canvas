@@ -42,13 +42,14 @@ export function ImmersiveOverlay() {
       <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[linear-gradient(to_bottom,rgba(99,102,241,0.08),transparent)]" />
 
       {/* Minimal header — print shows title only */}
-      <div className="relative z-10 flex items-center justify-between px-8 py-4 border-b border-workspace-border/30 backdrop-blur-sm print:border-b-2 print:border-gray-200 print:backdrop-blur-none print:px-0 print:py-2">
+      <div className="relative z-10 flex items-center justify-between px-4 md:px-8 py-3 md:py-4 border-b border-workspace-border/30 backdrop-blur-sm print:border-b-2 print:border-gray-200 print:backdrop-blur-none print:px-0 print:py-2">
         <div className="flex items-center gap-3">
           <button
             onClick={handleClose}
-            className="workspace-pill rounded-full px-3.5 py-2 text-xs text-workspace-text-secondary transition-all duration-200 workspace-spring hover:-translate-y-0.5 hover:text-workspace-text print:hidden"
+            className="workspace-pill rounded-full px-2.5 py-2 md:px-3.5 text-xs text-workspace-text-secondary transition-all duration-200 workspace-spring hover:-translate-y-0.5 hover:text-workspace-text print:hidden"
           >
-            ← Back to workspace
+            <span className="hidden md:inline">← Back to workspace</span>
+            <span className="md:hidden">← Back</span>
           </button>
           <div className="h-4 w-px bg-workspace-border/50 print:hidden" />
           <span className="workspace-pill rounded-full px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.2em] text-workspace-accent print:bg-transparent print:px-0">
@@ -79,8 +80,8 @@ export function ImmersiveOverlay() {
       </div>
 
       {/* Immersive content — full width for data, constrained for reading */}
-      <div className={`relative z-10 flex-1 overflow-y-auto pt-6 pb-8 ${
-        object.type === 'dataset' || object.type === 'inspector' || object.type === 'dataset-edit-preview' || object.type === 'memory-cleanup-preview' || object.context?.isDatasetEdit || object.context?.isMemoryCleanup ? 'px-4' : 'px-8'
+      <div className={`relative z-10 flex-1 overflow-y-auto pt-4 md:pt-6 pb-6 md:pb-8 ${
+        object.type === 'dataset' || object.type === 'inspector' || object.type === 'dataset-edit-preview' || object.type === 'memory-cleanup-preview' || object.context?.isDatasetEdit || object.context?.isMemoryCleanup ? 'px-2 md:px-4' : 'px-4 md:px-8'
       }`}>
         {/* PDF preview overlay — positioned over content */}
         {pdfMode && (
