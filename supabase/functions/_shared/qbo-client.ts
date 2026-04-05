@@ -27,7 +27,14 @@ interface QBOConnection {
 
 /**
  * Get a live QB access token from WCW's Supabase.
- * Refreshes automatically if expiring within 5 minutes.
+ *
+ * DSC is READ-ONLY on WCW's token. It never refreshes the token itself.
+ * WCW manages its own token lifecycle. If the token is expired, DSC
+ * reports the error and waits for WCW to refresh it.
+ *
+ * Why: QuickBooks rotates refresh tokens on every use. If both apps
+ * try to refresh, one invalidates the other's token — a race condition
+ * that was causing repeated disconnections.
  */
 export async function getQBOToken(): Promise<{ token: string; connection: QBOConnection }> {
   const wcwUrl = Deno.env.get('WCW_SUPABASE_URL');
@@ -50,66 +57,16 @@ export async function getQBOToken(): Promise<{ token: string; connection: QBOCon
     throw new Error('No active QuickBooks connection found in WCW');
   }
 
-  // Check if token needs refresh (5-minute buffer)
+  // Check if token is expired — if so, DON'T refresh, just report it.
+  // WCW will refresh its own token on its next sync cycle.
   const expiresAt = new Date(connection.token_expires_at);
   const now = new Date();
-  const fiveMinutes = 5 * 60 * 1000;
 
-  if (expiresAt.getTime() - now.getTime() > fiveMinutes) {
-    return { token: connection.access_token, connection };
+  if (expiresAt.getTime() < now.getTime()) {
+    throw new Error('QuickBooks access token is expired. WCW will refresh it automatically on its next sync, or trigger a sync in WCW.');
   }
 
-  // Refresh the token
-  console.log('Refreshing QuickBooks token via WCW...');
-
-  const clientId = Deno.env.get('QUICKBOOKS_CLIENT_ID');
-  const clientSecret = Deno.env.get('QUICKBOOKS_CLIENT_SECRET');
-
-  if (!clientId || !clientSecret) {
-    throw new Error('QUICKBOOKS_CLIENT_ID and QUICKBOOKS_CLIENT_SECRET must be set');
-  }
-
-  const tokenResponse = await fetch('https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Accept': 'application/json',
-    },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: connection.refresh_token,
-    }),
-  });
-
-  if (!tokenResponse.ok) {
-    const errorText = await tokenResponse.text();
-    console.error('Token refresh failed:', errorText);
-
-    // DO NOT modify WCW's connection status — that's WCW's responsibility.
-    // DSC is a guest reading WCW's token. If refresh fails, just report the error.
-    throw new Error('QuickBooks token refresh failed. The refresh token may be expired — reconnect in Working Capital Wizard.');
-  }
-
-  const tokens = await tokenResponse.json();
-  const newExpiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
-
-  // Write refreshed token back to WCW so both apps stay in sync
-  await wcw
-    .from('qbo_connections')
-    .update({
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token,
-      token_expires_at: newExpiresAt,
-      last_error: null,
-    })
-    .eq('id', connection.id);
-
-  console.log('Token refreshed successfully');
-  return {
-    token: tokens.access_token,
-    connection: { ...connection, access_token: tokens.access_token },
-  };
+  return { token: connection.access_token, connection };
 }
 
 // ─── QB API Helpers ────────────────────────────────────────────────────────
