@@ -119,6 +119,9 @@ function ImmersiveContent({ object }: { object: any }) {
     case 'alert':
       return <AlertRiskPanel object={object} />;
     case 'brief':
+      if (object.context?.sections?.length > 0) {
+        return <AnalysisCard object={object} />;
+      }
       if (object.context?.content) {
         return <MarkdownRenderer content={object.context.content} />;
       }
