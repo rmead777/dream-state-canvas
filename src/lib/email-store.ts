@@ -1,19 +1,26 @@
 /**
- * Email Store — client-side module for fetching Outlook emails via Microsoft Graph API.
+ * Email Store — Outlook email sync + Supabase persistence.
  *
- * Uses MSAL for authentication (delegated permissions — user's own mailbox only).
- * Caches results in memory for the session, same pattern as quickbooks-store.ts.
+ * Flow:
+ *   1. syncEmails() pulls from Graph API, stores full body in Supabase ap_emails table
+ *   2. getStoredEmails() reads from Supabase (fast, no Graph API call)
+ *   3. searchStoredEmails() does full-text search in Supabase
+ *   4. getStoredEmail() reads a single email from Supabase by graph_message_id
+ *   5. Only hits Graph API when syncing — all reads come from Supabase
  *
- * The Sherpa tool calls into this module. No server-side secrets needed.
+ * MSAL auth is still client-side (delegated permissions).
+ * Supabase is the persistence layer for email content.
  */
 
 import { PublicClientApplication, InteractionRequiredAuthError, type AccountInfo } from '@azure/msal-browser';
 import { loginRequest } from './msal-config';
+import { supabase } from '@/integrations/supabase/client';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
 export interface EmailSummary {
   id: string;
+  graphMessageId: string;
   subject: string;
   bodyPreview: string;
   from: { name: string; address: string };
@@ -24,15 +31,22 @@ export interface EmailSummary {
 }
 
 export interface EmailFull extends EmailSummary {
-  body: { content: string; contentType: string };
-  toRecipients: Array<{ emailAddress: { name: string; address: string } }>;
+  bodyText: string;
+  bodyContentType: string;
+  toRecipients: Array<{ name: string; address: string }>;
+}
+
+export interface SyncResult {
+  newEmails: number;
+  totalStored: number;
+  lastMessageDate: string | null;
+  error?: string;
 }
 
 // ─── MSAL Instance (set by MsalProvider in App.tsx) ────────────────────────
 
 let msalInstance: PublicClientApplication | null = null;
 
-/** Called once from App.tsx after MSAL initializes */
 export function setMsalInstance(instance: PublicClientApplication): void {
   msalInstance = instance;
 }
@@ -41,7 +55,6 @@ export function setMsalInstance(instance: PublicClientApplication): void {
 
 async function getAccessToken(): Promise<string | null> {
   if (!msalInstance) return null;
-
   const accounts = msalInstance.getAllAccounts();
   if (accounts.length === 0) return null;
 
@@ -96,7 +109,6 @@ async function resolveFolderId(folderName: string = DEFAULT_FOLDER_NAME): Promis
   const cached = folderIdCache.get(folderName.toLowerCase());
   if (cached) return cached;
 
-  // Search top-level mail folders
   const result = await graphFetch<{ value: Array<{ id: string; displayName: string }> }>(
     `/me/mailFolders?$filter=displayName eq '${folderName}'`
   );
@@ -120,154 +132,351 @@ async function resolveFolderId(folderName: string = DEFAULT_FOLDER_NAME): Promis
   return null;
 }
 
-// ─── Session Cache ─────────────────────────────────────────────────────────
+// ─── Public API: Connection ────────────────────────────────────────────────
 
-const cache = new Map<string, { data: any; fetchedAt: number }>();
-
-function getCached(key: string): any | null {
-  return cache.get(key)?.data ?? null;
-}
-
-function setCache(key: string, data: any): void {
-  cache.set(key, { data, fetchedAt: Date.now() });
-}
-
-export function clearEmailCache(): void {
-  cache.clear();
-  folderIdCache.clear();
-}
-
-// ─── Public API ────────────────────────────────────────────────────────────
-
-/** Check if user is signed in to Outlook */
 export function isOutlookConnected(): boolean {
   if (!msalInstance) return false;
   return msalInstance.getAllAccounts().length > 0;
 }
 
-/** Get the signed-in account info */
 export function getOutlookAccount(): AccountInfo | null {
   if (!msalInstance) return null;
   return msalInstance.getAllAccounts()[0] || null;
 }
 
-/** Trigger MSAL login via redirect (page navigates to Microsoft login, then back) */
 export async function signInToOutlook(): Promise<boolean> {
   if (!msalInstance) return false;
   try {
     await msalInstance.loginRedirect(loginRequest);
-    return true; // Won't reach here — page redirects to Microsoft
+    return true;
   } catch {
     return false;
   }
 }
 
-/** Sign out of Outlook */
 export async function signOutOfOutlook(): Promise<void> {
   if (!msalInstance) return;
-  try {
-    await msalInstance.logoutPopup();
-  } catch {}
+  try { await msalInstance.logoutPopup(); } catch {}
 }
 
+// ─── Sync: Pull from Graph API → Store in Supabase ────────────────────────
+
 /**
- * Fetch recent emails from the AP folder.
- * Cached for the session — call clearEmailCache() to re-fetch.
+ * Sync emails from Outlook to Supabase. Pulls only emails newer than
+ * the last sync timestamp. Stores full body text for AI analysis.
+ *
+ * Paginates at 50 per request (Graph API max).
  */
-export async function fetchRecentEmails(
-  limit: number = 20,
-  afterDate?: string,
-  folderName?: string,
-): Promise<EmailSummary[]> {
-  const cacheKey = `recent:${limit}:${afterDate || ''}:${folderName || ''}`;
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
+export async function syncEmails(
+  folderName: string = DEFAULT_FOLDER_NAME,
+  options?: { fullResync?: boolean },
+): Promise<SyncResult> {
+  const account = getOutlookAccount();
+  if (!account) throw new Error('Not signed in to Outlook');
+  const userId = account.username || account.homeAccountId;
 
-  const folderId = await resolveFolderId(folderName);
-  if (!folderId) throw new Error(`Folder "${folderName || DEFAULT_FOLDER_NAME}" not found`);
+  // Get last sync timestamp (unless full resync requested)
+  let afterDate: string | null = null;
+  if (!options?.fullResync) {
+    const { data: syncState } = await supabase
+      .from('ap_email_sync')
+      .select('last_message_date')
+      .eq('user_id', userId)
+      .eq('folder_name', folderName)
+      .single();
 
-  let url = `/me/mailFolders/${folderId}/messages?$top=${Math.min(limit, 50)}&$orderby=receivedDateTime desc&$select=id,subject,bodyPreview,from,receivedDateTime,isRead,hasAttachments,importance`;
-
-  if (afterDate) {
-    url += `&$filter=receivedDateTime ge ${afterDate}`;
+    if (syncState?.last_message_date) {
+      afterDate = syncState.last_message_date;
+    }
   }
 
-  const result = await graphFetch<{ value: any[] }>(url);
-  const emails: EmailSummary[] = (result?.value || []).map(normalizeEmail);
-  setCache(cacheKey, emails);
-  return emails;
+  // Update sync status to 'syncing'
+  await supabase
+    .from('ap_email_sync')
+    .upsert({
+      user_id: userId,
+      folder_name: folderName,
+      sync_status: 'syncing',
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,folder_name' });
+
+  const folderId = await resolveFolderId(folderName);
+  if (!folderId) {
+    await updateSyncState(userId, folderName, 'error', 0, null, `Folder "${folderName}" not found`);
+    throw new Error(`Folder "${folderName}" not found`);
+  }
+
+  // Paginate through all new emails
+  let newCount = 0;
+  let latestDate: string | null = null;
+  let offset = 0;
+  const PAGE_SIZE = 50;
+
+  while (true) {
+    let url = `/me/mailFolders/${folderId}/messages?$top=${PAGE_SIZE}&$skip=${offset}&$orderby=receivedDateTime desc&$select=id,subject,body,bodyPreview,from,toRecipients,receivedDateTime,isRead,hasAttachments,importance`;
+
+    if (afterDate) {
+      url += `&$filter=receivedDateTime gt ${afterDate}`;
+    }
+
+    const result = await graphFetch<{ value: any[] }>(url);
+    const messages = result?.value || [];
+
+    if (messages.length === 0) break;
+
+    // Upsert each email into Supabase
+    for (const msg of messages) {
+      const bodyText = msg.body?.contentType === 'html'
+        ? msg.body.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+        : msg.body?.content || '';
+
+      const row = {
+        graph_message_id: msg.id,
+        subject: msg.subject || '(no subject)',
+        sender_name: msg.from?.emailAddress?.name || '',
+        sender_address: msg.from?.emailAddress?.address || '',
+        received_at: msg.receivedDateTime,
+        importance: msg.importance || 'normal',
+        has_attachments: msg.hasAttachments ?? false,
+        is_read: msg.isRead ?? true,
+        body_preview: msg.bodyPreview || '',
+        body_text: bodyText,
+        body_content_type: msg.body?.contentType || 'text',
+        to_recipients: (msg.toRecipients || []).map((r: any) => ({
+          name: r.emailAddress?.name || '',
+          address: r.emailAddress?.address || '',
+        })),
+        folder_name: folderName,
+        user_id: userId,
+        synced_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase
+        .from('ap_emails')
+        .upsert(row, { onConflict: 'graph_message_id' });
+
+      if (!error) {
+        newCount++;
+        if (!latestDate || msg.receivedDateTime > latestDate) {
+          latestDate = msg.receivedDateTime;
+        }
+      }
+    }
+
+    if (messages.length < PAGE_SIZE) break;
+    offset += PAGE_SIZE;
+  }
+
+  // Get total stored count
+  const { count } = await supabase
+    .from('ap_emails')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('folder_name', folderName);
+
+  await updateSyncState(userId, folderName, 'complete', count || 0, latestDate, null);
+
+  return {
+    newEmails: newCount,
+    totalStored: count || 0,
+    lastMessageDate: latestDate,
+  };
+}
+
+async function updateSyncState(
+  userId: string,
+  folderName: string,
+  status: string,
+  emailsSynced: number,
+  lastMessageDate: string | null,
+  error: string | null,
+): Promise<void> {
+  await supabase
+    .from('ap_email_sync')
+    .upsert({
+      user_id: userId,
+      folder_name: folderName,
+      sync_status: status,
+      emails_synced: emailsSynced,
+      last_sync_at: new Date().toISOString(),
+      last_message_date: lastMessageDate || undefined,
+      last_error: error,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,folder_name' });
+}
+
+// ─── Read: Query from Supabase (no Graph API call) ─────────────────────────
+
+/**
+ * Get stored emails from Supabase, ordered by date descending.
+ * No Graph API call — reads from the synced cache.
+ */
+export async function getStoredEmails(
+  limit: number = 20,
+  afterDate?: string,
+  folderName: string = DEFAULT_FOLDER_NAME,
+): Promise<EmailSummary[]> {
+  const account = getOutlookAccount();
+  const userId = account?.username || account?.homeAccountId || '';
+
+  let query = supabase
+    .from('ap_emails')
+    .select('graph_message_id, subject, body_preview, sender_name, sender_address, received_at, is_read, has_attachments, importance')
+    .eq('folder_name', folderName)
+    .order('received_at', { ascending: false })
+    .limit(limit);
+
+  if (userId) {
+    query = query.eq('user_id', userId);
+  }
+
+  if (afterDate) {
+    query = query.gte('received_at', afterDate);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error('[email-store] Supabase read failed:', error);
+    return [];
+  }
+
+  return (data || []).map(row => ({
+    id: row.graph_message_id,
+    graphMessageId: row.graph_message_id,
+    subject: row.subject || '(no subject)',
+    bodyPreview: row.body_preview || '',
+    from: { name: row.sender_name || '', address: row.sender_address || '' },
+    receivedDateTime: row.received_at,
+    isRead: row.is_read ?? true,
+    hasAttachments: row.has_attachments ?? false,
+    importance: row.importance || 'normal',
+  }));
 }
 
 /**
- * Search emails across the mailbox.
- * Graph API note: $search and $orderby cannot be combined — results come by relevance.
+ * Full-text search across stored emails in Supabase.
  */
-export async function searchEmails(
+export async function searchStoredEmails(
   query: string,
   limit: number = 20,
 ): Promise<EmailSummary[]> {
-  const cacheKey = `search:${query}:${limit}`;
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
+  const account = getOutlookAccount();
+  const userId = account?.username || account?.homeAccountId || '';
 
-  const result = await graphFetch<{ value: any[] }>(
-    `/me/messages?$search="${encodeURIComponent(query)}"&$top=${Math.min(limit, 50)}&$select=id,subject,bodyPreview,from,receivedDateTime,isRead,hasAttachments,importance`
-  );
-  const emails: EmailSummary[] = (result?.value || []).map(normalizeEmail);
-  setCache(cacheKey, emails);
-  return emails;
+  // Use Postgres full-text search
+  const tsQuery = query.split(/\s+/).filter(Boolean).join(' & ');
+
+  const { data, error } = await supabase
+    .from('ap_emails')
+    .select('graph_message_id, subject, body_preview, sender_name, sender_address, received_at, is_read, has_attachments, importance')
+    .eq('user_id', userId)
+    .textSearch('subject', tsQuery, { type: 'websearch' })
+    .order('received_at', { ascending: false })
+    .limit(limit);
+
+  // Fallback: if full-text search returns nothing, try ilike on subject + sender
+  if ((!data || data.length === 0) && !error) {
+    const { data: fallbackData } = await supabase
+      .from('ap_emails')
+      .select('graph_message_id, subject, body_preview, sender_name, sender_address, received_at, is_read, has_attachments, importance')
+      .eq('user_id', userId)
+      .or(`subject.ilike.%${query}%,sender_name.ilike.%${query}%,sender_address.ilike.%${query}%,body_text.ilike.%${query}%`)
+      .order('received_at', { ascending: false })
+      .limit(limit);
+
+    return (fallbackData || []).map(rowToEmailSummary);
+  }
+
+  if (error) {
+    console.error('[email-store] Search failed:', error);
+    return [];
+  }
+
+  return (data || []).map(rowToEmailSummary);
 }
 
 /**
- * Read a single email's full body by ID.
+ * Read a single email's full body from Supabase.
  */
-export async function readEmail(emailId: string): Promise<EmailFull | null> {
-  const cacheKey = `email:${emailId}`;
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
+export async function getStoredEmail(graphMessageId: string): Promise<EmailFull | null> {
+  const { data, error } = await supabase
+    .from('ap_emails')
+    .select('*')
+    .eq('graph_message_id', graphMessageId)
+    .single();
 
-  const result = await graphFetch<any>(
-    `/me/messages/${emailId}?$select=id,subject,body,bodyPreview,from,toRecipients,receivedDateTime,isRead,hasAttachments,importance`
-  );
+  if (error || !data) return null;
 
-  if (!result) return null;
-
-  const email: EmailFull = {
-    id: result.id,
-    subject: result.subject || '(no subject)',
-    bodyPreview: result.bodyPreview || '',
-    body: result.body || { content: '', contentType: 'text' },
-    from: {
-      name: result.from?.emailAddress?.name || '',
-      address: result.from?.emailAddress?.address || '',
-    },
-    toRecipients: (result.toRecipients || []).map((r: any) => ({
-      emailAddress: { name: r.emailAddress?.name || '', address: r.emailAddress?.address || '' },
+  return {
+    id: data.graph_message_id,
+    graphMessageId: data.graph_message_id,
+    subject: data.subject || '(no subject)',
+    bodyPreview: data.body_preview || '',
+    bodyText: data.body_text || '',
+    bodyContentType: data.body_content_type || 'text',
+    from: { name: data.sender_name || '', address: data.sender_address || '' },
+    toRecipients: (data.to_recipients as any[] || []).map((r: any) => ({
+      name: r.name || '',
+      address: r.address || '',
     })),
-    receivedDateTime: result.receivedDateTime || '',
-    isRead: result.isRead ?? true,
-    hasAttachments: result.hasAttachments ?? false,
-    importance: result.importance || 'normal',
+    receivedDateTime: data.received_at,
+    isRead: data.is_read ?? true,
+    hasAttachments: data.has_attachments ?? false,
+    importance: data.importance || 'normal',
   };
+}
 
-  setCache(cacheKey, email);
-  return email;
+/**
+ * Get sync state for a folder.
+ */
+export async function getSyncState(folderName: string = DEFAULT_FOLDER_NAME) {
+  const account = getOutlookAccount();
+  const userId = account?.username || account?.homeAccountId || '';
+
+  const { data } = await supabase
+    .from('ap_email_sync')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('folder_name', folderName)
+    .single();
+
+  return data;
+}
+
+/**
+ * Get total stored email count for a folder.
+ */
+export async function getStoredEmailCount(folderName: string = DEFAULT_FOLDER_NAME): Promise<number> {
+  const account = getOutlookAccount();
+  const userId = account?.username || account?.homeAccountId || '';
+
+  const { count } = await supabase
+    .from('ap_emails')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('folder_name', folderName);
+
+  return count || 0;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-function normalizeEmail(raw: any): EmailSummary {
+function rowToEmailSummary(row: any): EmailSummary {
   return {
-    id: raw.id,
-    subject: raw.subject || '(no subject)',
-    bodyPreview: raw.bodyPreview || '',
-    from: {
-      name: raw.from?.emailAddress?.name || '',
-      address: raw.from?.emailAddress?.address || '',
-    },
-    receivedDateTime: raw.receivedDateTime || '',
-    isRead: raw.isRead ?? true,
-    hasAttachments: raw.hasAttachments ?? false,
-    importance: raw.importance || 'normal',
+    id: row.graph_message_id,
+    graphMessageId: row.graph_message_id,
+    subject: row.subject || '(no subject)',
+    bodyPreview: row.body_preview || '',
+    from: { name: row.sender_name || '', address: row.sender_address || '' },
+    receivedDateTime: row.received_at,
+    isRead: row.is_read ?? true,
+    hasAttachments: row.has_attachments ?? false,
+    importance: row.importance || 'normal',
   };
+}
+
+// Legacy exports for backward compat with OutlookStatusPanel
+export function clearEmailCache(): void {
+  folderIdCache.clear();
 }

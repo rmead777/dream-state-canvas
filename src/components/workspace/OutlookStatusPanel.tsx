@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { isOutlookConnected, getOutlookAccount, signInToOutlook, signOutOfOutlook, clearEmailCache, fetchRecentEmails } from '@/lib/email-store';
+import { isOutlookConnected, getOutlookAccount, signInToOutlook, signOutOfOutlook, syncEmails, getStoredEmailCount, getSyncState } from '@/lib/email-store';
 
 export function OutlookStatusPanel() {
   const [connected, setConnected] = useState(false);
@@ -34,11 +34,14 @@ export function OutlookStatusPanel() {
     return () => clearInterval(interval);
   }, [checkConnection]);
 
-  // Warm fetch: once connected, pull recent email count
+  const [lastSync, setLastSync] = useState<string | null>(null);
+
+  // Once connected, load stored email count from Supabase
   useEffect(() => {
     if (connected && emailCount === null) {
-      fetchRecentEmails(5).then(emails => {
-        setEmailCount(emails.length);
+      getStoredEmailCount().then(count => setEmailCount(count)).catch(() => {});
+      getSyncState().then(state => {
+        if (state?.last_sync_at) setLastSync(state.last_sync_at);
       }).catch(() => {});
     }
   }, [connected, emailCount]);
@@ -53,12 +56,11 @@ export function OutlookStatusPanel() {
   };
 
   const handleRefresh = async () => {
-    clearEmailCache();
-    setEmailCount(null);
     setLoading(true);
     try {
-      const emails = await fetchRecentEmails(5);
-      setEmailCount(emails.length);
+      const result = await syncEmails();
+      setEmailCount(result.totalStored);
+      setLastSync(new Date().toISOString());
     } catch {}
     setLoading(false);
   };
@@ -123,22 +125,24 @@ export function OutlookStatusPanel() {
                 <span className="text-[10px] text-workspace-text flex-1 truncate">
                   Incoa AP Automated
                 </span>
-                <span className="text-[8px] text-emerald-400/60 shrink-0">
-                  Connected
+                <span className="text-[8px] text-emerald-400/60 shrink-0 tabular-nums">
+                  {emailCount != null ? `${emailCount} stored` : 'Connected'}
                 </span>
               </div>
 
-              {/* Refresh + sign out */}
+              {/* Sync button */}
               <button
                 onClick={handleRefresh}
                 disabled={loading}
                 className="w-full mt-2 rounded px-2 py-1 text-[9px] text-workspace-text-secondary/50 hover:text-workspace-accent border border-workspace-border/20 hover:border-workspace-accent/20 transition-colors disabled:opacity-50"
               >
-                {loading ? 'Refreshing...' : 'Refresh Emails'}
+                {loading ? 'Syncing...' : 'Sync New Emails'}
               </button>
 
               <p className="text-[8px] text-workspace-text-secondary/30 mt-1 px-1">
-                Emails cached for session. Say "check AP emails" to query.
+                {lastSync
+                  ? `Last sync: ${new Date(lastSync).toLocaleString()}`
+                  : 'Emails stored in Supabase. Click sync to pull new ones.'}
               </p>
             </div>
           )}

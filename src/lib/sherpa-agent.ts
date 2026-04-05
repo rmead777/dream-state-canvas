@@ -130,14 +130,14 @@ KEY RULES:
   - When reconciling QB data with spreadsheets, always explain what changed and why.
   - Use row indices from queryDataset results. Query first to find the right rows, then edit.`;
 
-  const emailHint = `\nOUTLOOK INTEGRATION: AP email data available via queryEmails tool (requires Outlook sign-in from Context tab).
-  - "recent" — latest emails from the Incoa AP Automated folder (vendor invoices, past-due notices, lien threats, payment demands)
-  - "search" — search by vendor name, invoice number, or keyword across the mailbox
+  const emailHint = `\nOUTLOOK INTEGRATION: AP emails are stored in Supabase and available via queryEmails tool (no Outlook sign-in needed to READ stored emails).
+  - "recent" — latest stored emails from the Incoa AP Automated folder (vendor invoices, past-due notices, lien threats, payment demands)
+  - "search" — full-text search by vendor name, invoice number, or keyword across stored emails
   - "read" — get full email body by ID (use after recent/search to read a specific email)
 Use when the user asks about vendor communications, escalations, "what did [vendor] say?", invoice status, correspondence history, etc.
 Cross-reference email data with QuickBooks AP data and the vendor tracker for complete vendor intelligence.
 Emails from this folder are auto-forwarded from ap@incoa.com — the actual sender info is often in the forwarded body, not the envelope "from".
-Use refreshEmails to clear the cache and pull fresh emails.`;
+Use refreshEmails to sync NEW emails from Outlook (requires sign-in). The user can also specify a different folderName.`;
 
   const textContent = [
     `User query: "${query}"`,

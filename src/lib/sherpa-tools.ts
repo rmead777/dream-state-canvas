@@ -14,7 +14,7 @@ import { retrieveRelevantMemories, formatMemoriesForPrompt, determineWorkspaceSt
 import { supabase } from '@/integrations/supabase/client';
 import { createTrigger as saveTrigger } from './automation-triggers';
 import { fetchQBOData, clearQBOCache, type QBODataType } from './quickbooks-store';
-import { fetchRecentEmails, searchEmails, readEmail, clearEmailCache, isOutlookConnected } from './email-store';
+import { getStoredEmails, searchStoredEmails, getStoredEmail, syncEmails, isOutlookConnected } from './email-store';
 
 // ─── Tool Definitions (OpenAI function-calling format) ──────────────────────
 
@@ -535,10 +535,12 @@ export const SHERPA_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'refreshEmails',
-      description: 'Clear the cached email data and re-fetch from Outlook. Use when the user says "refresh emails", "check for new emails", "update AP inbox", etc.',
+      description: 'Sync emails from Outlook to the local store. Pulls only new emails since last sync (incremental). Use when the user says "refresh emails", "check for new emails", "sync AP inbox", "update emails", etc. Requires Outlook sign-in.',
       parameters: {
         type: 'object',
-        properties: {},
+        properties: {
+          folderName: { type: 'string', description: 'Outlook folder to sync. Default: "Incoa AP Automated".' },
+        },
       },
     },
   },
@@ -1203,15 +1205,16 @@ export async function executeTool(
       }
 
       case 'queryEmails': {
-        if (!isOutlookConnected()) {
-          return JSON.stringify({ error: 'Not signed in to Outlook. Ask the user to sign in via the Context tab.' });
-        }
-        const action = args.action as string;
-        if (action === 'recent') {
-          const emails = await fetchRecentEmails(args.limit || 20, args.afterDate, args.folderName);
+        const emailAction = args.action as string;
+        if (emailAction === 'recent') {
+          // Read from Supabase — no Graph API call
+          const emails = await getStoredEmails(args.limit || 20, args.afterDate, args.folderName);
+          if (emails.length === 0) {
+            return JSON.stringify({ emails: [], count: 0, hint: 'No emails stored yet. Use refreshEmails to sync from Outlook.' });
+          }
           return JSON.stringify({
             emails: emails.map(e => ({
-              id: e.id,
+              id: e.graphMessageId,
               subject: e.subject,
               from: `${e.from.name} <${e.from.address}>`,
               date: e.receivedDateTime,
@@ -1222,12 +1225,12 @@ export async function executeTool(
             count: emails.length,
           });
         }
-        if (action === 'search') {
+        if (emailAction === 'search') {
           if (!args.query) return JSON.stringify({ error: 'query is required for search action' });
-          const emails = await searchEmails(args.query, args.limit || 20);
+          const emails = await searchStoredEmails(args.query, args.limit || 20);
           return JSON.stringify({
             emails: emails.map(e => ({
-              id: e.id,
+              id: e.graphMessageId,
               subject: e.subject,
               from: `${e.from.name} <${e.from.address}>`,
               date: e.receivedDateTime,
@@ -1238,38 +1241,34 @@ export async function executeTool(
             query: args.query,
           });
         }
-        if (action === 'read') {
+        if (emailAction === 'read') {
           if (!args.emailId) return JSON.stringify({ error: 'emailId is required for read action' });
-          const email = await readEmail(args.emailId);
-          if (!email) return JSON.stringify({ error: 'Email not found' });
-          // Strip HTML tags for plain text — AI doesn't need HTML
-          const bodyText = email.body.contentType === 'html'
-            ? email.body.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 3000)
-            : email.body.content.slice(0, 3000);
+          const email = await getStoredEmail(args.emailId);
+          if (!email) return JSON.stringify({ error: 'Email not found in store. Try refreshEmails to sync first.' });
           return JSON.stringify({
-            id: email.id,
+            id: email.graphMessageId,
             subject: email.subject,
             from: `${email.from.name} <${email.from.address}>`,
-            to: email.toRecipients.map(r => `${r.emailAddress.name} <${r.emailAddress.address}>`),
+            to: email.toRecipients.map(r => `${r.name} <${r.address}>`),
             date: email.receivedDateTime,
-            body: bodyText,
+            body: email.bodyText.slice(0, 3000),
             hasAttachments: email.hasAttachments,
             importance: email.importance,
           });
         }
-        return JSON.stringify({ error: `Unknown action: ${action}. Use: recent, search, read` });
+        return JSON.stringify({ error: `Unknown action: ${emailAction}. Use: recent, search, read` });
       }
 
       case 'refreshEmails': {
-        clearEmailCache();
         if (!isOutlookConnected()) {
-          return JSON.stringify({ refreshed: false, error: 'Not signed in to Outlook' });
+          return JSON.stringify({ refreshed: false, error: 'Not signed in to Outlook. Ask the user to sign in via the Context tab.' });
         }
-        const emails = await fetchRecentEmails(10);
+        const syncResult = await syncEmails(args.folderName);
         return JSON.stringify({
           refreshed: true,
-          message: `Email cache cleared. Fetched ${emails.length} recent emails.`,
-          count: emails.length,
+          message: `Synced ${syncResult.newEmails} new emails. ${syncResult.totalStored} total stored.`,
+          newEmails: syncResult.newEmails,
+          totalStored: syncResult.totalStored,
         });
       }
 
