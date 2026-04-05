@@ -89,11 +89,12 @@ async function graphFetch<T>(endpoint: string): Promise<T | null> {
 
 // ─── Folder Resolution ─────────────────────────────────────────────────────
 
-let cachedFolderId: string | null = null;
+const folderIdCache = new Map<string, string>();
 const DEFAULT_FOLDER_NAME = 'Incoa AP Automated';
 
 async function resolveFolderId(folderName: string = DEFAULT_FOLDER_NAME): Promise<string | null> {
-  if (cachedFolderId) return cachedFolderId;
+  const cached = folderIdCache.get(folderName.toLowerCase());
+  if (cached) return cached;
 
   // Search top-level mail folders
   const result = await graphFetch<{ value: Array<{ id: string; displayName: string }> }>(
@@ -101,8 +102,8 @@ async function resolveFolderId(folderName: string = DEFAULT_FOLDER_NAME): Promis
   );
 
   if (result?.value?.[0]) {
-    cachedFolderId = result.value[0].id;
-    return cachedFolderId;
+    folderIdCache.set(folderName.toLowerCase(), result.value[0].id);
+    return result.value[0].id;
   }
 
   // Try child folders of Inbox
@@ -112,8 +113,8 @@ async function resolveFolderId(folderName: string = DEFAULT_FOLDER_NAME): Promis
 
   const match = inbox?.value?.find(f => f.displayName.toLowerCase() === folderName.toLowerCase());
   if (match) {
-    cachedFolderId = match.id;
-    return cachedFolderId;
+    folderIdCache.set(folderName.toLowerCase(), match.id);
+    return match.id;
   }
 
   return null;
@@ -133,7 +134,7 @@ function setCache(key: string, data: any): void {
 
 export function clearEmailCache(): void {
   cache.clear();
-  cachedFolderId = null;
+  folderIdCache.clear();
 }
 
 // ─── Public API ────────────────────────────────────────────────────────────

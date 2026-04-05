@@ -512,19 +512,20 @@ export const SHERPA_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'queryEmails',
-      description: 'Fetch or search AP emails from the Incoa AP Automated Outlook folder. Use when the user asks about vendor communications, escalations, "what did [vendor] say?", "check AP emails", "latest from [vendor]", invoice correspondence, lien threats, payment demands, etc. Requires Outlook sign-in (check if connected first).',
+      description: 'Fetch or search emails from an Outlook folder. Defaults to "Incoa AP Automated" folder. Use when the user asks about vendor communications, escalations, "what did [vendor] say?", "check AP emails", "latest from [vendor]", invoice correspondence, lien threats, payment demands, etc. The user can specify a different folder name. Requires Outlook sign-in (check if connected first).',
       parameters: {
         type: 'object',
         properties: {
           action: {
             type: 'string',
             enum: ['recent', 'search', 'read'],
-            description: '"recent" = latest emails from AP folder. "search" = full-text search by vendor name, invoice number, or keyword. "read" = get full email body by ID (use after recent/search to read a specific email).',
+            description: '"recent" = latest emails from the folder. "search" = full-text search by vendor name, invoice number, or keyword. "read" = get full email body by ID (use after recent/search to read a specific email).',
           },
           query: { type: 'string', description: 'Search query — vendor name, invoice number, keyword. Required for "search" action.' },
           limit: { type: 'number', description: 'Max emails to return (default 20, max 50).' },
           afterDate: { type: 'string', description: 'Only return emails after this ISO date (e.g. "2026-03-01"). Used with "recent" action.' },
           emailId: { type: 'string', description: 'Email ID to read full body. Required for "read" action.' },
+          folderName: { type: 'string', description: 'Outlook folder to pull from. Default: "Incoa AP Automated". The user may specify a different folder (e.g. "Inbox", "AP Invoices", "Vendor Escalations"). Ask if unsure.' },
         },
         required: ['action'],
       },
@@ -1207,7 +1208,7 @@ export async function executeTool(
         }
         const action = args.action as string;
         if (action === 'recent') {
-          const emails = await fetchRecentEmails(args.limit || 20, args.afterDate);
+          const emails = await fetchRecentEmails(args.limit || 20, args.afterDate, args.folderName);
           return JSON.stringify({
             emails: emails.map(e => ({
               id: e.id,
