@@ -122,9 +122,6 @@ function ImmersiveContent({ object }: { object: any }) {
       if (object.context?.sections?.length > 0) {
         return <AnalysisCard object={object} />;
       }
-      if (object.context?.content) {
-        return <MarkdownRenderer content={object.context.content} />;
-      }
       return <AIBrief object={object} />;
     case 'timeline':
       return <Timeline object={object} />;
