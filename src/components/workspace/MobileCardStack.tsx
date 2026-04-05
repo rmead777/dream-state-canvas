@@ -1,23 +1,67 @@
+import { useState, useRef, useCallback } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useWorkspaceActions } from '@/hooks/useWorkspaceActions';
 import { getObjectTypeToken, getFamilyTokens } from '@/lib/design-tokens';
 import { WorkspaceObject as WO } from '@/lib/workspace-types';
+
+const SWIPE_THRESHOLD = 60;
+const SWIPE_MAX_Y = 40;
 
 function CompactCard({ object }: { object: WO }) {
   const { collapseObject, dissolveObject } = useWorkspaceActions();
   const { dispatch } = useWorkspace();
   const typeToken = getObjectTypeToken(object.type);
   const familyToken = getFamilyTokens(object.type);
+  const [swipeX, setSwipeX] = useState(0);
+  const touchRef = useRef<{ startX: number; startY: number } | null>(null);
 
   const summary = object.context?.content
     ? object.context.content.slice(0, 100).replace(/[#*_\n]/g, ' ').trim()
     : object.context?.sections?.[0]?.content?.slice(0, 100)?.replace(/[#*_\n]/g, ' ').trim()
     || '';
 
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    touchRef.current = { startX: touch.clientX, startY: touch.clientY };
+    setSwipeX(0);
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!touchRef.current) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - touchRef.current.startX;
+    const dy = Math.abs(touch.clientY - touchRef.current.startY);
+    if (dy > SWIPE_MAX_Y) {
+      touchRef.current = null;
+      setSwipeX(0);
+      return;
+    }
+    setSwipeX(dx);
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (swipeX < -SWIPE_THRESHOLD) {
+      collapseObject(object.id);
+    } else if (swipeX > SWIPE_THRESHOLD) {
+      dispatch({ type: 'ENTER_IMMERSIVE', payload: { id: object.id } });
+    }
+    setSwipeX(0);
+    touchRef.current = null;
+  }, [swipeX, object.id, collapseObject, dispatch]);
+
+  const swipeStyle = swipeX !== 0 ? {
+    transform: `translateX(${swipeX * 0.5}px)`,
+    opacity: 1 - Math.abs(swipeX) / 300,
+  } : {};
+
   return (
     <div
       className="group relative flex items-center gap-3 rounded-xl border border-workspace-border/50 bg-white/90 px-4 py-3 shadow-sm transition-all duration-200 active:scale-[0.98]"
+      style={swipeStyle}
       onClick={() => dispatch({ type: 'ENTER_IMMERSIVE', payload: { id: object.id } })}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
     >
       {/* Type icon */}
       <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${familyToken.pillBg} ${familyToken.pillText} text-sm`}>
