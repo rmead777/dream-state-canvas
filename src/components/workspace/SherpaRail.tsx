@@ -121,6 +121,7 @@ export function SherpaRail() {
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
+  const modelDropdownPanelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -135,7 +136,10 @@ export function SherpaRail() {
   // Close model dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (modelDropdownRef.current && !modelDropdownRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const inToggle = modelDropdownRef.current?.contains(target);
+      const inPanel = modelDropdownPanelRef.current?.contains(target);
+      if (!inToggle && !inPanel) {
         setShowModelDropdown(false);
       }
     };
@@ -414,9 +418,9 @@ export function SherpaRail() {
         </div>
       </div>
 
-      {/* Model dropdown panel — outside header/rail overflow, anchored below tab bar */}
+      {/* Model dropdown panel */}
       {showModelDropdown && adminUnlocked && (
-        <div className="relative z-50 -mt-px">
+        <div ref={modelDropdownPanelRef} className="relative z-50 -mt-px">
           <div className="absolute left-4 top-0 w-56 max-h-[70vh] overflow-y-auto rounded-xl border border-workspace-border/45 bg-white shadow-[0_20px_60px_rgba(0,0,0,0.15)] animate-[materialize_0.15s_cubic-bezier(0.16,1,0.3,1)_forwards]">
           <div className="sticky top-0 z-10 bg-white border-b border-workspace-border/30 px-3 py-2">
             <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-workspace-text-secondary/60">Switch Model</span>
