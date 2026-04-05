@@ -2,12 +2,14 @@
  * OutlookStatusPanel — shows Outlook email connection status
  * in the Context tab of the Sherpa rail.
  *
- * Green = signed in (MSAL has active account)
- * Gray = not signed in (sign-in button available)
+ * Shows: signed-in account, active folder, stored email count,
+ * last sync time, folder selector, sign-in/sync buttons.
  */
 
 import { useState, useEffect, useCallback } from 'react';
 import { isOutlookConnected, getOutlookAccount, signInToOutlook, signOutOfOutlook, syncEmails, getStoredEmailCount, getSyncState } from '@/lib/email-store';
+
+const DEFAULT_FOLDER = 'Incoa AP Automated';
 
 export function OutlookStatusPanel() {
   const [connected, setConnected] = useState(false);
@@ -15,6 +17,11 @@ export function OutlookStatusPanel() {
   const [emailCount, setEmailCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(true);
+  const [lastSync, setLastSync] = useState<string | null>(null);
+  const [folderName, setFolderName] = useState(DEFAULT_FOLDER);
+  const [editingFolder, setEditingFolder] = useState(false);
+  const [folderInput, setFolderInput] = useState(DEFAULT_FOLDER);
+  const [syncDays, setSyncDays] = useState(90);
 
   const checkConnection = useCallback(() => {
     const conn = isOutlookConnected();
@@ -34,35 +41,44 @@ export function OutlookStatusPanel() {
     return () => clearInterval(interval);
   }, [checkConnection]);
 
-  const [lastSync, setLastSync] = useState<string | null>(null);
-
   // Once connected, load stored email count from Supabase
   useEffect(() => {
     if (connected && emailCount === null) {
-      getStoredEmailCount().then(count => setEmailCount(count)).catch(() => {});
-      getSyncState().then(state => {
+      getStoredEmailCount(folderName).then(count => setEmailCount(count)).catch(() => {});
+      getSyncState(folderName).then(state => {
         if (state?.last_sync_at) setLastSync(state.last_sync_at);
       }).catch(() => {});
     }
-  }, [connected, emailCount]);
+  }, [connected, emailCount, folderName]);
 
   const handleSignIn = async () => {
     setLoading(true);
-    const success = await signInToOutlook();
-    if (success) {
-      checkConnection();
-    }
+    await signInToOutlook();
     setLoading(false);
   };
 
-  const handleRefresh = async () => {
+  const handleSync = async () => {
     setLoading(true);
     try {
-      const result = await syncEmails();
+      // On first sync (no lastSync), use syncDays as the lookback window
+      const isFirstSync = !lastSync;
+      const result = await syncEmails(folderName, {
+        daysBack: isFirstSync ? syncDays : undefined,
+      });
       setEmailCount(result.totalStored);
       setLastSync(new Date().toISOString());
     } catch {}
     setLoading(false);
+  };
+
+  const handleFolderChange = () => {
+    const trimmed = folderInput.trim();
+    if (trimmed && trimmed !== folderName) {
+      setFolderName(trimmed);
+      setEmailCount(null);
+      setLastSync(null);
+    }
+    setEditingFolder(false);
   };
 
   return (
@@ -118,31 +134,77 @@ export function OutlookStatusPanel() {
               </button>
             </div>
           ) : (
-            <div className="space-y-0.5">
-              {/* Connection info */}
-              <div className="flex items-center gap-2 rounded px-2 py-1.5 bg-emerald-400/5">
+            <div className="space-y-1">
+              {/* Account */}
+              <div className="flex items-center gap-2 rounded px-2 py-1 bg-emerald-400/5">
                 <span className="inline-block h-1.5 w-1.5 rounded-full shrink-0 bg-emerald-400" />
                 <span className="text-[10px] text-workspace-text flex-1 truncate">
-                  Incoa AP Automated
+                  {accountName}
                 </span>
-                <span className="text-[8px] text-emerald-400/60 shrink-0 tabular-nums">
-                  {emailCount != null ? `${emailCount} stored` : 'Connected'}
+                <span className="text-[8px] text-emerald-400/60 shrink-0">
+                  Connected
                 </span>
               </div>
 
+              {/* Folder — click to edit */}
+              <div className="flex items-center gap-2 rounded px-2 py-1 bg-workspace-surface/30">
+                <span className="text-[9px] text-workspace-text-secondary/40 shrink-0">Folder:</span>
+                {editingFolder ? (
+                  <input
+                    type="text"
+                    value={folderInput}
+                    onChange={e => setFolderInput(e.target.value)}
+                    onBlur={handleFolderChange}
+                    onKeyDown={e => { if (e.key === 'Enter') handleFolderChange(); if (e.key === 'Escape') { setFolderInput(folderName); setEditingFolder(false); } }}
+                    autoFocus
+                    className="flex-1 bg-transparent text-[10px] text-workspace-text border-b border-workspace-accent/30 outline-none px-0 py-0"
+                  />
+                ) : (
+                  <button
+                    onClick={() => { setFolderInput(folderName); setEditingFolder(true); }}
+                    className="flex-1 text-left text-[10px] text-workspace-text truncate hover:text-workspace-accent transition-colors"
+                    title="Click to change folder"
+                  >
+                    {folderName}
+                  </button>
+                )}
+                <span className="text-[8px] text-workspace-text-secondary/40 shrink-0 tabular-nums">
+                  {emailCount != null ? `${emailCount}` : '—'}
+                </span>
+              </div>
+
+              {/* Date range — only on first sync */}
+              {!lastSync && (
+                <div className="flex items-center gap-2 rounded px-2 py-1 bg-workspace-surface/30">
+                  <span className="text-[9px] text-workspace-text-secondary/40 shrink-0">Lookback:</span>
+                  <select
+                    value={syncDays}
+                    onChange={e => setSyncDays(Number(e.target.value))}
+                    className="flex-1 bg-transparent text-[10px] text-workspace-text outline-none cursor-pointer"
+                  >
+                    <option value={30}>Last 30 days</option>
+                    <option value={60}>Last 60 days</option>
+                    <option value={90}>Last 90 days</option>
+                    <option value={180}>Last 6 months</option>
+                    <option value={365}>Last year</option>
+                    <option value={0}>All time</option>
+                  </select>
+                </div>
+              )}
+
               {/* Sync button */}
               <button
-                onClick={handleRefresh}
+                onClick={handleSync}
                 disabled={loading}
-                className="w-full mt-2 rounded px-2 py-1 text-[9px] text-workspace-text-secondary/50 hover:text-workspace-accent border border-workspace-border/20 hover:border-workspace-accent/20 transition-colors disabled:opacity-50"
+                className="w-full mt-1 rounded px-2 py-1 text-[9px] text-workspace-text-secondary/50 hover:text-workspace-accent border border-workspace-border/20 hover:border-workspace-accent/20 transition-colors disabled:opacity-50"
               >
-                {loading ? 'Syncing...' : 'Sync New Emails'}
+                {loading ? 'Syncing...' : lastSync ? 'Sync New Emails' : 'Initial Sync'}
               </button>
 
-              <p className="text-[8px] text-workspace-text-secondary/30 mt-1 px-1">
+              <p className="text-[8px] text-workspace-text-secondary/30 mt-0.5 px-1">
                 {lastSync
                   ? `Last sync: ${new Date(lastSync).toLocaleString()}`
-                  : 'Emails stored in Supabase. Click sync to pull new ones.'}
+                  : 'First sync pulls emails from the selected time range.'}
               </p>
             </div>
           )}

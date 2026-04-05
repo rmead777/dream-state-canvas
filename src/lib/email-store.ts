@@ -169,7 +169,7 @@ export async function signOutOfOutlook(): Promise<void> {
  */
 export async function syncEmails(
   folderName: string = DEFAULT_FOLDER_NAME,
-  options?: { fullResync?: boolean },
+  options?: { fullResync?: boolean; daysBack?: number },
 ): Promise<SyncResult> {
   const account = getOutlookAccount();
   if (!account) throw new Error('Not signed in to Outlook');
@@ -188,6 +188,13 @@ export async function syncEmails(
     if (syncState?.last_message_date) {
       afterDate = syncState.last_message_date;
     }
+  }
+
+  // On first sync with daysBack specified, use that as the lookback window
+  if (!afterDate && options?.daysBack && options.daysBack > 0) {
+    const d = new Date();
+    d.setDate(d.getDate() - options.daysBack);
+    afterDate = d.toISOString();
   }
 
   // Update sync status to 'syncing'
