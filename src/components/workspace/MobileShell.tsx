@@ -1,0 +1,410 @@
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { useWorkspaceActions } from '@/hooks/useWorkspaceActions';
+import { useSherpa } from '@/contexts/SherpaContext';
+import { useVoiceInput } from '@/hooks/useVoiceInput';
+import { useAmbientAudio } from '@/hooks/useAmbientAudio';
+import { useAuth } from '@/hooks/useAuth';
+import { useDocuments } from '@/contexts/DocumentContext';
+import { MobileTabBar, MobileTab } from './MobileTabBar';
+import { MobileCardStack } from './MobileCardStack';
+import { ImmersiveOverlay } from './ImmersiveOverlay';
+import { VoiceIndicator } from './VoiceIndicator';
+import { DocumentContextSelector, ContextMode } from './DocumentContextSelector';
+import { QBOStatusPanel } from './QBOStatusPanel';
+import { OutlookStatusPanel } from './OutlookStatusPanel';
+import { MemoryPanel } from './MemoryPanel';
+import MarkdownRenderer from '../objects/MarkdownRenderer';
+
+async function compressImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const MAX = 1024;
+      let { width, height } = img;
+      if (width > MAX || height > MAX) {
+        if (width > height) { height = Math.round(height * MAX / width); width = MAX; }
+        else { width = Math.round(width * MAX / height); height = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { reject(new Error('No canvas context')); return; }
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = reject;
+    img.src = objectUrl;
+  });
+}
+
+export function MobileShell() {
+  const { state, dispatch } = useWorkspace();
+  const { processIntent, setDocumentIds } = useWorkspaceActions();
+  const { suggestions, lastResponse, isProcessing } = useSherpa();
+  const { play } = useAmbientAudio();
+  const { user, signOut } = useAuth();
+  const { documents } = useDocuments();
+
+  const [activeTab, setActiveTab] = useState<MobileTab>('chat');
+  const [input, setInput] = useState('');
+  const [promptHistory, setPromptHistory] = useState<Array<{ query: string; response: string | null; timestamp: number; steps?: string[] }>>([]);
+  const [expandedSteps, setExpandedSteps] = useState<Record<number, boolean>>({});
+  const [pendingImages, setPendingImages] = useState<string[]>([]);
+  const [contextMode, setContextMode] = useState<ContextMode>('auto');
+  const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const isImmersive = !!state.activeContext.immersiveObjectId;
+
+  // Sync document IDs
+  useEffect(() => {
+    if (contextMode === 'auto') {
+      setDocumentIds(documents.map((d) => d.id));
+    } else {
+      setDocumentIds(selectedDocIds);
+    }
+  }, [contextMode, selectedDocIds, documents, setDocumentIds]);
+
+  // Sync Sherpa responses
+  useEffect(() => {
+    if (lastResponse && promptHistory.length > 0) {
+      const last = promptHistory[promptHistory.length - 1];
+      if (last.response !== lastResponse) {
+        setPromptHistory(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1] = { ...updated[updated.length - 1], response: lastResponse };
+          return updated;
+        });
+      }
+    }
+  }, [lastResponse]);
+
+  // Auto-scroll chat
+  useEffect(() => {
+    if (activeTab !== 'chat') return;
+    const el = scrollContainerRef.current;
+    if (el) {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    }
+  }, [lastResponse, isProcessing, activeTab]);
+
+  const trackAndProcess = useCallback(async (text: string, images?: string[]) => {
+    const ts = Date.now();
+    setPromptHistory(prev => [...prev, { query: text, response: null, timestamp: ts }]);
+    setActiveTab('chat');
+    const result = await processIntent(text, images);
+    if (result?.steps?.length) {
+      setPromptHistory(prev => prev.map(e => e.timestamp === ts ? { ...e, steps: result.steps } : e));
+    }
+  }, [processIntent]);
+
+  // Listen for sherpa-query events
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const query = (e as CustomEvent).detail;
+      if (typeof query === 'string' && query.trim()) {
+        trackAndProcess(query);
+      }
+    };
+    document.addEventListener('sherpa-query', handler);
+    return () => document.removeEventListener('sherpa-query', handler);
+  }, [trackAndProcess]);
+
+  const handleSubmit = useCallback(() => {
+    const trimmed = input.trim();
+    if (!trimmed && pendingImages.length === 0) return;
+    const images = pendingImages.length > 0 ? pendingImages : undefined;
+    trackAndProcess(trimmed || 'What do you see in this image?', images);
+    setInput('');
+    setPendingImages([]);
+  }, [input, pendingImages, trackAndProcess]);
+
+  const handleVoiceResult = useCallback((transcript: string) => {
+    play('focus');
+    trackAndProcess(transcript);
+  }, [trackAndProcess, play]);
+
+  const handleVoiceInterim = useCallback((transcript: string) => {
+    setInput(transcript);
+  }, []);
+
+  const voice = useVoiceInput({ onResult: handleVoiceResult, onInterim: handleVoiceInterim });
+
+  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
+    const items = Array.from(e.clipboardData.items);
+    const imageItems = items.filter(item => item.type.startsWith('image/'));
+    if (imageItems.length === 0) return;
+    e.preventDefault();
+    const compressed = await Promise.all(imageItems.map(item => compressImage(item.getAsFile()!)));
+    setPendingImages(prev => [...prev, ...compressed]);
+  }, []);
+
+  const handleImageFiles = useCallback(async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+    if (imageFiles.length === 0) return;
+    const compressed = await Promise.all(imageFiles.map(compressImage));
+    setPendingImages(prev => [...prev, ...compressed]);
+  }, []);
+
+  const handleClearChat = useCallback(() => {
+    dispatch({ type: 'CLEAR_SHERPA' });
+    setPromptHistory([]);
+  }, [dispatch]);
+
+  return (
+    <div className="relative flex h-screen flex-col overflow-hidden bg-workspace-bg">
+      {/* Immersive overlay */}
+      <ImmersiveOverlay />
+
+      {/* Top bar */}
+      <div className={`relative z-20 flex items-center justify-between border-b border-workspace-border/40 bg-white/80 px-4 py-2.5 backdrop-blur-xl ${isImmersive ? 'hidden' : ''}`}>
+        <div className="flex items-center gap-2">
+          <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-workspace-accent/10 text-xs text-workspace-accent">
+            ✦
+          </div>
+          <span className="text-xs font-semibold uppercase tracking-[0.22em] text-workspace-text">Sherpa</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {promptHistory.length > 0 && activeTab === 'chat' && (
+            <button
+              onClick={handleClearChat}
+              className="rounded-full p-2 text-workspace-text-secondary/40 hover:text-workspace-text-secondary transition-colors"
+              title="Clear chat"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+              </svg>
+            </button>
+          )}
+          {user && (
+            <button
+              onClick={signOut}
+              className="rounded-full px-2 py-1 text-[10px] text-workspace-text-secondary/40 hover:text-destructive transition-colors"
+              title={`Sign out (${user.email})`}
+            >
+              Sign out
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Tab content */}
+      {!isImmersive && (
+        <>
+          {activeTab === 'chat' && (
+            <div className="flex flex-1 flex-col overflow-hidden">
+              {/* Chat thread */}
+              <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 py-3">
+                <div className="space-y-3">
+                  {promptHistory.length === 0 && !lastResponse && !isProcessing && (
+                    <div className="rounded-2xl border border-workspace-border/30 bg-workspace-surface/20 px-4 py-5 text-center mt-4">
+                      <p className="text-sm text-workspace-text/80">Good morning. What would you like to focus on?</p>
+                      <p className="mt-1.5 text-[11px] text-workspace-text-secondary/50">
+                        Ask anything — I'll materialize the right views.
+                      </p>
+                      {suggestions.length > 0 && (
+                        <div className="mt-4 flex flex-wrap justify-center gap-2">
+                          {suggestions.slice(0, 4).map(s => (
+                            <button
+                              key={s.id}
+                              onClick={() => trackAndProcess(s.query)}
+                              className="rounded-full border border-workspace-border/50 bg-white/80 px-3 py-1.5 text-[11px] text-workspace-text transition-all active:scale-[0.96]"
+                            >
+                              {s.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {promptHistory.map((entry, i) => (
+                    <div key={entry.timestamp} className="space-y-2">
+                      {/* User message */}
+                      <div className="flex justify-end">
+                        <div className="max-w-[85%] rounded-2xl rounded-br-md bg-workspace-accent/10 border border-workspace-accent/15 px-3.5 py-2.5">
+                          <p className="text-sm text-workspace-text leading-relaxed">{entry.query}</p>
+                        </div>
+                      </div>
+                      {/* Sherpa response */}
+                      {entry.response && (
+                        <div className="flex flex-col items-start gap-1">
+                          <div className="max-w-[92%] rounded-2xl rounded-bl-md bg-white border border-workspace-border/40 px-3.5 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
+                            <MarkdownRenderer content={entry.response} />
+                          </div>
+                          {entry.steps && entry.steps.length > 1 && (
+                            <button
+                              onClick={() => setExpandedSteps(prev => ({ ...prev, [i]: !prev[i] }))}
+                              className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] text-workspace-text-secondary/50"
+                            >
+                              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                                className={`transition-transform duration-150 ${expandedSteps[i] ? 'rotate-90' : ''}`}>
+                                <path d="m9 18 6-6-6-6"/>
+                              </svg>
+                              {entry.steps.length} steps
+                            </button>
+                          )}
+                          {expandedSteps[i] && entry.steps && (
+                            <div className="max-w-[92%] space-y-1 pl-1 border-l-2 border-workspace-border/30">
+                              {entry.steps.map((step, si) => (
+                                <div key={si} className="rounded-xl bg-workspace-surface/30 border border-workspace-border/25 px-3 py-2">
+                                  <p className="text-[10px] text-workspace-text-secondary/60 leading-relaxed whitespace-pre-wrap">{step}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {/* Processing indicator */}
+                      {i === promptHistory.length - 1 && !entry.response && isProcessing && (
+                        <div className="flex justify-start">
+                          <div className="rounded-2xl rounded-bl-md bg-white border border-workspace-border/40 px-3.5 py-2.5">
+                            <div className="flex items-center gap-2">
+                              <div className="flex gap-1">
+                                {[0, 1, 2].map(j => (
+                                  <div key={j} className="h-1.5 w-1.5 rounded-full bg-workspace-accent/40 animate-pulse" style={{ animationDelay: `${j * 200}ms` }} />
+                                ))}
+                              </div>
+                              <span className="text-[10px] text-workspace-accent/60">Reasoning...</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  <div ref={chatEndRef} />
+                </div>
+              </div>
+
+              {/* Suggestions */}
+              {suggestions.length > 0 && promptHistory.length > 0 && (
+                <div className="border-t border-workspace-border/30 px-4 py-2 bg-workspace-surface/20">
+                  <div className="flex gap-2 overflow-x-auto">
+                    {suggestions.map(s => (
+                      <button
+                        key={s.id}
+                        onClick={() => trackAndProcess(s.query)}
+                        className="shrink-0 rounded-full border border-workspace-border/50 bg-white/80 px-2.5 py-1 text-[10px] text-workspace-text active:scale-[0.96]"
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Input area */}
+              <div className="border-t border-workspace-border/50 bg-white/80 px-4 py-2.5 backdrop-blur-xl safe-area-bottom" onPaste={handlePaste}>
+                <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleImageFiles(e.target.files)} />
+
+                <VoiceIndicator volume={voice.volume} isListening={voice.isListening} />
+
+                {pendingImages.length > 0 && (
+                  <div className="flex gap-2 mb-2">
+                    {pendingImages.map((src, idx) => (
+                      <div key={idx} className="relative">
+                        <img src={src} alt={`Image ${idx + 1}`} className="h-12 w-12 rounded-lg object-cover border border-workspace-border/50" />
+                        <button
+                          onClick={() => setPendingImages(prev => prev.filter((_, i) => i !== idx))}
+                          className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-workspace-text/70 text-white text-[9px]"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 rounded-2xl border border-workspace-border/60 bg-white px-3 py-2 transition-all focus-within:border-workspace-accent/30">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSubmit(); } }}
+                    placeholder="Ask anything..."
+                    className="flex-1 bg-transparent text-sm text-workspace-text placeholder:text-workspace-text-secondary/40 outline-none"
+                    aria-label="Ask Sherpa"
+                  />
+
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="rounded-full p-2 text-workspace-text-secondary/40 active:bg-workspace-accent/10"
+                    title="Attach image"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" />
+                    </svg>
+                  </button>
+
+                  {voice.isSupported && (
+                    <button
+                      onTouchStart={(e) => { e.preventDefault(); voice.startListening(); }}
+                      onTouchEnd={() => voice.stopListening()}
+                      onMouseDown={(e) => { e.preventDefault(); voice.startListening(); }}
+                      onMouseUp={() => voice.stopListening()}
+                      className={`rounded-full p-2 transition-all ${
+                        voice.isListening
+                          ? 'bg-workspace-accent/15 text-workspace-accent scale-110'
+                          : 'text-workspace-text-secondary/40 active:bg-workspace-accent/10'
+                      }`}
+                      title="Hold to speak"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                        <line x1="12" x2="12" y1="19" y2="22" />
+                      </svg>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={handleSubmit}
+                    disabled={!input.trim() || isProcessing}
+                    className="rounded-full bg-workspace-accent/10 px-3 py-1.5 text-[11px] font-medium text-workspace-accent transition-all active:scale-[0.95] disabled:opacity-40"
+                  >
+                    {isProcessing ? '...' : 'Send'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'cards' && <MobileCardStack />}
+
+          {activeTab === 'context' && (
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+              <div className="space-y-0.5">
+                <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-workspace-accent/75">
+                  Document Context
+                </span>
+                <p className="text-[11px] text-workspace-text-secondary">
+                  Control which documents Sherpa considers.
+                </p>
+              </div>
+              <DocumentContextSelector
+                selectedDocIds={selectedDocIds}
+                onSelectionChange={setSelectedDocIds}
+                contextMode={contextMode}
+                onModeChange={setContextMode}
+              />
+              <QBOStatusPanel />
+              <OutlookStatusPanel />
+              <MemoryPanel onSendToSherpa={trackAndProcess} />
+            </div>
+          )}
+
+          <MobileTabBar activeTab={activeTab} onTabChange={setActiveTab} />
+        </>
+      )}
+    </div>
+  );
+}

@@ -4,6 +4,8 @@ import { SherpaRail } from './SherpaRail';
 import { WorkspaceBar } from './WorkspaceBar';
 import { ImmersiveOverlay } from './ImmersiveOverlay';
 import { CommandPalette } from './CommandPalette';
+import { MobileShell } from './MobileShell';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { useWorkspaceBreathing } from '@/hooks/useWorkspaceBreathing';
 import { useCognitiveMode } from '@/hooks/useCognitiveMode';
 import { useAmbientAudio } from '@/hooks/useAmbientAudio';
@@ -12,6 +14,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 
 export function WorkspaceShell() {
   const { state } = useWorkspace();
+  const { isMobile } = useIsMobile();
   const { isOverCapacity } = useWorkspaceBreathing();
   useCognitiveMode();
   const { play, muted, toggleMute } = useAmbientAudio();
@@ -37,6 +40,11 @@ export function WorkspaceShell() {
   useEffect(() => {
     if (isImmersive) play('immersive-enter');
   }, [isImmersive]);
+
+  // Mobile layout — completely different component tree
+  if (isMobile) {
+    return <MobileShell />;
+  }
 
   return (
     <div className={`workspace-noise relative flex h-screen flex-col overflow-hidden bg-workspace-bg transition-colors duration-1500`}>
