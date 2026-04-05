@@ -231,18 +231,39 @@ export async function syncEmails(
 
     if (messages.length === 0) break;
 
-    // Upsert each email into Supabase
+    // Upsert each email into Supabase with cross-folder dedup
     for (const msg of messages) {
       const bodyText = msg.body?.contentType === 'html'
         ? msg.body.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
         : msg.body?.content || '';
 
+      const senderAddress = msg.from?.emailAddress?.address || '';
+      const subject = msg.subject || '(no subject)';
+      const receivedAt = msg.receivedDateTime;
+
+      // Cross-folder dedup: check if an email with same subject + sender + ~same time
+      // already exists from a different folder (e.g. same email forwarded to two people)
+      const { data: existing } = await supabase
+        .from('ap_emails')
+        .select('id')
+        .eq('sender_address', senderAddress)
+        .eq('subject', subject)
+        .gte('received_at', new Date(new Date(receivedAt).getTime() - 60000).toISOString())
+        .lte('received_at', new Date(new Date(receivedAt).getTime() + 60000).toISOString())
+        .neq('graph_message_id', msg.id)
+        .limit(1);
+
+      if (existing && existing.length > 0) {
+        // Duplicate from another folder — skip
+        continue;
+      }
+
       const row = {
         graph_message_id: msg.id,
-        subject: msg.subject || '(no subject)',
+        subject,
         sender_name: msg.from?.emailAddress?.name || '',
-        sender_address: msg.from?.emailAddress?.address || '',
-        received_at: msg.receivedDateTime,
+        sender_address: senderAddress,
+        received_at: receivedAt,
         importance: msg.importance || 'normal',
         has_attachments: msg.hasAttachments ?? false,
         is_read: msg.isRead ?? true,
@@ -264,8 +285,8 @@ export async function syncEmails(
 
       if (!error) {
         newCount++;
-        if (!latestDate || msg.receivedDateTime > latestDate) {
-          latestDate = msg.receivedDateTime;
+        if (!latestDate || receivedAt > latestDate) {
+          latestDate = receivedAt;
         }
       }
     }
