@@ -800,12 +800,20 @@ export async function executeTool(
       case 'recallMemories': {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return JSON.stringify({ memories: [] });
-        const memories = await retrieveRelevantMemories(user.id, {
-          query: args.query,
-          objectTypes: Object.values(state.objects).filter(o => o.status !== 'dissolved').map(o => o.type),
-          workspaceState: determineWorkspaceState(state),
-        });
-        return JSON.stringify({ memories: memories.map(m => ({ type: m.type, content: m.content, confidence: m.confidence })) });
+        // If query asks for "all" memories (e.g. for cleanup), return the full list
+        const queryLower = String(args.query).toLowerCase();
+        const wantsAll = queryLower.includes('all') || queryLower.includes('cleanup') || queryLower.includes('consolidat') || queryLower.includes('every');
+        let memories;
+        if (wantsAll) {
+          memories = await getMemories(user.id);
+        } else {
+          memories = await retrieveRelevantMemories(user.id, {
+            query: args.query,
+            objectTypes: Object.values(state.objects).filter(o => o.status !== 'dissolved').map(o => o.type),
+            workspaceState: determineWorkspaceState(state),
+          });
+        }
+        return JSON.stringify({ memories: memories.map(m => ({ id: m.id, type: m.type, content: m.content, confidence: m.confidence, hitCount: m.hitCount })) });
       }
 
       case 'consolidateMemories': {
