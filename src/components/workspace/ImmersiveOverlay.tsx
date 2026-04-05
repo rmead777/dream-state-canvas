@@ -1,3 +1,4 @@
+import { useState, useRef } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { DocumentReader } from '@/components/objects/DocumentReader';
 import { DatasetView } from '@/components/objects/DatasetView';
@@ -10,6 +11,7 @@ import { Timeline } from '@/components/objects/Timeline';
 import { DataInspector } from '@/components/objects/DataInspector';
 import { DatasetEditPreview } from '@/components/objects/DatasetEditPreview';
 import { MemoryCleanupPreview } from '@/components/objects/MemoryCleanupPreview';
+import { PdfPreviewMode } from '@/components/workspace/PdfPreviewMode';
 import { getObjectTypeToken } from '@/lib/design-tokens';
 import MarkdownRenderer from '@/components/objects/MarkdownRenderer';
 
@@ -21,6 +23,8 @@ import MarkdownRenderer from '@/components/objects/MarkdownRenderer';
 export function ImmersiveOverlay() {
   const { state, dispatch } = useWorkspace();
   const { immersiveObjectId } = state.activeContext;
+  const [pdfMode, setPdfMode] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   if (!immersiveObjectId) return null;
 
@@ -57,11 +61,13 @@ export function ImmersiveOverlay() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => window.print()}
-            className="workspace-pill rounded-full px-3 py-1.5 text-[10px] text-workspace-text-secondary transition-colors hover:text-workspace-accent print:hidden"
+            onClick={() => setPdfMode(!pdfMode)}
+            className={`workspace-pill rounded-full px-3 py-1.5 text-[10px] transition-colors print:hidden ${
+              pdfMode ? 'bg-purple-100 text-purple-600' : 'text-workspace-text-secondary hover:text-workspace-accent'
+            }`}
             title="Export as PDF"
           >
-            ↓ PDF
+            {pdfMode ? '✕ Exit PDF' : '↓ PDF'}
           </button>
           <button
             onClick={handleClose}
@@ -76,7 +82,18 @@ export function ImmersiveOverlay() {
       <div className={`relative z-10 flex-1 overflow-y-auto pt-6 pb-8 ${
         object.type === 'dataset' || object.type === 'inspector' || object.type === 'dataset-edit-preview' || object.type === 'memory-cleanup-preview' || object.context?.isDatasetEdit || object.context?.isMemoryCleanup ? 'px-4' : 'px-8'
       }`}>
-        <div className={object.type === 'dataset' || object.type === 'inspector' || object.type === 'dataset-edit-preview' || object.type === 'memory-cleanup-preview' || object.context?.isDatasetEdit || object.context?.isMemoryCleanup ? '' : 'mx-auto max-w-4xl'}>
+        {/* PDF preview overlay — positioned over content */}
+        {pdfMode && (
+          <PdfPreviewMode
+            contentRef={contentRef}
+            title={object.title}
+            onClose={() => setPdfMode(false)}
+          />
+        )}
+        <div
+          ref={contentRef}
+          className={`relative ${object.type === 'dataset' || object.type === 'inspector' || object.type === 'dataset-edit-preview' || object.type === 'memory-cleanup-preview' || object.context?.isDatasetEdit || object.context?.isMemoryCleanup ? '' : 'mx-auto max-w-4xl'}`}
+        >
           <ImmersiveContent object={object} />
         </div>
       </div>
