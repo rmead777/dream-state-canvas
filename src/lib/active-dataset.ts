@@ -1,52 +1,35 @@
 /**
- * Active dataset store — a simple reactive store that holds the current
- * dataset being used by the workspace. This replaces direct CANONICAL_DATASET
- * imports in non-React code (intent engine, sherpa engine, etc.)
+ * Dataset Loader — utility for fetching a specific document's data by ID.
+ *
+ * There is NO global "active dataset" singleton. Every data access must
+ * reference a document by ID. This file only provides getDataset(docId)
+ * for resolving a document from Supabase.
+ *
+ * For the UI's "which document is selected" state, see DocumentContext.
  */
-import { CANONICAL_DATASET } from './seed-data';
 import { getDocument, extractDataset } from './document-store';
 
-interface Dataset {
+export interface Dataset {
   columns: string[];
   rows: string[][];
   sourceLabel: string;
   sourceDocId: string | null;
 }
 
-type Listener = () => void;
-
-let current: Dataset = {
-  columns: CANONICAL_DATASET.columns,
-  rows: CANONICAL_DATASET.rows,
-  sourceLabel: 'INCOA AP Vendor Tracker v14',
-  sourceDocId: null,
-};
-
-const listeners = new Set<Listener>();
-
-export function getActiveDataset(): Dataset {
-  return current;
-}
-
 /**
  * Get dataset for a specific document ID.
- * Returns null if document not found or has no data — callers must handle this
- * rather than silently getting the active dataset (which caused scratchpads
- * to show vendor tracker data).
- * Falls back to active dataset ONLY when no documentId is provided.
+ * Returns null if document not found or has no extractable data.
  */
-export async function getDataset(documentId?: string): Promise<Dataset | null> {
-  if (!documentId) return current;
-
+export async function getDataset(documentId: string): Promise<Dataset | null> {
   const doc = await getDocument(documentId);
   if (!doc) {
-    console.warn(`[active-dataset] Document ${documentId} not found`);
+    console.warn(`[dataset-loader] Document ${documentId} not found`);
     return null;
   }
 
   const extracted = extractDataset(doc);
   if (!extracted) {
-    console.warn(`[active-dataset] Could not extract data from ${documentId}`);
+    console.warn(`[dataset-loader] Could not extract data from ${documentId}`);
     return null;
   }
 
@@ -56,14 +39,4 @@ export async function getDataset(documentId?: string): Promise<Dataset | null> {
     sourceLabel: doc.filename,
     sourceDocId: doc.id,
   };
-}
-
-export function setActiveDataset(ds: Dataset): void {
-  current = ds;
-  listeners.forEach((fn) => fn());
-}
-
-export function subscribeDataset(fn: Listener): () => void {
-  listeners.add(fn);
-  return () => listeners.delete(fn);
 }
