@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { isOutlookConnected, getOutlookAccount, signInToOutlook, signOutOfOutlook, syncEmails, getStoredEmailCount, getSyncState } from '@/lib/email-store';
+import { isOutlookConnected, getOutlookAccount, signInToOutlook, signOutOfOutlook, syncEmails, getStoredEmailCount, getSyncState, listMailFolders } from '@/lib/email-store';
 
 const DEFAULT_FOLDER = 'Incoa AP Automated';
 
@@ -22,6 +22,8 @@ export function OutlookStatusPanel() {
   const [editingFolder, setEditingFolder] = useState(false);
   const [folderInput, setFolderInput] = useState(DEFAULT_FOLDER);
   const [syncDays, setSyncDays] = useState(90);
+  const [browsing, setBrowsing] = useState(false);
+  const [folders, setFolders] = useState<Array<{ id: string; displayName: string; totalItemCount: number }> | null>(null);
 
   const checkConnection = useCallback(() => {
     const conn = isOutlookConnected();
@@ -79,6 +81,27 @@ export function OutlookStatusPanel() {
       setLastSync(null);
     }
     setEditingFolder(false);
+  };
+
+  const handleBrowseFolders = async () => {
+    setBrowsing(true);
+    try {
+      const result = await listMailFolders();
+      setFolders(result);
+    } catch {
+      setFolders([]);
+    }
+    setBrowsing(false);
+  };
+
+  const handleSelectFolder = (name: string) => {
+    // For child folders shown as "Parent / Child", use just the child name for the Graph API filter
+    const actualName = name.includes(' / ') ? name.split(' / ').pop()! : name;
+    setFolderName(actualName);
+    setFolderInput(actualName);
+    setEmailCount(null);
+    setLastSync(null);
+    setFolders(null);
   };
 
   return (
@@ -173,6 +196,38 @@ export function OutlookStatusPanel() {
                 </span>
               </div>
 
+              {/* Browse folders button + folder list */}
+              <button
+                onClick={handleBrowseFolders}
+                disabled={browsing}
+                className="w-full rounded px-2 py-1 text-[9px] text-workspace-text-secondary/40 hover:text-workspace-accent border border-dashed border-workspace-border/20 hover:border-workspace-accent/20 transition-colors disabled:opacity-50"
+              >
+                {browsing ? 'Loading folders...' : 'Browse Outlook Folders'}
+              </button>
+
+              {folders && (
+                <div className="max-h-40 overflow-y-auto rounded border border-workspace-border/30 bg-workspace-surface/20">
+                  {folders.length === 0 ? (
+                    <p className="text-[9px] text-workspace-text-secondary/40 px-2 py-2 text-center">No folders found</p>
+                  ) : (
+                    folders.map(f => (
+                      <button
+                        key={f.id}
+                        onClick={() => handleSelectFolder(f.displayName)}
+                        className={`flex w-full items-center justify-between px-2 py-1.5 text-left hover:bg-workspace-accent/5 transition-colors border-b border-workspace-border/10 last:border-0 ${
+                          f.displayName.toLowerCase() === folderName.toLowerCase() || f.displayName.split(' / ').pop()?.toLowerCase() === folderName.toLowerCase()
+                            ? 'bg-workspace-accent/10 text-workspace-accent'
+                            : ''
+                        }`}
+                      >
+                        <span className="text-[10px] text-workspace-text truncate">{f.displayName}</span>
+                        <span className="text-[8px] text-workspace-text-secondary/30 shrink-0 tabular-nums ml-2">{f.totalItemCount}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+
               {/* Date range — only on first sync */}
               {!lastSync && (
                 <div className="flex items-center gap-2 rounded px-2 py-1 bg-workspace-surface/30">
@@ -201,11 +256,26 @@ export function OutlookStatusPanel() {
                 {loading ? 'Syncing...' : lastSync ? 'Sync New Emails' : 'Initial Sync'}
               </button>
 
-              <p className="text-[8px] text-workspace-text-secondary/30 mt-0.5 px-1">
-                {lastSync
-                  ? `Last sync: ${new Date(lastSync).toLocaleString()}`
-                  : 'First sync pulls emails from the selected time range.'}
-              </p>
+              <div className="flex items-center justify-between mt-1 px-1">
+                <p className="text-[8px] text-workspace-text-secondary/30">
+                  {lastSync
+                    ? `Last sync: ${new Date(lastSync).toLocaleString()}`
+                    : 'First sync pulls emails from the selected time range.'}
+                </p>
+                <button
+                  onClick={async () => {
+                    await signOutOfOutlook();
+                    setConnected(false);
+                    setAccountName(null);
+                    setEmailCount(null);
+                    setLastSync(null);
+                    setFolders(null);
+                  }}
+                  className="text-[8px] text-workspace-text-secondary/30 hover:text-destructive transition-colors shrink-0 ml-2"
+                >
+                  Sign out
+                </button>
+              </div>
             </div>
           )}
         </div>

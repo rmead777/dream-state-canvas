@@ -102,6 +102,33 @@ async function graphFetch<T>(endpoint: string): Promise<T | null> {
 
 // ─── Folder Resolution ─────────────────────────────────────────────────────
 
+// ─── Folder Discovery ─────────────────────────────────────────────────────
+
+export async function listMailFolders(): Promise<Array<{ id: string; displayName: string; totalItemCount: number; childFolderCount: number }>> {
+  const folders: Array<{ id: string; displayName: string; totalItemCount: number; childFolderCount: number }> = [];
+
+  // Top-level folders
+  const topLevel = await graphFetch<{ value: Array<{ id: string; displayName: string; totalItemCount: number; childFolderCount: number }> }>(
+    `/me/mailFolders?$top=100`
+  );
+  if (topLevel?.value) {
+    for (const f of topLevel.value) {
+      folders.push(f);
+      // Also fetch child folders
+      if (f.childFolderCount > 0) {
+        const children = await graphFetch<{ value: Array<{ id: string; displayName: string; totalItemCount: number; childFolderCount: number }> }>(
+          `/me/mailFolders/${f.id}/childFolders?$top=100`
+        );
+        if (children?.value) {
+          folders.push(...children.value.map(c => ({ ...c, displayName: `${f.displayName} / ${c.displayName}` })));
+        }
+      }
+    }
+  }
+
+  return folders;
+}
+
 const folderIdCache = new Map<string, string>();
 const DEFAULT_FOLDER_NAME = 'Incoa AP Automated';
 
