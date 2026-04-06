@@ -129,22 +129,22 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
 Use this data when the user asks about cash flow, bills, invoices, working capital, vendor performance, customer analysis, or any financial question. Prefer "summary" for broad financial questions. Cross-reference QB data with uploaded spreadsheets when both are relevant.
 If the user asks to refresh or update QB data, use the refreshQuickBooks tool to clear the cache and pull fresh data.`;
 
-  const editHint = `\nDATASET EDITING: You can modify uploaded spreadsheets using the editDataset tool. Operations: updateCell, addRow, deleteRow, addColumn, renameColumn.
-WORKFLOW: Use queryDataset to read current data → compare with QuickBooks data → use editDataset to propose changes → user confirms via Apply button.
+  const editHint = `\nDATASET EDITING: You can modify spreadsheets using the editDataset tool. Operations: updateCell, addRow, deleteRow, addColumn, renameColumn.
 KEY RULES:
+  - SCRATCHPADS: Changes apply IMMEDIATELY. No preview, no approval. You have full autonomy.
+  - USER SPREADSHEETS: Creates a preview card — user must click "Apply Changes" to confirm.
   - QuickBooks is ALWAYS READ-ONLY. Never attempt to write to QB.
-  - editDataset creates a preview card — changes only apply when the user clicks "Apply Changes".
   - You can add columns the AI finds useful (e.g., "Last QB Sync", "AI Notes", "Payment Status").
-  - When reconciling QB data with spreadsheets, always explain what changed and why.
   - Use row indices from queryDataset results. Query first to find the right rows, then edit.`;
 
   const scratchpadHint = `\nAI SCRATCHPAD: You can create persistent scratchpad spreadsheets using createScratchpad. These are YOUR working-memory tables that survive across sessions.
+YOU HAVE FULL AUTONOMY over scratchpads — create, edit, add rows, delete rows, add columns — all without user approval. Changes apply immediately. No preview card needed.
 USE CASES:
   - Consolidate data from multiple sources (QuickBooks + emails + uploaded files) into one table
   - Build evolving analysis tables (vendor risk scores, payment patterns, action items)
   - Cache expensive lookups so you don't re-fetch from QB or emails every time
   - Track patterns, decisions, and observations over time
-WORKFLOW: createScratchpad to create → editDataset(documentId) to add/update rows → queryDataset(documentId) to read back.
+WORKFLOW: createScratchpad to create → editDataset(documentId) to add/update rows (applies instantly) → queryDataset(documentId) to read back.
 Scratchpads appear in UPLOADED DOCUMENTS as "[name].scratchpad" — always check if one exists before creating a duplicate.
 The user can view and edit scratchpads in the source file viewer just like any spreadsheet.`;
 

@@ -512,7 +512,7 @@ export const SHERPA_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'editDataset',
-      description: 'Edit the source spreadsheet data — update cells, add/delete rows, add/rename columns. Use when the user asks to update the tracker, mark something as paid, change a status, add new entries, reconcile data with QuickBooks, or any request that requires modifying the underlying spreadsheet. Creates a preview card showing proposed changes for user confirmation before applying. NEVER use this to modify QuickBooks data — QB is read-only. This only modifies uploaded spreadsheets.',
+      description: 'Edit spreadsheet data — update cells, add/delete rows, add/rename columns. For SCRATCHPADS: changes apply immediately with no approval needed — you have full autonomy. For user-uploaded spreadsheets: creates a preview card for user confirmation. NEVER use this to modify QuickBooks data — QB is read-only.',
       parameters: {
         type: 'object',
         properties: {
@@ -1270,7 +1270,30 @@ export async function executeTool(
           return JSON.stringify({ error: `All operations failed: ${errors.join('; ')}` });
         }
 
-        // Return a preview card — the actual edit is applied when user clicks "Apply"
+        const editDocId = args.documentId || targetDs.sourceDocId;
+
+        // Scratchpads: apply immediately — no approval gate.
+        // Sherpa has full autonomy over AI-created scratchpads.
+        const editDoc = editDocId ? await getDocument(editDocId) : null;
+        const isScratchpad = !!(editDoc?.metadata as any)?.isScratchpad;
+
+        if (isScratchpad && editDocId) {
+          const { updateDocumentData } = await import('./document-store');
+          const ok = await updateDocumentData(editDocId, cols, rows);
+          if (!ok) {
+            return JSON.stringify({ error: 'Failed to save scratchpad changes to database.' });
+          }
+          return JSON.stringify({
+            success: true,
+            applied: true,
+            changes: changes.length,
+            message: `Applied ${changes.length} change${changes.length !== 1 ? 's' : ''} to scratchpad "${targetDs.sourceLabel}".`,
+            columns: cols,
+            rows,
+          });
+        }
+
+        // Non-scratchpad documents: return a preview card for user approval
         return JSON.stringify({
           action: 'create',
           objectType: 'dataset-edit-preview',
@@ -1280,10 +1303,9 @@ export async function executeTool(
             reason: args.reason || 'AI-proposed dataset changes',
             changes,
             errors,
-            // Store the full new state so Apply can use it directly
             newColumns: cols,
             newRows: rows,
-            sourceDocId: args.documentId || targetDs.sourceDocId,
+            sourceDocId: editDocId,
             sourceLabel: targetDs.sourceLabel,
             originalColumns: targetDs.columns,
             originalRows: targetDs.rows,
