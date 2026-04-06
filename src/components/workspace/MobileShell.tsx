@@ -268,18 +268,11 @@ export function MobileShell() {
                           )}
                         </div>
                       )}
-                      {/* Processing indicator */}
+                      {/* Processing indicator — minimal in-thread hint (main animation is above input) */}
                       {i === promptHistory.length - 1 && !entry.response && isProcessing && (
                         <div className="flex justify-start">
-                          <div className="rounded-2xl rounded-bl-md bg-white border border-workspace-border/40 px-3.5 py-2.5">
-                            <div className="flex items-center gap-2">
-                              <div className="flex gap-1">
-                                {[0, 1, 2].map(j => (
-                                  <div key={j} className="h-1.5 w-1.5 rounded-full bg-workspace-accent/40 animate-pulse" style={{ animationDelay: `${j * 200}ms` }} />
-                                ))}
-                              </div>
-                              <span className="text-[10px] text-workspace-accent/60">Reasoning...</span>
-                            </div>
+                          <div className="rounded-2xl rounded-bl-md bg-white/60 border border-workspace-accent/20 px-3 py-1.5">
+                            <span className="text-[10px] text-workspace-accent/50">Working on it...</span>
                           </div>
                         </div>
                       )}
@@ -310,6 +303,58 @@ export function MobileShell() {
               {/* Input area */}
               <div className="border-t border-workspace-border/50 bg-white/80 px-4 py-2.5 backdrop-blur-xl safe-area-bottom" onPaste={handlePaste}>
                 <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleImageFiles(e.target.files)} />
+
+                {/* Futuristic processing indicator — popup bar above input */}
+                {isProcessing && (
+                  <div
+                    className="relative mb-2.5 overflow-hidden rounded-2xl border border-workspace-accent/30 bg-[linear-gradient(135deg,rgba(99,102,241,0.13),rgba(99,102,241,0.06),rgba(99,102,241,0.13))] px-3.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_12px_32px_rgba(99,102,241,0.20)] animate-[materialize_0.25s_cubic-bezier(0.16,1,0.3,1)_forwards]"
+                    role="status"
+                    aria-label="Sherpa is reasoning"
+                  >
+                    {/* Vertical scanline sweep */}
+                    <div className="pointer-events-none absolute inset-x-0 h-px bg-gradient-to-r from-transparent via-workspace-accent/55 to-transparent animate-[scanline_2s_linear_infinite]" />
+                    {/* Data stream at bottom edge */}
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-0.5 gap-px overflow-hidden rounded-b-2xl">
+                      {Array.from({ length: 14 }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="flex-1 bg-workspace-accent/20 animate-[dataStream_2s_linear_infinite]"
+                          style={{ animationDelay: `${i * 0.14}s` }}
+                        />
+                      ))}
+                    </div>
+                    <div className="relative flex items-center gap-2.5">
+                      {/* Orbital spinner */}
+                      <div className="relative h-6 w-6 shrink-0">
+                        <div className="absolute inset-0 rounded-full border border-workspace-accent/30 animate-[spin_2.5s_linear_infinite]">
+                          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-px h-1.5 w-1.5 rounded-full bg-workspace-accent" />
+                        </div>
+                        <div className="absolute inset-1 rounded-full border border-workspace-accent/15 animate-[spin_1.8s_linear_infinite_reverse]">
+                          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-px h-1 w-1 rounded-full bg-workspace-accent/65" />
+                        </div>
+                        <div className="absolute inset-2 rounded-full bg-workspace-accent/20 animate-[pulse_1.5s_cubic-bezier(0.34,1.56,0.64,1)_infinite]" />
+                      </div>
+                      {/* Label + progress dots */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-semibold tracking-wide text-workspace-accent">Reasoning</span>
+                          <div className="flex items-center gap-1">
+                            {[0, 1, 2, 3].map((j) => (
+                              <div
+                                key={j}
+                                className="h-1 w-2.5 rounded-full bg-workspace-accent/45 animate-[progressDot_1.2s_cubic-bezier(0.34,1.56,0.64,1)_infinite]"
+                                style={{ animationDelay: `${j * 0.15}s` }}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        <p className="mt-0.5 text-[9px] leading-3 text-workspace-accent/65">
+                          Sherpa is analyzing your workspace
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <VoiceIndicator volume={voice.volume} isListening={voice.isListening} />
 
