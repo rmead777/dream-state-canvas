@@ -1248,13 +1248,21 @@ export async function executeTool(
           args.initialRows as string[][] | undefined,
         );
         if (!doc) return JSON.stringify({ error: 'Failed to create scratchpad' });
+        // Return a create action so the card is auto-materialized with the scratchpad's own data
+        const scratchpadRows = args.initialRows || [];
         return JSON.stringify({
-          success: true,
+          action: 'create',
+          objectType: 'dataset',
+          title: args.name,
+          data: {
+            columns: args.columns,
+            rows: scratchpadRows,
+            sourceDocId: doc.id,
+            isScratchpad: true,
+            dataQuery: { documentId: doc.id },
+          },
           documentId: doc.id,
-          name: args.name,
-          columns: args.columns,
-          rowCount: args.initialRows?.length || 0,
-          hint: `Scratchpad "${args.name}" created. Use queryDataset(documentId: "${doc.id}") to read and editDataset(documentId: "${doc.id}") to write.`,
+          hint: `Scratchpad "${args.name}" created with ${scratchpadRows.length} rows. Use queryDataset(documentId: "${doc.id}") to read and editDataset(documentId: "${doc.id}") to write.`,
         });
       }
 

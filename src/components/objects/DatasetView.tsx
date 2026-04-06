@@ -27,10 +27,13 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
   const d = object.context;
   const persistedView = getObjectViewState(d);
 
-  // Use live active dataset for full column set — prefer the live store
-  // whenever it has at least as many columns (covers edits + new uploads).
+  // If the card has its own data (e.g. scratchpad, specific document query),
+  // use it directly. Only fall back to the live active dataset for cards
+  // that were created without their own data (legacy behavior).
   const liveDs = getActiveDataset();
-  const preferLive = liveDs.columns.length >= (d.columns || []).length;
+  const hasOwnData = (d.columns?.length > 0 && d.rows?.length > 0) &&
+    (d.sourceDocId || d.dataQuery?.documentId || d.isScratchpad);
+  const preferLive = !hasOwnData && liveDs.columns.length >= (d.columns || []).length;
   const allColumns = useMemo<string[]>(
     () => (preferLive ? liveDs.columns : (d.columns || [])),
     [preferLive, d.columns, liveDs.columns]
