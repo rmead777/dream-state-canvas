@@ -39,9 +39,10 @@ export function ImmersiveOverlay() {
       const ctx = safeObject.context || {};
       const isDataset = safeObject.type === 'dataset' || safeObject.type === 'inspector' || ctx.columns;
       if (isDataset) {
-        const liveDs = getActiveDataset();
-        const cols = liveDs.columns.length > 0 ? liveDs.columns : ctx.columns || [];
-        const rows = liveDs.rows.length > 0 ? liveDs.rows : ctx.rows || [];
+        // Use card's own data first. Only fall back to active dataset if card has none.
+        const hasOwnData = ctx.columns?.length > 0 && ctx.rows?.length > 0;
+        const cols = hasOwnData ? ctx.columns : getActiveDataset().columns || [];
+        const rows = hasOwnData ? ctx.rows : getActiveDataset().rows || [];
         await exportToExcel(safeObject.title, cols, rows);
       } else {
         const cols = ['Field', 'Value'];

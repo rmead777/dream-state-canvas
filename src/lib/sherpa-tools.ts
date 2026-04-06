@@ -711,8 +711,11 @@ export async function executeTool(
         // Support optional documentId for multi-document queries
         const ds = args.documentId
           ? await getDataset(args.documentId)
-          : getActiveDataset();
-        const result = executeDataQuery({ ...args, _dataset: ds });
+          : null;
+        if (args.documentId && !ds) {
+          return JSON.stringify({ error: `Document "${args.documentId}" not found. Check the UPLOADED DOCUMENTS list for valid IDs.` });
+        }
+        const result = executeDataQuery({ ...args, _dataset: ds || getActiveDataset() });
         // No artificial cap — return all matched rows so the AI can analyze the full dataset.
         // For very large datasets (500+), truncate and tell the AI to use filters/limits.
         const MAX_AI_ROWS = 500;
@@ -1147,9 +1150,13 @@ export async function executeTool(
 
       case 'editDataset': {
         // Get the target dataset
-        const targetDs = args.documentId
+        const resolvedDs = args.documentId
           ? await getDataset(args.documentId)
-          : getActiveDataset();
+          : null;
+        if (args.documentId && !resolvedDs) {
+          return JSON.stringify({ error: `Document "${args.documentId}" not found.` });
+        }
+        const targetDs = resolvedDs || getActiveDataset();
 
         const cols = [...targetDs.columns];
         const rows = targetDs.rows.map(r => [...r]);
@@ -1353,10 +1360,13 @@ export async function executeTool(
       }
 
       case 'computeStats': {
-        const ds = args.documentId
+        const statsDs = args.documentId
           ? await getDataset(args.documentId)
-          : getActiveDataset();
-        const { columns, rows } = ds;
+          : null;
+        if (args.documentId && !statsDs) {
+          return JSON.stringify({ error: `Document "${args.documentId}" not found.` });
+        }
+        const { columns, rows } = statsDs || getActiveDataset();
         const targetCols = (args.columns as string[]) || columns;
 
         // Helper: parse numeric values from cells

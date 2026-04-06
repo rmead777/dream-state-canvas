@@ -29,17 +29,26 @@ export function getActiveDataset(): Dataset {
 }
 
 /**
- * Get dataset for a specific document ID, or the active dataset if no ID given.
- * Used by queryDataset and joinDatasets tools to support multi-document queries.
+ * Get dataset for a specific document ID.
+ * Returns null if document not found or has no data — callers must handle this
+ * rather than silently getting the active dataset (which caused scratchpads
+ * to show vendor tracker data).
+ * Falls back to active dataset ONLY when no documentId is provided.
  */
-export async function getDataset(documentId?: string): Promise<Dataset> {
+export async function getDataset(documentId?: string): Promise<Dataset | null> {
   if (!documentId) return current;
 
   const doc = await getDocument(documentId);
-  if (!doc) return current; // graceful fallback
+  if (!doc) {
+    console.warn(`[active-dataset] Document ${documentId} not found`);
+    return null;
+  }
 
   const extracted = extractDataset(doc);
-  if (!extracted) return current;
+  if (!extracted) {
+    console.warn(`[active-dataset] Could not extract data from ${documentId}`);
+    return null;
+  }
 
   return {
     columns: extracted.columns,

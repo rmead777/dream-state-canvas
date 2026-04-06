@@ -495,10 +495,13 @@ export function useWorkspaceActions() {
       }
     }
 
-    // If AI provided a dataQuery, execute and merge results
-    if ((action as any).dataQuery) {
+    // If AI provided a dataQuery, execute and merge results.
+    // BUT: skip if action.data already has columns/rows (e.g. scratchpads) —
+    // executing the dataQuery would overwrite the already-correct data.
+    const alreadyHasData = Array.isArray((context as any).columns) && (context as any).columns.length > 0
+      && Array.isArray((context as any).rows);
+    if ((action as any).dataQuery && !alreadyHasData) {
       const dq = (action as any).dataQuery;
-      // Resolve documentId so scratchpads/other docs don't fall back to active dataset
       const ds = dq.documentId ? await getDataset(dq.documentId) : undefined;
       const queryResult = executeDataQuery(ds ? { ...dq, _dataset: ds } : dq);
       context = {
@@ -508,6 +511,9 @@ export function useWorkspaceActions() {
         dataQuery: dq,
         queryMeta: { totalMatched: queryResult.totalMatched, truncated: queryResult.truncated },
       };
+    } else if ((action as any).dataQuery) {
+      // Preserve the dataQuery reference without re-executing
+      context = { ...context, dataQuery: (action as any).dataQuery };
     }
 
     const obj: Omit<WorkspaceObject, 'status' | 'createdAt' | 'lastInteractedAt'> = {

@@ -27,20 +27,19 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
   const d = object.context;
   const persistedView = getObjectViewState(d);
 
-  // If the card has its own data (e.g. scratchpad, specific document query),
-  // use it directly. Only fall back to the live active dataset for cards
-  // that were created without their own data (legacy behavior).
+  // Use the card's own data if it has any. Only fall back to the global
+  // active dataset for cards that genuinely have NO data of their own.
+  // This prevents the vendor tracker from bleeding into scratchpads,
+  // analysis cards, or any card backed by a specific document.
   const liveDs = getActiveDataset();
-  const hasOwnData = (d.columns?.length > 0 && d.rows?.length > 0) &&
-    (d.sourceDocId || d.dataQuery?.documentId || d.isScratchpad);
-  const preferLive = !hasOwnData && liveDs.columns.length >= (d.columns || []).length;
+  const hasOwnData = d.columns?.length > 0 && d.rows?.length > 0;
   const allColumns = useMemo<string[]>(
-    () => (preferLive ? liveDs.columns : (d.columns || [])),
-    [preferLive, d.columns, liveDs.columns]
+    () => hasOwnData ? d.columns : (liveDs.columns || []),
+    [hasOwnData, d.columns, liveDs.columns]
   );
   const sourceRows = useMemo<string[][]>(
-    () => (preferLive ? liveDs.rows : (d.rows || [])),
-    [preferLive, d.columns, d.rows, liveDs.rows]
+    () => hasOwnData ? d.rows : (liveDs.rows || []),
+    [hasOwnData, d.rows, liveDs.rows]
   );
 
   // Editable state — only used in immersive mode
