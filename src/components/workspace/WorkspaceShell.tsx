@@ -48,7 +48,7 @@ export function WorkspaceShell() {
   }
 
   return (
-    <div className={`relative flex h-screen flex-col overflow-hidden bg-workspace-bg transition-colors duration-1500`}>
+    <div className={`relative flex h-screen flex-col overflow-hidden transition-colors duration-1500`}>
       <BackgroundShader />
       <div className="pointer-events-none absolute inset-x-0 top-0 z-0 h-28 bg-[linear-gradient(to_bottom,rgba(99,102,241,0.07),transparent)]" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-24 bg-[linear-gradient(to_top,rgba(255,255,255,0.45),transparent)]" />
