@@ -9,6 +9,7 @@ import { useAI } from '@/hooks/useAI';
 import MarkdownRenderer from '@/components/objects/MarkdownRenderer';
 import { getDisplayColumns, filterRowToColumns } from '@/lib/smart-columns';
 import { getObjectViewState } from '@/lib/workspace-intelligence';
+import { extractDataset } from '@/lib/document-store';
 import { TableVisualization } from './TableVisualization';
 
 interface DatasetViewProps {
@@ -26,15 +27,21 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
   const d = object.context;
   const persistedView = getObjectViewState(d);
 
-  // Cards use their own data. No global fallback. If a card has no data,
-  // that's a bug in card creation — not something rendering should paper over.
+  // Cards use their own data. If columns/rows are missing but structured_data
+  // exists (cards created before the active-dataset refactor), extract inline.
+  const extracted = useMemo(() => {
+    if (d.columns?.length > 0) return null; // already has data
+    if (d.structured_data) return extractDataset({ structured_data: d.structured_data, metadata: d } as any);
+    return null;
+  }, [d.columns, d.structured_data]);
+
   const allColumns = useMemo<string[]>(
-    () => d.columns || [],
-    [d.columns]
+    () => d.columns || extracted?.columns || [],
+    [d.columns, extracted]
   );
   const sourceRows = useMemo<string[][]>(
-    () => d.rows || [],
-    [d.rows]
+    () => d.rows || extracted?.rows || [],
+    [d.rows, extracted]
   );
 
   // Editable state — only used in immersive mode
