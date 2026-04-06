@@ -224,7 +224,9 @@ export async function syncEmails(
       .single();
 
     if (syncState?.last_message_date) {
-      afterDate = syncState.last_message_date;
+      // Ensure ISO 8601 with timezone — Graph API requires the Z suffix
+      const raw = syncState.last_message_date;
+      afterDate = raw.endsWith('Z') || raw.includes('+') ? raw : new Date(raw + 'Z').toISOString();
     }
   }
 
@@ -277,7 +279,11 @@ export async function syncEmails(
 
       const senderAddress = msg.from?.emailAddress?.address || '';
       const subject = msg.subject || '(no subject)';
-      const receivedAt = msg.receivedDateTime;
+      // Normalize to full ISO 8601 — Graph API sometimes omits the Z suffix
+      const rawDate = msg.receivedDateTime;
+      const receivedAt = rawDate && !rawDate.endsWith('Z') && !rawDate.includes('+')
+        ? rawDate + 'Z'
+        : rawDate;
 
       // Cross-folder dedup: check if an email with same subject + sender + ~same time
       // already exists from a different folder (e.g. same email forwarded to two people)
