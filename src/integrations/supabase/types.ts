@@ -14,6 +14,102 @@ export type Database = {
   }
   public: {
     Tables: {
+      ap_email_sync: {
+        Row: {
+          emails_synced: number | null
+          folder_name: string
+          id: string
+          last_error: string | null
+          last_message_date: string | null
+          last_sync_at: string | null
+          sync_status: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          emails_synced?: number | null
+          folder_name?: string
+          id?: string
+          last_error?: string | null
+          last_message_date?: string | null
+          last_sync_at?: string | null
+          sync_status?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          emails_synced?: number | null
+          folder_name?: string
+          id?: string
+          last_error?: string | null
+          last_message_date?: string | null
+          last_sync_at?: string | null
+          sync_status?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ap_emails: {
+        Row: {
+          body_content_type: string | null
+          body_preview: string | null
+          body_text: string | null
+          created_at: string | null
+          folder_name: string | null
+          graph_message_id: string
+          has_attachments: boolean | null
+          id: string
+          importance: string | null
+          is_read: boolean | null
+          received_at: string
+          sender_address: string | null
+          sender_name: string | null
+          subject: string | null
+          synced_at: string | null
+          to_recipients: Json | null
+          user_id: string
+        }
+        Insert: {
+          body_content_type?: string | null
+          body_preview?: string | null
+          body_text?: string | null
+          created_at?: string | null
+          folder_name?: string | null
+          graph_message_id: string
+          has_attachments?: boolean | null
+          id?: string
+          importance?: string | null
+          is_read?: boolean | null
+          received_at: string
+          sender_address?: string | null
+          sender_name?: string | null
+          subject?: string | null
+          synced_at?: string | null
+          to_recipients?: Json | null
+          user_id: string
+        }
+        Update: {
+          body_content_type?: string | null
+          body_preview?: string | null
+          body_text?: string | null
+          created_at?: string | null
+          folder_name?: string | null
+          graph_message_id?: string
+          has_attachments?: boolean | null
+          id?: string
+          importance?: string | null
+          is_read?: boolean | null
+          received_at?: string
+          sender_address?: string | null
+          sender_name?: string | null
+          subject?: string | null
+          synced_at?: string | null
+          to_recipients?: Json | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       automation_triggers: {
         Row: {
           action: Json
