@@ -8,7 +8,7 @@
 import { WorkspaceObject, WorkspaceState } from './workspace-types';
 import { executeDataQuery } from './data-query';
 import { getActiveDataset, getDataset } from './active-dataset';
-import { getDocument } from './document-store';
+import { getDocument, createScratchpad } from './document-store';
 import { createMemory, deleteMemory, getMemories } from './memory-store';
 import { retrieveRelevantMemories, formatMemoriesForPrompt, determineWorkspaceState } from './memory-retriever';
 import { supabase } from '@/integrations/supabase/client';
@@ -500,6 +500,32 @@ export const SHERPA_TOOLS = [
           documentId: { type: 'string', description: 'Optional: edit a specific document by ID. Defaults to the active dataset.' },
         },
         required: ['operations', 'reason'],
+      },
+    },
+  },
+
+  // SCRATCHPAD tool
+  {
+    type: 'function' as const,
+    function: {
+      name: 'createScratchpad',
+      description: 'Create a persistent AI scratchpad spreadsheet — a structured working-memory table that persists across sessions. Use this when you need to collect, organize, compare, or accumulate data from multiple sources (QuickBooks, emails, uploaded files, user conversations) into a single reusable table rather than re-fetching every time. The scratchpad is a real document the user can view and edit. After creation, use queryDataset(documentId) to read from it and editDataset(documentId) to write to it. Check UPLOADED DOCUMENTS first — if a scratchpad already exists, reuse it instead of creating a new one.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Descriptive name for the scratchpad, e.g. "Vendor Cash Flow Analysis", "Weekly Action Items"' },
+          columns: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Column headers for the scratchpad table',
+          },
+          initialRows: {
+            type: 'array',
+            items: { type: 'array', items: { type: 'string' } },
+            description: 'Optional initial data rows (array of arrays matching column order)',
+          },
+        },
+        required: ['name', 'columns'],
       },
     },
   },
@@ -1206,6 +1232,23 @@ export async function executeTool(
             originalRows: targetDs.rows,
             operationCount: changes.length,
           },
+        });
+      }
+
+      case 'createScratchpad': {
+        const doc = await createScratchpad(
+          args.name,
+          args.columns as string[],
+          args.initialRows as string[][] | undefined,
+        );
+        if (!doc) return JSON.stringify({ error: 'Failed to create scratchpad' });
+        return JSON.stringify({
+          success: true,
+          documentId: doc.id,
+          name: args.name,
+          columns: args.columns,
+          rowCount: args.initialRows?.length || 0,
+          hint: `Scratchpad "${args.name}" created. Use queryDataset(documentId: "${doc.id}") to read and editDataset(documentId: "${doc.id}") to write.`,
         });
       }
 

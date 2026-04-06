@@ -488,6 +488,56 @@ export async function updateDocumentData(
 }
 
 /**
+ * Create an AI scratchpad document — a virtual spreadsheet that exists only in
+ * the database (no storage file). The AI can read/write to it via queryDataset
+ * and editDataset using the returned document ID.
+ */
+export async function createScratchpad(
+  name: string,
+  columns: string[],
+  initialRows?: string[][],
+): Promise<DocumentRecord | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const structuredData = {
+    sheets: {
+      [name]: {
+        headers: columns,
+        rows: initialRows || [],
+      },
+    },
+  };
+
+  const { data, error } = await supabase
+    .from('documents')
+    .insert({
+      filename: `${name}.scratchpad`,
+      mime_type: 'application/x-scratchpad',
+      file_type: 'csv',               // passes CHECK constraint; extractDataset works
+      storage_path: `scratchpad-${Date.now()}`, // virtual — no actual file
+      extracted_text: '',
+      structured_data: structuredData,
+      metadata: {
+        isScratchpad: true,
+        primarySheet: name,
+        summary: `AI scratchpad: ${name}`,
+        createdBy: 'sherpa',
+      },
+      fingerprint: `scratchpad-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      user_id: user?.id || null,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('[document-store] Failed to create scratchpad:', error);
+    return null;
+  }
+
+  return data as DocumentRecord;
+}
+
+/**
  * Delete a document.
  */
 export async function deleteDocument(id: string): Promise<boolean> {

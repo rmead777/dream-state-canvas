@@ -104,7 +104,10 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
   try {
     const docs = await listDocuments();
     if (docs.length > 0) {
-      documentsHint = `\nUPLOADED DOCUMENTS (use getDocumentContent tool to read any of these):\n${docs.map(d => `  - ID: ${d.id} | "${d.filename}" (${d.file_type}) | uploaded ${d.created_at}`).join('\n')}`;
+      documentsHint = `\nUPLOADED DOCUMENTS (use getDocumentContent tool to read any of these):\n${docs.map(d => {
+        const isScratchpad = (d.metadata as any)?.isScratchpad;
+        return `  - ID: ${d.id} | "${d.filename}" (${d.file_type})${isScratchpad ? ' [AI SCRATCHPAD]' : ''} | uploaded ${d.created_at}`;
+      }).join('\n')}`;
     }
   } catch {}
 
@@ -130,6 +133,16 @@ KEY RULES:
   - When reconciling QB data with spreadsheets, always explain what changed and why.
   - Use row indices from queryDataset results. Query first to find the right rows, then edit.`;
 
+  const scratchpadHint = `\nAI SCRATCHPAD: You can create persistent scratchpad spreadsheets using createScratchpad. These are YOUR working-memory tables that survive across sessions.
+USE CASES:
+  - Consolidate data from multiple sources (QuickBooks + emails + uploaded files) into one table
+  - Build evolving analysis tables (vendor risk scores, payment patterns, action items)
+  - Cache expensive lookups so you don't re-fetch from QB or emails every time
+  - Track patterns, decisions, and observations over time
+WORKFLOW: createScratchpad to create → editDataset(documentId) to add/update rows → queryDataset(documentId) to read back.
+Scratchpads appear in UPLOADED DOCUMENTS as "[name].scratchpad" — always check if one exists before creating a duplicate.
+The user can view and edit scratchpads in the source file viewer just like any spreadsheet.`;
+
   const emailHint = `\nOUTLOOK INTEGRATION: AP emails are stored in Supabase and available via queryEmails tool (no Outlook sign-in needed to READ stored emails).
   - "recent" — latest stored emails from the Incoa AP Automated folder (vendor invoices, past-due notices, lien threats, payment demands)
   - "search" — full-text search by vendor name, invoice number, or keyword across stored emails
@@ -146,6 +159,7 @@ Use refreshEmails to sync NEW emails from Outlook (requires sign-in). The user c
     documentsHint,
     qboHint,
     editHint,
+    scratchpadHint,
     emailHint,
     // NOTE: memories are sent separately as body.memories to the edge function
     // and injected into the system prompt. Don't duplicate them in the user message.
