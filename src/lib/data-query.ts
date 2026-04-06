@@ -1,14 +1,12 @@
 /**
- * DataQuery Executor — runs AI-generated data queries against the active dataset.
+ * DataQuery Executor — runs data queries against an explicitly provided dataset.
  *
  * Translates DataQuery schema (filter, sort, columns, limit, groupBy)
  * into actual data operations. Pure function — no state mutation, no API calls.
  *
- * This is a parallel path to data-slicer.ts, not a replacement.
- * The slicer handles DataProfile-driven deterministic views.
- * This handles AI-driven dynamic queries.
+ * IMPORTANT: `_dataset` is REQUIRED. There is no global fallback.
+ * Every caller must resolve which document's data to query and pass it in.
  */
-import { getActiveDataset } from './active-dataset';
 import type { DataQuery } from './card-schema';
 
 export interface QueryResult {
@@ -19,13 +17,19 @@ export interface QueryResult {
 }
 
 /**
- * Execute a DataQuery against a dataset.
- * If `_dataset` is provided in the query, uses that instead of the active dataset.
+ * Execute a DataQuery against an explicitly provided dataset.
  * The `_dataset` field is a runtime-only override — not part of the AI-visible schema.
+ * Callers MUST provide `_dataset`. If missing, returns empty result with an error flag.
  */
 export function executeDataQuery(query: DataQuery): QueryResult {
   const datasetOverride = (query as any)?._dataset as { columns: string[]; rows: string[][] } | undefined;
-  const { columns: allColumns, rows: allRows } = datasetOverride ?? getActiveDataset();
+
+  if (!datasetOverride) {
+    console.error('[data-query] executeDataQuery called without _dataset. Every caller must provide explicit data.');
+    return { columns: [], rows: [], totalMatched: 0, truncated: false };
+  }
+
+  const { columns: allColumns, rows: allRows } = datasetOverride;
 
   if (!query) {
     return { columns: allColumns, rows: allRows, totalMatched: allRows.length, truncated: false };
