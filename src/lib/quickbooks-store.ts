@@ -49,7 +49,12 @@ export interface QBOFinancialSummary {
   };
 }
 
-// ─── Session Cache (lives for entire SPA lifetime) ─────────────────────────
+// ─── Session Cache (with TTL to ensure token refresh) ─────────────────────
+
+// Cache expires after 45 minutes — forces a fresh edge function call before
+// the QB access token expires (1 hour). The edge function auto-refreshes
+// the token when it's within 5 minutes of expiry.
+const CACHE_TTL_MS = 45 * 60 * 1000;
 
 const cache = new Map<string, { data: QBOResponse; fetchedAt: number }>();
 
@@ -58,7 +63,14 @@ const refreshListeners = new Set<() => void>();
 
 function getCached(key: string): QBOResponse | null {
   const entry = cache.get(key);
-  return entry?.data ?? null;
+  if (!entry) return null;
+  // Expire stale entries so the next fetch hits the edge function
+  // (which auto-refreshes the QB token if it's expiring)
+  if (Date.now() - entry.fetchedAt > CACHE_TTL_MS) {
+    cache.delete(key);
+    return null;
+  }
+  return entry.data;
 }
 
 function setCache(key: string, data: QBOResponse): void {

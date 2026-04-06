@@ -83,9 +83,26 @@ export function QBOStatusPanel() {
 
   useEffect(() => {
     fetchStatus();
-    // Re-check every 10 minutes (not too aggressive)
-    const interval = setInterval(fetchStatus, 10 * 60 * 1000);
-    return () => clearInterval(interval);
+    // Re-check every 5 minutes to keep the QB token alive
+    // (QB tokens expire after 1 hour; the edge function auto-refreshes
+    //  when within 5 minutes of expiry, so checking every 5 min ensures
+    //  we always trigger refresh before expiry)
+    const interval = setInterval(fetchStatus, 5 * 60 * 1000);
+
+    // Browser throttles/suspends timers in background tabs.
+    // When the user returns to the tab, re-check immediately so the
+    // token refresh fires even if setInterval was suspended.
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        fetchStatus();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [fetchStatus]);
 
   // Warm fetch: once we confirm QB is connected, pre-load the summary
@@ -159,7 +176,18 @@ export function QBOStatusPanel() {
               {/* Token health warning */}
               {status.tokenHealthy === false && (
                 <div className="px-2 py-1.5 mb-1 rounded-md bg-red-400/5 border border-red-400/10">
-                  <p className="text-[9px] text-red-400/70">OAuth token expired — reconnect in Working Capital Wizard</p>
+                  <p className="text-[9px] text-red-400/70">OAuth token expired — attempting auto-refresh...</p>
+                  <button
+                    onClick={() => { setLoading(true); fetchStatus(); }}
+                    className="text-[9px] text-red-400/70 underline hover:text-red-500 mt-0.5"
+                  >
+                    Retry now
+                  </button>
+                </div>
+              )}
+              {status.error && (
+                <div className="px-2 py-1.5 mb-1 rounded-md bg-amber-400/5 border border-amber-400/10">
+                  <p className="text-[9px] text-amber-600/70">{status.error}</p>
                 </div>
               )}
 
@@ -208,7 +236,7 @@ export function QBOStatusPanel() {
               </button>
 
               <p className="text-[8px] text-workspace-text-secondary/30 mt-1 px-1">
-                QB data is cached for the session. Click above or say "refresh quickbooks" to pull fresh.
+                Token auto-refreshes every 5 min. Data cache expires after 45 min.
               </p>
             </div>
           )}
