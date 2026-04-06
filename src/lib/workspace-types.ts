@@ -7,7 +7,8 @@ export type ObjectType =
   | 'timeline' | 'monitor' | 'document' | 'document-viewer' | 'dataset' | 'analysis'
   | 'action-queue' | 'vendor-dossier' | 'cash-planner'
   | 'escalation-tracker' | 'outreach-tracker' | 'production-risk'
-  | 'email-draft' | 'simulation';
+  | 'email-draft' | 'simulation'
+  | 'dataset-edit-preview' | 'memory-cleanup-preview';
 
 export type ObjectStatus = 'materializing' | 'open' | 'collapsed' | 'dissolved';
 
