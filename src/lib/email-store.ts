@@ -83,7 +83,10 @@ const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
 
 async function graphFetch<T>(endpoint: string): Promise<T | null> {
   const token = await getAccessToken();
-  if (!token) return null;
+  if (!token) {
+    console.error('[email-store] No access token — MSAL session may have expired. User needs to re-authenticate.');
+    throw new Error('Outlook session expired — please sign in again');
+  }
 
   const response = await fetch(`${GRAPH_BASE}${endpoint}`, {
     headers: {
@@ -94,6 +97,11 @@ async function graphFetch<T>(endpoint: string): Promise<T | null> {
 
   if (!response.ok) {
     const errorText = await response.text();
+    console.error(`[email-store] Graph API ${response.status} on ${endpoint}:`, errorText);
+    // 401 = token expired/revoked — surface clearly
+    if (response.status === 401) {
+      throw new Error('Outlook session expired — please sign in again');
+    }
     throw new Error(`Graph API error ${response.status}: ${errorText}`);
   }
 
@@ -138,6 +146,9 @@ async function resolveFolderId(folderName: string = DEFAULT_FOLDER_NAME): Promis
 
   const target = folderName.toLowerCase();
 
+  // graphFetch now throws on auth failures — let those propagate
+  // so syncEmails reports "session expired" instead of "folder not found"
+
   // 1. Try all top-level mail folders (case-insensitive client-side match)
   const topLevel = await graphFetch<{ value: Array<{ id: string; displayName: string }> }>(
     `/me/mailFolders?$top=100`
@@ -152,13 +163,18 @@ async function resolveFolderId(folderName: string = DEFAULT_FOLDER_NAME): Promis
 
     // 2. Search child folders of every top-level folder (handles nested folders)
     for (const parent of topLevel.value) {
-      const children = await graphFetch<{ value: Array<{ id: string; displayName: string }> }>(
-        `/me/mailFolders/${parent.id}/childFolders?$top=100`
-      );
-      const childMatch = children?.value?.find(f => f.displayName.toLowerCase() === target);
-      if (childMatch) {
-        folderIdCache.set(target, childMatch.id);
-        return childMatch.id;
+      try {
+        const children = await graphFetch<{ value: Array<{ id: string; displayName: string }> }>(
+          `/me/mailFolders/${parent.id}/childFolders?$top=100`
+        );
+        const childMatch = children?.value?.find(f => f.displayName.toLowerCase() === target);
+        if (childMatch) {
+          folderIdCache.set(target, childMatch.id);
+          return childMatch.id;
+        }
+      } catch (e) {
+        // Some system folders don't allow childFolder listing — skip
+        console.warn(`[email-store] Could not list children of "${parent.displayName}":`, e);
       }
     }
   }
@@ -247,9 +263,17 @@ export async function syncEmails(
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id,folder_name' });
 
-  const folderId = await resolveFolderId(folderName);
+  let folderId: string | null;
+  try {
+    folderId = await resolveFolderId(folderName);
+  } catch (e: any) {
+    // Auth errors from graphFetch — report clearly instead of "folder not found"
+    const msg = e?.message || 'Unknown error resolving folder';
+    await updateSyncState(userId, folderName, 'error', 0, null, msg);
+    throw e;
+  }
   if (!folderId) {
-    await updateSyncState(userId, folderName, 'error', 0, null, `Folder "${folderName}" not found`);
+    await updateSyncState(userId, folderName, 'error', 0, null, `Folder "${folderName}" not found in Outlook. Check the folder name or sign in again.`);
     throw new Error(`Folder "${folderName}" not found`);
   }
 

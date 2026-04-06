@@ -18,6 +18,7 @@ export function OutlookStatusPanel() {
   const [loading, setLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(true);
   const [lastSync, setLastSync] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [folderName, setFolderName] = useState(DEFAULT_FOLDER);
   const [editingFolder, setEditingFolder] = useState(false);
   const [folderInput, setFolderInput] = useState(DEFAULT_FOLDER);
@@ -61,6 +62,7 @@ export function OutlookStatusPanel() {
 
   const handleSync = async () => {
     setLoading(true);
+    setSyncError(null);
     try {
       // On first sync (no lastSync), use syncDays as the lookback window
       const isFirstSync = !lastSync;
@@ -69,7 +71,11 @@ export function OutlookStatusPanel() {
       });
       setEmailCount(result.totalStored);
       setLastSync(new Date().toISOString());
-    } catch {}
+    } catch (e: any) {
+      const msg = e?.message || 'Sync failed';
+      setSyncError(msg);
+      console.error('[OutlookStatusPanel] Sync error:', e);
+    }
     setLoading(false);
   };
 
@@ -244,6 +250,21 @@ export function OutlookStatusPanel() {
                     <option value={365}>Last year</option>
                     <option value={0}>All time</option>
                   </select>
+                </div>
+              )}
+
+              {/* Sync error */}
+              {syncError && (
+                <div className="rounded px-2 py-1.5 bg-red-50 border border-red-200/50">
+                  <p className="text-[9px] text-red-600">{syncError}</p>
+                  {syncError.includes('expired') || syncError.includes('sign in') ? (
+                    <button
+                      onClick={async () => { setSyncError(null); await signInToOutlook(); }}
+                      className="text-[9px] text-red-500 underline hover:text-red-700 mt-0.5"
+                    >
+                      Re-authenticate
+                    </button>
+                  ) : null}
                 </div>
               )}
 
