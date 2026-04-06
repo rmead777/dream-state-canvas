@@ -46,8 +46,9 @@ export function DocumentProvider({ children }: { children: React.ReactNode }) {
     listDocuments().then((docs) => {
       setDocuments(docs);
       // If there's a spreadsheet document, use it as active dataset
+      // Skip scratchpads — those are AI working memory, not the user's primary data
       const spreadsheet = docs.find(
-        (d) => (d.file_type === 'xlsx' || d.file_type === 'csv') && d.structured_data
+        (d) => (d.file_type === 'xlsx' || d.file_type === 'csv') && d.structured_data && !(d.metadata as any)?.isScratchpad
       );
       if (spreadsheet) {
         const dataset = extractDataset(spreadsheet);
@@ -94,8 +95,8 @@ export function DocumentProvider({ children }: { children: React.ReactNode }) {
   const addDocument = useCallback((doc: DocumentRecord) => {
     setDocuments((prev) => [doc, ...prev.filter((d) => d.id !== doc.id)]);
 
-    // If it's a spreadsheet, auto-set as active dataset
-    if (doc.file_type === 'xlsx' || doc.file_type === 'csv') {
+    // If it's a spreadsheet (but not an AI scratchpad), auto-set as active dataset
+    if ((doc.file_type === 'xlsx' || doc.file_type === 'csv') && !(doc.metadata as any)?.isScratchpad) {
       const dataset = extractDataset(doc);
       if (dataset && dataset.rows.length > 0) {
         setActiveDataset({
