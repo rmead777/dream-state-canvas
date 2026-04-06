@@ -4,7 +4,7 @@ import { generateSuggestions, generateObservations } from '@/lib/sherpa-engine';
 import { Suggestion } from '@/lib/workspace-types';
 import { getMemories } from '@/lib/memory-store';
 import { parseThreshold, checkAlertThresholds } from '@/lib/alert-monitor';
-import { getActiveDataset } from '@/lib/active-dataset';
+import { useDocuments } from '@/contexts/DocumentContext';
 import { loadTriggers, checkTriggers, markTriggerFired } from '@/lib/automation-triggers';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -26,6 +26,7 @@ const SherpaCtx = createContext<SherpaContextValue | null>(null);
 
 export function SherpaProvider({ children }: { children: React.ReactNode }) {
   const { state, dispatch } = useWorkspace();
+  const { activeDataset } = useDocuments();
 
   // Stable ref for the scan function — prevents interval reset on every state change.
   // The interval calls scanRef.current which always points to the latest closure.
@@ -82,7 +83,7 @@ export function SherpaProvider({ children }: { children: React.ReactNode }) {
 
         if (thresholds.length === 0) return;
 
-        const { columns, rows } = getActiveDataset();
+        const { columns, rows } = activeDataset;
         const firing = checkAlertThresholds(thresholds, columns, rows);
 
         for (const alert of firing) {

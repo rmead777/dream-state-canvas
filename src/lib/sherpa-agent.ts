@@ -20,7 +20,7 @@ import { getAdminSettings } from './admin-settings';
 import { listDocuments, extractDataset } from './document-store';
 import { buildWorkspaceIntentContext } from './workspace-intelligence';
 import { getCurrentProfile } from './data-analyzer';
-import { getActiveDataset } from './active-dataset';
+// No active dataset singleton — resolve from uploaded documents
 import { recordAICall, defaultRouteMeta, parseRouteMeta } from './ai-telemetry';
 
 interface Message {
@@ -83,8 +83,11 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
   // Build structured workspace context using the same pipeline as the old intent engine.
   // This includes: DataProfile summary, focused object details, per-object summaries
   // with view state, recent intent outcomes — all compressed for the context window.
-  const ds = getActiveDataset();
-  const profile = getCurrentProfile(ds.columns, ds.rows);
+  // Resolve dataset from first available uploaded document
+  const allDocs = await listDocuments();
+  const primaryDoc = allDocs.find(d => (d.file_type === 'xlsx' || d.file_type === 'csv') && d.structured_data && !(d.metadata as any)?.isScratchpad);
+  const primaryDs = primaryDoc ? extractDataset(primaryDoc) : null;
+  const profile = primaryDs ? getCurrentProfile(primaryDs.columns, primaryDs.rows) : null;
   const structuredContext = buildWorkspaceIntentContext({
     objects: workspaceState.objects,
     activeContext,
@@ -539,13 +542,15 @@ export async function orchestratorLoop(params: AgentLoopParams): Promise<AgentLo
 
   onStatusUpdate?.('Decomposing complex request...');
 
-  // Build context for decomposition
-  const ds = getActiveDataset();
-  const profile = getCurrentProfile(ds.columns, ds.rows);
+  // Build context for decomposition — resolve from uploaded docs
+  const decomDocs = await listDocuments();
+  const decomDoc = decomDocs.find(d => (d.file_type === 'xlsx' || d.file_type === 'csv') && d.structured_data && !(d.metadata as any)?.isScratchpad);
+  const decomDs = decomDoc ? extractDataset(decomDoc) : null;
+  const decomProfile = decomDs ? getCurrentProfile(decomDs.columns, decomDs.rows) : null;
   const workspaceContext = buildWorkspaceIntentContext({
     objects: workspaceState.objects,
     activeContext,
-    profile,
+    profile: decomProfile,
   });
 
   const subTasks = await decomposeQuery(query, workspaceContext, documentIds, memories);

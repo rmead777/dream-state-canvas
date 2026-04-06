@@ -12,7 +12,7 @@ import { useMemo } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useDocuments } from '@/contexts/DocumentContext';
 import { useAuth } from '@/hooks/useAuth';
-import { getActiveDataset } from '@/lib/active-dataset';
+// Dataset info comes from DocumentContext, not a global singleton
 import { getAllTurns } from '@/lib/conversation-memory';
 
 export interface WorkspaceAIContext {
@@ -53,7 +53,7 @@ export interface WorkspaceAIContext {
 
 export function useAIContext(): WorkspaceAIContext {
   const { state } = useWorkspace();
-  const { documents } = useDocuments();
+  const { documents, activeDataset } = useDocuments();
   const { user } = useAuth();
 
   return useMemo(() => {
@@ -79,7 +79,7 @@ export function useAIContext(): WorkspaceAIContext {
       };
     }
 
-    const dataset = getActiveDataset();
+    const dataset = activeDataset;
     const turns = getAllTurns();
 
     return {
@@ -112,5 +112,5 @@ export function useAIContext(): WorkspaceAIContext {
 
       conversationTurnCount: turns.length,
     };
-  }, [state.objects, state.activeContext, documents, user]);
+  }, [state.objects, state.activeContext, documents, activeDataset, user]);
 }
