@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { DocumentRecord, listDocuments, getDocument, extractDataset, updateDocumentData, deleteDocument } from '@/lib/document-store';
 import { CANONICAL_DATASET } from '@/lib/seed-data';
-import { setActiveDataset as setGlobalDataset } from '@/lib/active-dataset';
 import { clearProfileCache, analyzeDataset } from '@/lib/data-analyzer';
 import { invalidateProfileCache } from '@/lib/intent-engine';
 
@@ -62,8 +61,6 @@ export function DocumentProvider({ children }: { children: React.ReactNode }) {
             sourceLabel: spreadsheet.filename,
           };
           setActiveDataset(ds);
-          // Sync global store
-          setGlobalDataset(ds);
           clearProfileCache();
           invalidateProfileCache();
           // Pre-warm the DataProfile cache so Next Moves suggestions are domain-aware immediately
@@ -122,7 +119,6 @@ export function DocumentProvider({ children }: { children: React.ReactNode }) {
     // If we just deleted the active dataset, fall back
     if (activeDataset.sourceDocId === docId) {
       setActiveDataset(fallbackDataset);
-      setGlobalDataset(fallbackDataset);
       clearProfileCache();
       invalidateProfileCache();
     }
@@ -132,8 +128,6 @@ export function DocumentProvider({ children }: { children: React.ReactNode }) {
   const updateActiveDataset = useCallback(async (columns: string[], rows: string[][]) => {
     // Update local state
     setActiveDataset(prev => ({ ...prev, columns, rows }));
-    // Sync global store so AI and all cards see the changes
-    setGlobalDataset({ ...activeDataset, columns, rows });
     clearProfileCache();
     invalidateProfileCache();
     // Persist to Supabase if backed by a document

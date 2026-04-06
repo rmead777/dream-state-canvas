@@ -13,7 +13,6 @@ import { DocumentContextSelector, ContextMode } from './DocumentContextSelector'
 import { QBOStatusPanel } from './QBOStatusPanel';
 import { OutlookStatusPanel } from './OutlookStatusPanel';
 import { useDocuments } from '@/contexts/DocumentContext';
-import { setActiveDataset } from '@/lib/active-dataset';
 import { invalidateProfileCache } from '@/lib/intent-engine';
 import { clearProfileCache } from '@/lib/data-analyzer';
 import {
