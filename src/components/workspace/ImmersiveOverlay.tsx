@@ -26,32 +26,24 @@ export function ImmersiveOverlay() {
   const { state, dispatch } = useWorkspace();
   const { immersiveObjectId } = state.activeContext;
   const [pdfMode, setPdfMode] = useState(false);
+  const [exporting, setExporting] = useState<'excel' | 'word' | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  if (!immersiveObjectId) return null;
-
-  const object = state.objects[immersiveObjectId];
-  if (!object || object.status === 'dissolved') return null;
-
-  const handleClose = () => {
-    dispatch({ type: 'EXIT_IMMERSIVE' });
-  };
-
-  const [exporting, setExporting] = useState<'excel' | 'word' | null>(null);
+  const object = immersiveObjectId ? state.objects[immersiveObjectId] : null;
+  const safeObject = object?.status !== 'dissolved' ? object : null;
 
   const handleExportExcel = useCallback(async () => {
+    if (!safeObject) return;
     setExporting('excel');
     try {
-      // For dataset objects, use live active dataset (full rows) over the card's context
-      const ctx = object.context || {};
-      const isDataset = object.type === 'dataset' || object.type === 'inspector' || ctx.columns;
+      const ctx = safeObject.context || {};
+      const isDataset = safeObject.type === 'dataset' || safeObject.type === 'inspector' || ctx.columns;
       if (isDataset) {
         const liveDs = getActiveDataset();
         const cols = liveDs.columns.length > 0 ? liveDs.columns : ctx.columns || [];
         const rows = liveDs.rows.length > 0 ? liveDs.rows : ctx.rows || [];
-        await exportToExcel(object.title, cols, rows);
+        await exportToExcel(safeObject.title, cols, rows);
       } else {
-        // For non-tabular cards, build a simple 2-column export from sections
         const cols = ['Field', 'Value'];
         const rows: string[][] = [];
         if (ctx.sections) {
@@ -64,25 +56,31 @@ export function ImmersiveOverlay() {
           }
         }
         if (ctx.content) rows.push(['Content', ctx.content]);
-        await exportToExcel(object.title, cols, rows.length > 0 ? rows : [['No tabular data']]);
+        await exportToExcel(safeObject.title, cols, rows.length > 0 ? rows : [['No tabular data']]);
       }
     } finally {
       setExporting(null);
     }
-  }, [object]);
+  }, [safeObject]);
 
   const handleExportWord = useCallback(async () => {
+    if (!safeObject) return;
     setExporting('word');
     try {
-      await exportToWord(object);
+      await exportToWord(safeObject);
     } finally {
       setExporting(null);
     }
-  }, [object]);
+  }, [safeObject]);
 
-  const isDataType = object.type === 'dataset' || object.type === 'inspector' || object.context?.columns;
+  if (!safeObject) return null;
 
-  const typeToken = getObjectTypeToken(object.type);
+  const handleClose = () => {
+    dispatch({ type: 'EXIT_IMMERSIVE' });
+  };
+
+  const isDataType = safeObject.type === 'dataset' || safeObject.type === 'inspector' || safeObject.context?.columns;
+  const typeToken = getObjectTypeToken(safeObject.type);
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col overflow-hidden bg-[linear-gradient(to_bottom,rgba(255,255,255,0.96),rgba(248,248,252,0.96))] backdrop-blur-md animate-[immersive-enter_0.4s_cubic-bezier(0.16,1,0.3,1)_forwards]">
@@ -103,7 +101,7 @@ export function ImmersiveOverlay() {
             {typeToken.label}
           </span>
           <div>
-            <h2 className="text-sm font-semibold text-workspace-text print:text-lg">{object.title}</h2>
+            <h2 className="text-sm font-semibold text-workspace-text print:text-lg">{safeObject.title}</h2>
             <p className="text-[11px] text-workspace-text-secondary/60 print:hidden">Expanded view</p>
           </div>
         </div>
@@ -144,21 +142,21 @@ export function ImmersiveOverlay() {
 
       {/* Immersive content — full width for data, constrained for reading */}
       <div className={`relative z-10 flex-1 overflow-y-auto pt-4 md:pt-6 pb-6 md:pb-8 ${
-        object.type === 'dataset' || object.type === 'inspector' || object.type === 'dataset-edit-preview' || object.type === 'memory-cleanup-preview' || object.context?.isDatasetEdit || object.context?.isMemoryCleanup ? 'px-2 md:px-4' : 'px-4 md:px-8'
+        safeObject.type === 'dataset' || safeObject.type === 'inspector' || safeObject.type === 'dataset-edit-preview' || safeObject.type === 'memory-cleanup-preview' || safeObject.context?.isDatasetEdit || safeObject.context?.isMemoryCleanup ? 'px-2 md:px-4' : 'px-4 md:px-8'
       }`}>
         {/* PDF preview overlay — positioned over content */}
         {pdfMode && (
           <PdfPreviewMode
             contentRef={contentRef}
-            title={object.title}
+            title={safeObject.title}
             onClose={() => setPdfMode(false)}
           />
         )}
         <div
           ref={contentRef}
-          className={`relative ${object.type === 'dataset' || object.type === 'inspector' || object.type === 'dataset-edit-preview' || object.type === 'memory-cleanup-preview' || object.context?.isDatasetEdit || object.context?.isMemoryCleanup ? '' : 'mx-auto max-w-4xl'}`}
+          className={`relative ${safeObject.type === 'dataset' || safeObject.type === 'inspector' || safeObject.type === 'dataset-edit-preview' || safeObject.type === 'memory-cleanup-preview' || safeObject.context?.isDatasetEdit || safeObject.context?.isMemoryCleanup ? '' : 'mx-auto max-w-4xl'}`}
         >
-          <ImmersiveContent object={object} />
+          <ImmersiveContent object={safeObject} />
         </div>
       </div>
     </div>

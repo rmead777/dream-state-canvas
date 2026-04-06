@@ -46,7 +46,7 @@ export const SHERPA_TOOLS = [
           filters: { type: 'array', items: { type: 'object' }, description: 'Array of filter objects for multiple conditions' },
           columns: { type: 'array', items: { type: 'string' }, description: 'Which columns to return' },
           sort: { type: 'object', description: '{ column, direction: "asc"|"desc" }' },
-          limit: { type: 'number', description: 'Max rows to return' },
+          limit: { type: 'number', description: 'Max rows to return (default 100). Use lower limits for previews, omit for full results.' },
           documentId: { type: 'string', description: 'Optional: query a specific uploaded document instead of the active dataset' },
         },
       },
@@ -65,7 +65,7 @@ export const SHERPA_TOOLS = [
           leftKey: { type: 'string', description: 'Column name in the left table to join on' },
           rightKey: { type: 'string', description: 'Column name in the right table to join on' },
           columns: { type: 'array', items: { type: 'string' }, description: 'Columns to include in results (from either table)' },
-          limit: { type: 'number', description: 'Max rows to return (default 30)' },
+          limit: { type: 'number', description: 'Max rows to return (default 100)' },
         },
         required: ['rightDocumentId', 'leftKey', 'rightKey'],
       },
@@ -89,7 +89,7 @@ export const SHERPA_TOOLS = [
         properties: {
           query: { type: 'string', description: 'Text to search for' },
           column: { type: 'string', description: 'Optional: limit search to this column' },
-          limit: { type: 'number', description: 'Max rows (default 20)' },
+          limit: { type: 'number', description: 'Max rows (default 50)' },
         },
         required: ['query'],
       },
@@ -701,7 +701,7 @@ export async function executeTool(
           rowCount: Array.isArray(obj.context?.rows) ? obj.context.rows.length : null,
           columnCount: Array.isArray(obj.context?.columns) ? obj.context.columns.length : null,
           columns: obj.context?.columns || null,
-          rows: Array.isArray(obj.context?.rows) ? obj.context.rows.slice(0, 10) : null,
+          rows: Array.isArray(obj.context?.rows) ? obj.context.rows.slice(0, 30) : null,
           dataQuery: obj.context?.dataQuery || null,
           sections: obj.context?.sections || null,
         });
@@ -713,11 +713,13 @@ export async function executeTool(
           ? await getDataset(args.documentId)
           : getActiveDataset();
         const result = executeDataQuery({ ...args, _dataset: ds });
+        // AI sees up to 100 rows; cards get all rows via executeDataQuery in applyResult
+        const aiLimit = args.limit || 100;
         return JSON.stringify({
           columns: result.columns,
-          rows: result.rows.slice(0, 30),
+          rows: result.rows.slice(0, aiLimit),
           totalMatched: result.totalMatched,
-          truncated: result.truncated || result.rows.length > 30,
+          truncated: result.truncated || result.rows.length > aiLimit,
           sourceLabel: ds.sourceLabel,
         });
       }
@@ -741,7 +743,7 @@ export async function executeTool(
         const { columns, rows } = getActiveDataset();
         const query = String(args.query).toLowerCase();
         const colIdx = args.column ? columns.indexOf(args.column) : -1;
-        const limit = args.limit || 20;
+        const limit = args.limit || 50;
 
         const matches = rows.filter(row => {
           if (colIdx >= 0) return String(row[colIdx] ?? '').toLowerCase().includes(query);
@@ -827,7 +829,7 @@ export async function executeTool(
           outRows = joinedRows.map((row) => indices.map((i) => row[i] ?? null));
         }
 
-        const limit = args.limit || 30;
+        const limit = args.limit || 100;
         return JSON.stringify({
           columns: outColumns,
           rows: outRows.slice(0, limit),
