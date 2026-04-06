@@ -26,6 +26,7 @@ import { RulesEditor } from './RulesEditor';
 import { AITelemetryPanel } from './AITelemetryPanel';
 import MarkdownRenderer from '../objects/MarkdownRenderer';
 import { compressImage } from '@/lib/image-utils';
+import { extractDataset } from '@/lib/document-store';
 
 const RAIL_MIN_WIDTH = 280;
 const RAIL_MAX_WIDTH = 800;
@@ -331,6 +332,8 @@ export function SherpaRail() {
 
     // Materialize a new object and immediately enter immersive
     const objId = `doc-view-${doc.id.slice(0, 8)}-${Date.now()}`;
+    // Extract columns/rows from the document's structured_data
+    const dataset = isSpreadsheet ? extractDataset(doc as any) : null;
     dispatch({
       type: 'MATERIALIZE_OBJECT',
       payload: {
@@ -340,7 +343,11 @@ export function SherpaRail() {
         pinned: false,
         origin: { type: 'user-query' as const, query: `Open ${doc.filename}` },
         relationships: [],
-        context: { sourceDocId: doc.id, structured_data: doc.structured_data },
+        context: {
+          sourceDocId: doc.id,
+          columns: dataset?.columns || [],
+          rows: dataset?.rows || [],
+        },
         position: { zone: 'primary' as const, order: 0 },
       },
     });

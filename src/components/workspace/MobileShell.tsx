@@ -16,6 +16,7 @@ import { OutlookStatusPanel } from './OutlookStatusPanel';
 import { MemoryPanel } from './MemoryPanel';
 import MarkdownRenderer from '../objects/MarkdownRenderer';
 import { compressImage } from '@/lib/image-utils';
+import { extractDataset } from '@/lib/document-store';
 import {
   checkPassphrase, unlockAdmin, lockAdmin, isAdminUnlocked,
   getAdminSettings, setAdminModel, setAdminMaxTokens, setAdminContextWindow,
@@ -175,6 +176,7 @@ export function MobileShell() {
       return;
     }
     const objId = `doc-view-${doc.id.slice(0, 8)}-${Date.now()}`;
+    const dataset = isSpreadsheet ? extractDataset(doc as any) : null;
     dispatch({
       type: 'MATERIALIZE_OBJECT',
       payload: {
@@ -184,7 +186,11 @@ export function MobileShell() {
         pinned: false,
         origin: { type: 'user-query' as const, query: `Open ${doc.filename}` },
         relationships: [],
-        context: { sourceDocId: doc.id, structured_data: doc.structured_data },
+        context: {
+          sourceDocId: doc.id,
+          columns: dataset?.columns || [],
+          rows: dataset?.rows || [],
+        },
         position: { zone: 'primary' as const, order: 0 },
       },
     });
