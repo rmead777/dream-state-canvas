@@ -263,7 +263,9 @@ export async function syncEmails(
     let url = `/me/mailFolders/${folderId}/messages?$top=${PAGE_SIZE}&$skip=${offset}&$orderby=receivedDateTime desc&$select=id,subject,body,bodyPreview,from,toRecipients,receivedDateTime,isRead,hasAttachments,importance`;
 
     if (afterDate) {
-      url += `&$filter=receivedDateTime gt ${afterDate}`;
+      // Graph API requires full ISO 8601 with timezone — ensure Z suffix
+      const isoDate = afterDate.endsWith('Z') ? afterDate : new Date(afterDate).toISOString();
+      url += `&$filter=receivedDateTime gt ${isoDate}`;
     }
 
     const result = await graphFetch<{ value: any[] }>(url);
