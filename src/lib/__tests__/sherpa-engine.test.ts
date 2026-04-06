@@ -1,12 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { generateSuggestions } from '../sherpa-engine';
 import { analyzeDataset, clearProfileCache } from '../data-analyzer';
-import { setActiveDataset } from '../active-dataset';
 import type { WorkspaceObject, ActiveContext } from '../workspace-types';
 
 vi.mock('@/hooks/useAI', () => ({
   callAI: vi.fn().mockResolvedValue(null),
 }));
+
+const TEST_COLUMNS = ['Vendor', 'Tier', 'Balance', 'Region'];
+const TEST_ROWS = [
+  ['Acme', 'Tier 1', '$100', 'East'],
+  ['Bravo', 'Tier 2', '$50', 'West'],
+  ['Charlie', 'Tier 1', '$75', 'South'],
+];
 
 function makeObject(overrides: Partial<WorkspaceObject> = {}): WorkspaceObject {
   return {
@@ -18,12 +24,8 @@ function makeObject(overrides: Partial<WorkspaceObject> = {}): WorkspaceObject {
     origin: { type: 'user-query', query: 'show vendors' },
     relationships: [],
     context: {
-      columns: ['Vendor', 'Tier', 'Balance', 'Region'],
-      rows: [
-        ['Acme', 'Tier 1', '$100', 'East'],
-        ['Bravo', 'Tier 2', '$50', 'West'],
-        ['Charlie', 'Tier 1', '$75', 'South'],
-      ],
+      columns: TEST_COLUMNS,
+      rows: TEST_ROWS,
       view: {
         sortBy: 'Balance',
         sortDirection: 'desc',
@@ -47,28 +49,18 @@ const activeContext: ActiveContext = {
 describe('generateSuggestions', () => {
   beforeEach(async () => {
     clearProfileCache();
-    setActiveDataset({
-      columns: ['Vendor', 'Tier', 'Balance', 'Region'],
-      rows: [
-        ['Acme', 'Tier 1', '$100', 'East'],
-        ['Bravo', 'Tier 2', '$50', 'West'],
-        ['Charlie', 'Tier 1', '$75', 'South'],
-      ],
-      sourceDocId: null,
-      sourceLabel: 'test-dataset',
-    });
-    await analyzeDataset(
-      ['Vendor', 'Tier', 'Balance', 'Region'],
-      [
-        ['Acme', 'Tier 1', '$100', 'East'],
-        ['Bravo', 'Tier 2', '$50', 'West'],
-        ['Charlie', 'Tier 1', '$75', 'South'],
-      ]
-    );
+    // No global singleton — pass data directly to generateSuggestions
+    await analyzeDataset(TEST_COLUMNS, TEST_ROWS);
   });
 
   it('prefers refinement suggestions for the focused object', () => {
-    const suggestions = generateSuggestions({ 'inspector-1': makeObject() }, activeContext);
+    // generateSuggestions now accepts data columns/rows as params
+    const suggestions = generateSuggestions(
+      { 'inspector-1': makeObject() },
+      activeContext,
+      TEST_COLUMNS,
+      TEST_ROWS,
+    );
     expect(suggestions.some((suggestion) => suggestion.query.includes('only Tier 1'))).toBe(true);
     expect(suggestions.some((suggestion) => suggestion.query.includes('bar chart'))).toBe(true);
   });

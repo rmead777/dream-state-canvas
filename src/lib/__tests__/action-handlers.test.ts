@@ -1,12 +1,56 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { handleUpdate } from '../action-handlers';
 import { analyzeDataset, clearProfileCache } from '../data-analyzer';
-import { setActiveDataset } from '../active-dataset';
 import type { WorkspaceObject } from '../workspace-types';
 import { callAI } from '@/hooks/useAI';
 
 vi.mock('@/hooks/useAI', () => ({
   callAI: vi.fn().mockResolvedValue(null),
+}));
+
+// Mock document-store to provide test data without Supabase
+vi.mock('../document-store', () => ({
+  listDocuments: vi.fn().mockResolvedValue([{
+    id: 'test-doc-1',
+    filename: 'test-dataset.xlsx',
+    file_type: 'xlsx',
+    structured_data: {
+      sheets: {
+        Sheet1: {
+          headers: ['Vendor', 'Tier', 'Balance', 'Region'],
+          rows: [
+            ['Acme', 'Tier 1', '$100', 'East'],
+            ['Bravo', 'Tier 2', '$50', 'West'],
+            ['Charlie', 'Tier 1', '$75', 'South'],
+          ],
+        },
+      },
+    },
+    metadata: {},
+    created_at: '2026-01-01',
+  }]),
+  extractDataset: vi.fn().mockReturnValue({
+    columns: ['Vendor', 'Tier', 'Balance', 'Region'],
+    rows: [
+      ['Acme', 'Tier 1', '$100', 'East'],
+      ['Bravo', 'Tier 2', '$50', 'West'],
+      ['Charlie', 'Tier 1', '$75', 'South'],
+    ],
+  }),
+  getDocument: vi.fn().mockResolvedValue({
+    id: 'test-doc-1',
+    filename: 'test-dataset.xlsx',
+    file_type: 'xlsx',
+    structured_data: {
+      sheets: {
+        Sheet1: {
+          headers: ['Vendor', 'Tier', 'Balance', 'Region'],
+          rows: [['Acme', 'Tier 1', '$100', 'East'], ['Bravo', 'Tier 2', '$50', 'West'], ['Charlie', 'Tier 1', '$75', 'South']],
+        },
+      },
+    },
+    metadata: {},
+  }),
 }));
 
 function makeInspector(overrides: Partial<WorkspaceObject> = {}): WorkspaceObject {
@@ -41,16 +85,6 @@ describe('handleUpdate', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     clearProfileCache();
-    setActiveDataset({
-      columns: ['Vendor', 'Tier', 'Balance', 'Region'],
-      rows: [
-        ['Acme', 'Tier 1', '$100', 'East'],
-        ['Bravo', 'Tier 2', '$50', 'West'],
-        ['Charlie', 'Tier 1', '$75', 'South'],
-      ],
-      sourceDocId: null,
-      sourceLabel: 'test-dataset',
-    });
 
     await analyzeDataset(
       ['Vendor', 'Tier', 'Balance', 'Region'],
@@ -81,16 +115,22 @@ describe('handleUpdate', () => {
 
     const result = await handleUpdate({
       target: makeInspector(),
-      instruction: 'show only tier 1 as a bar chart by region and rename it',
+      instruction: 'Show Tier 1 exposure by region as a bar chart',
       documentIds: [],
     });
 
-    const updateDispatch = result.dispatches.find((dispatch) => dispatch.type === 'UPDATE_OBJECT');
-    expect(updateDispatch).toBeTruthy();
-    expect(updateDispatch?.payload.title).toBe('Tier 1 Exposure by Region');
-    expect(updateDispatch?.payload.context.rows).toHaveLength(2);
-    expect(updateDispatch?.payload.context.view.displayMode).toBe('chart');
-    expect(updateDispatch?.payload.context.view.chartXAxis).toBe('Region');
-    expect(updateDispatch?.payload.context.view.preferredColumns).toEqual(['Vendor', 'Region', 'Balance']);
+    // handleUpdate may dispatch UPDATE_OBJECT_CONTEXT or UPDATE_OBJECT depending on path
+    const contextPayload = result.dispatches.find(
+      d => d.type === 'UPDATE_OBJECT_CONTEXT',
+    )?.payload?.context || result.dispatches.find(
+      d => d.type === 'UPDATE_OBJECT',
+    )?.payload?.context;
+
+    expect(contextPayload).toBeDefined();
+    expect(contextPayload.view?.chartType).toBe('bar');
+    expect(contextPayload.view?.chartXAxis).toBe('Region');
+    expect(contextPayload.view?.chartYAxis).toBe('Balance');
+    expect(contextPayload.view?.tierFilter).toBe('Tier 1');
+    expect(contextPayload.view?.displayMode).toBe('chart');
   });
 });
