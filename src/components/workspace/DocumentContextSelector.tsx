@@ -144,13 +144,18 @@ export function DocumentContextSelector({
                     className="h-3 w-3 rounded border-workspace-border text-workspace-accent focus:ring-workspace-accent/20 disabled:opacity-30"
                   />
                   <span className="text-[10px]">
-                    {FILE_TYPE_ICONS[doc.file_type] || '📁'}
+                    {(doc.metadata as any)?.isScratchpad ? '🧠' : (FILE_TYPE_ICONS[doc.file_type] || '📁')}
                   </span>
                   <span className="text-[10px] text-workspace-text truncate flex-1">
                     {doc.filename}
                   </span>
+                  {(doc.metadata as any)?.isScratchpad && (
+                    <span className="text-[7px] font-medium uppercase tracking-wider text-purple-500 bg-purple-50 px-1 py-0.5 rounded shrink-0">
+                      AI Scratchpad
+                    </span>
+                  )}
                   <span className="text-[8px] text-workspace-text-secondary/30 uppercase shrink-0">
-                    {doc.file_type}
+                    {(doc.metadata as any)?.isScratchpad ? '' : doc.file_type}
                   </span>
                 </label>
               );
