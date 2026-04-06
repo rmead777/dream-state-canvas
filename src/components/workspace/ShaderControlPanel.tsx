@@ -48,6 +48,16 @@ const GROUPS: { title: string; sliders: SliderDef[] }[] = [
       { key: 'decay', label: 'Trail Decay', icon: 'T' },
     ],
   },
+  {
+    title: 'Shape',
+    sliders: [
+      { key: 'scale', label: 'Zoom / Scale', icon: 'Z' },
+      { key: 'turbulence', label: 'Turbulence', icon: 'W' },
+      { key: 'coverage', label: 'Coverage', icon: 'C' },
+      { key: 'vividness', label: 'Vividness', icon: 'V' },
+      { key: 'bloomRadius', label: 'Bloom Radius', icon: 'R' },
+    ],
+  },
 ];
 
 export function ShaderControlPanel() {

@@ -19,6 +19,12 @@ export interface ShaderSettings {
   emission: number;
   mouseReactivity: number;
   decay: number;
+  // Shape
+  scale: number;
+  turbulence: number;
+  coverage: number;
+  vividness: number;
+  bloomRadius: number;
 }
 
 export const DEFAULT_SHADER_SETTINGS: ShaderSettings = {
@@ -31,6 +37,11 @@ export const DEFAULT_SHADER_SETTINGS: ShaderSettings = {
   emission: 0.5,
   mouseReactivity: 0.5,
   decay: 0.5,
+  scale: 0.5,
+  turbulence: 0.5,
+  coverage: 0.5,
+  vividness: 0.5,
+  bloomRadius: 0.5,
 };
 
 const STORAGE_KEY = 'shader-settings';
@@ -84,6 +95,7 @@ const BUILT_IN_PRESETS: ShaderPreset[] = [
       hue: 0.62, saturation: 0.8, brightness: 0.35,
       speed: 0.3, intensity: 0.65, diffusion: 0.7,
       emission: 0.4, mouseReactivity: 0.6, decay: 0.3,
+      scale: 0.3, turbulence: 0.7, coverage: 0.6, vividness: 0.65, bloomRadius: 0.55,
     },
   },
   {
@@ -93,6 +105,7 @@ const BUILT_IN_PRESETS: ShaderPreset[] = [
       hue: 0.08, saturation: 0.55, brightness: 0.55,
       speed: 0.4, intensity: 0.55, diffusion: 0.45,
       emission: 0.7, mouseReactivity: 0.65, decay: 0.45,
+      scale: 0.45, turbulence: 0.6, coverage: 0.55, vividness: 0.75, bloomRadius: 0.6,
     },
   },
   {
@@ -102,6 +115,7 @@ const BUILT_IN_PRESETS: ShaderPreset[] = [
       hue: 0.5, saturation: 0.2, brightness: 0.6,
       speed: 0.2, intensity: 0.25, diffusion: 0.3,
       emission: 0.15, mouseReactivity: 0.2, decay: 0.7,
+      scale: 0.5, turbulence: 0.2, coverage: 0.3, vividness: 0.2, bloomRadius: 0.3,
     },
   },
   {
@@ -111,6 +125,17 @@ const BUILT_IN_PRESETS: ShaderPreset[] = [
       hue: 0.38, saturation: 0.75, brightness: 0.45,
       speed: 0.55, intensity: 0.7, diffusion: 0.6,
       emission: 0.8, mouseReactivity: 0.7, decay: 0.35,
+      scale: 0.55, turbulence: 0.65, coverage: 0.7, vividness: 0.8, bloomRadius: 0.65,
+    },
+  },
+  {
+    name: 'Vivid Currents',
+    builtIn: true,
+    settings: {
+      hue: 0.5, saturation: 0.85, brightness: 0.4,
+      speed: 0.6, intensity: 0.7, diffusion: 0.35,
+      emission: 0.75, mouseReactivity: 0.7, decay: 0.25,
+      scale: 0.4, turbulence: 0.8, coverage: 0.8, vividness: 0.9, bloomRadius: 0.7,
     },
   },
 ];

@@ -50,6 +50,11 @@ uniform float u_decay;
 uniform float u_hue;
 uniform float u_saturation;
 uniform float u_brightness;
+uniform float u_scale;
+uniform float u_turbulence;
+uniform float u_coverage;
+uniform float u_vividness;
+uniform float u_bloom_radius;
 
 in  vec2 v_uv;
 out vec4 out_color;
@@ -126,13 +131,13 @@ vec3 hsl2rgb(vec3 hsl) {
 void main() {
   vec2 px = 1.0 / u_resolution;
 
-  // Two-octave flow field — slow drift, organic feel
+  // Flow field — scale controls zoom, turbulence controls warp depth
   float t        = u_time * u_speed;
-  vec2  uv2      = v_uv * 2.8;
+  vec2  uv2      = v_uv * u_scale;
   float nx       = snoise(uv2 + vec2(0.0,        t));
   float ny       = snoise(uv2 + vec2(5.2, 1.3) - vec2(0.0, t * 0.75));
-  float nx2      = snoise(uv2 * 0.6 + vec2(17.4, t * 0.4)) * 0.4;
-  float ny2      = snoise(uv2 * 0.6 + vec2(8.1, 22.3 + t * 0.4)) * 0.4;
+  float nx2      = snoise(uv2 * 0.6 + vec2(17.4, t * 0.4)) * u_turbulence;
+  float ny2      = snoise(uv2 * 0.6 + vec2(8.1, 22.3 + t * 0.4)) * u_turbulence;
   vec2  flow     = vec2(nx + nx2, ny + ny2) * u_intensity;
 
   // Advect: sample previous frame shifted by flow
@@ -171,18 +176,21 @@ void main() {
   hsl.y = clamp(hsl.y * (u_saturation * 2.0), 0.0, 1.0); // scale saturation
   inject_c = hsl2rgb(hsl);
 
-  // Soft thresholded emission — only where noise crests, never uniform
+  // Thresholded emission — coverage controls how much of the noise field emits
+  float thresh_lo = 0.82 - u_coverage * 0.7;  // coverage 0→0.82 (rare), 1→0.12 (everywhere)
+  float thresh_hi = thresh_lo + 0.3;
   float emit =
-    smoothstep(0.52, 0.82, n1) * 0.038 * u_emission +
-    smoothstep(0.55, 0.80, n2) * 0.028 * u_emission;
+    smoothstep(thresh_lo, thresh_hi, n1) * 0.038 * u_emission +
+    smoothstep(thresh_lo + 0.03, thresh_hi, n2) * 0.028 * u_emission;
 
-  // Mouse proximity bloom
+  // Mouse proximity bloom — radius is tunable
   vec2  mouse_uv = u_mouse / u_resolution;
   mouse_uv.y     = 1.0 - mouse_uv.y;
   float m_dist   = length(v_uv - mouse_uv);
-  emit += smoothstep(0.22, 0.0, m_dist) * u_mouse_react;
+  emit += smoothstep(u_bloom_radius, 0.0, m_dist) * u_mouse_react;
 
-  prev.rgb = mix(prev.rgb, inject_c, clamp(emit, 0.0, 0.12));
+  // Vividness controls how much injected color can punch through
+  prev.rgb = mix(prev.rgb, inject_c, clamp(emit, 0.0, u_vividness));
 
   out_color = clamp(prev, 0.0, 1.0);
 }
@@ -325,6 +333,11 @@ export function BackgroundShader() {
       hue:        gl.getUniformLocation(simProg, 'u_hue'),
       saturation: gl.getUniformLocation(simProg, 'u_saturation'),
       brightness: gl.getUniformLocation(simProg, 'u_brightness'),
+      scale:      gl.getUniformLocation(simProg, 'u_scale'),
+      turbulence: gl.getUniformLocation(simProg, 'u_turbulence'),
+      coverage:   gl.getUniformLocation(simProg, 'u_coverage'),
+      vividness:  gl.getUniformLocation(simProg, 'u_vividness'),
+      bloomRadius:gl.getUniformLocation(simProg, 'u_bloom_radius'),
     }
     const dispUniforms = {
       sim: gl.getUniformLocation(dispProg, 'u_sim'),
@@ -452,6 +465,11 @@ export function BackgroundShader() {
       gl.uniform1f(simUniforms.hue,        s.hue)
       gl.uniform1f(simUniforms.saturation, s.saturation)
       gl.uniform1f(simUniforms.brightness, s.brightness)
+      gl.uniform1f(simUniforms.scale,      lerp(1.0,   6.0,   s.scale))
+      gl.uniform1f(simUniforms.turbulence, lerp(0.0,   1.0,   s.turbulence))
+      gl.uniform1f(simUniforms.coverage,   s.coverage)
+      gl.uniform1f(simUniforms.vividness,  lerp(0.05,  0.6,   s.vividness))
+      gl.uniform1f(simUniforms.bloomRadius,lerp(0.05,  0.5,   s.bloomRadius))
 
       gl.drawArrays(gl.TRIANGLES, 0, 6)
 
