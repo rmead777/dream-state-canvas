@@ -8,7 +8,6 @@ import { useDocuments } from '@/contexts/DocumentContext';
 import { useAI } from '@/hooks/useAI';
 import MarkdownRenderer from '@/components/objects/MarkdownRenderer';
 import { getDisplayColumns, filterRowToColumns } from '@/lib/smart-columns';
-import { getActiveDataset } from '@/lib/active-dataset';
 import { getObjectViewState } from '@/lib/workspace-intelligence';
 import { TableVisualization } from './TableVisualization';
 
@@ -27,19 +26,15 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
   const d = object.context;
   const persistedView = getObjectViewState(d);
 
-  // Use the card's own data if it has any. Only fall back to the global
-  // active dataset for cards that genuinely have NO data of their own.
-  // This prevents the vendor tracker from bleeding into scratchpads,
-  // analysis cards, or any card backed by a specific document.
-  const liveDs = getActiveDataset();
-  const hasOwnData = d.columns?.length > 0 && d.rows?.length > 0;
+  // Cards use their own data. No global fallback. If a card has no data,
+  // that's a bug in card creation — not something rendering should paper over.
   const allColumns = useMemo<string[]>(
-    () => hasOwnData ? d.columns : (liveDs.columns || []),
-    [hasOwnData, d.columns, liveDs.columns]
+    () => d.columns || [],
+    [d.columns]
   );
   const sourceRows = useMemo<string[][]>(
-    () => hasOwnData ? d.rows : (liveDs.rows || []),
-    [hasOwnData, d.rows, liveDs.rows]
+    () => d.rows || [],
+    [d.rows]
   );
 
   // Editable state — only used in immersive mode
