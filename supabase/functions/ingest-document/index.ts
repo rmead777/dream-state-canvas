@@ -89,7 +89,7 @@ async function aiAnalyzeSpreadsheet(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
+      model: "google/gemini-3-flash-preview",
       messages: [
         {
           role: "system",
@@ -216,7 +216,7 @@ Return ONLY JSON, no markdown fences.`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: isImage || isPdf ? "google/gemini-2.5-flash" : "google/gemini-2.5-flash-lite",
+      model: isImage || isPdf ? "google/gemini-3-flash-preview" : "google/gemini-2.5-flash-lite",
       messages,
       max_tokens: 8192,
     }),
@@ -264,7 +264,7 @@ async function aiExtractTableFromImage(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
+      model: "google/gemini-3-flash-preview",
       max_tokens: 8192,
       messages: [
         {
@@ -399,7 +399,7 @@ serve(async (req) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
+          model: "google/gemini-3-flash-preview",
           messages: [
             {
               role: "system",
