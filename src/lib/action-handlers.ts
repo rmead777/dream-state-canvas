@@ -10,7 +10,8 @@
 import { z } from 'zod';
 import { WorkspaceObject } from './workspace-types';
 import { callAI } from '@/hooks/useAI';
-import { getActiveDataset, getDataset } from './active-dataset';
+import { getDataset } from './active-dataset';
+import { listDocuments, extractDataset } from './document-store';
 import { previewRows, alertRows, metricAggregate, comparisonPairs } from './data-slicer';
 import { executeFusion } from './fusion-executor';
 import { getFusionOutputType } from './fusion-rules';
@@ -36,6 +37,20 @@ export interface DispatchInstruction {
 export interface HandlerResult {
   dispatches: DispatchInstruction[];
   toasts?: { title: string; description?: string }[];
+}
+
+// ─── Dataset Resolution ───────────────────────────────────────────────────
+
+/** Get the first non-scratchpad spreadsheet from uploaded documents. */
+async function getFirstSpreadsheet(): Promise<{ columns: string[]; rows: string[][]; sourceLabel: string; sourceDocId: string } | null> {
+  const docs = await listDocuments();
+  const spreadsheet = docs.find(
+    d => (d.file_type === 'xlsx' || d.file_type === 'csv') && d.structured_data && !(d.metadata as any)?.isScratchpad
+  );
+  if (!spreadsheet) return null;
+  const dataset = extractDataset(spreadsheet);
+  if (!dataset) return null;
+  return { columns: dataset.columns, rows: dataset.rows, sourceLabel: spreadsheet.filename, sourceDocId: spreadsheet.id };
 }
 
 // ─── Update Handler ─────────────────────────────────────────────────────────
@@ -171,7 +186,11 @@ export async function handleUpdate({ target, instruction, documentIds, dataQuery
     };
   }
 
-  const { columns, rows } = getActiveDataset();
+  // Resolve dataset from the card's own context or first available document
+  const docId = target.context?.sourceDocId || target.context?.dataQuery?.documentId;
+  const ds = docId ? await getDataset(docId) : await getFirstSpreadsheet();
+  const columns = ds?.columns || target.context?.columns || [];
+  const rows = ds?.rows || target.context?.rows || [];
   const { getCurrentProfile } = await import('./data-analyzer');
   const profile = getCurrentProfile(columns, rows);
 
@@ -675,7 +694,9 @@ interface RefineRulesParams {
 
 export async function handleRefineRules({ feedback, objects }: RefineRulesParams): Promise<HandlerResult> {
   const updatedProfile = await refineDataRules(feedback);
-  const { columns, rows } = getActiveDataset();
+  const refineDs = await getFirstSpreadsheet();
+  const columns = refineDs?.columns || [];
+  const rows = refineDs?.rows || [];
   const dispatches: DispatchInstruction[] = [];
   const dataObjects = Object.values(objects).filter(
     o => ['metric', 'inspector', 'alert', 'comparison'].includes(o.type) && o.status !== 'dissolved'
