@@ -7,14 +7,54 @@
  */
 import { WorkspaceObject, WorkspaceState } from './workspace-types';
 import { executeDataQuery } from './data-query';
-import { getActiveDataset, getDataset } from './active-dataset';
-import { getDocument, createScratchpad } from './document-store';
+import { getDataset } from './active-dataset';
+import { getDocument, createScratchpad, listDocuments, extractDataset } from './document-store';
 import { createMemory, deleteMemory, getMemories } from './memory-store';
 import { retrieveRelevantMemories, formatMemoriesForPrompt, determineWorkspaceState } from './memory-retriever';
 import { supabase } from '@/integrations/supabase/client';
 import { createTrigger as saveTrigger } from './automation-triggers';
 import { fetchQBOData, clearQBOCache, type QBODataType } from './quickbooks-store';
 import { getStoredEmails, searchStoredEmails, getStoredEmail, syncEmails, isOutlookConnected } from './email-store';
+
+// ─── Dataset Resolution Helper ────────────────────────────────────────────
+// No global "active dataset." Every tool resolves its data source explicitly.
+
+interface ResolvedDataset {
+  columns: string[];
+  rows: string[][];
+  sourceLabel: string;
+  sourceDocId: string | null;
+}
+
+/**
+ * Resolve a dataset from a documentId, or fall back to the first
+ * non-scratchpad spreadsheet in the documents table.
+ * Returns null if nothing is found — callers must handle this.
+ */
+async function resolveDataset(documentId?: string): Promise<ResolvedDataset | null> {
+  // If a specific document is requested, fetch it
+  if (documentId) {
+    const ds = await getDataset(documentId);
+    return ds;
+  }
+
+  // No documentId — find the first non-scratchpad spreadsheet
+  const docs = await listDocuments();
+  const spreadsheet = docs.find(
+    d => (d.file_type === 'xlsx' || d.file_type === 'csv') && d.structured_data && !(d.metadata as any)?.isScratchpad
+  );
+  if (!spreadsheet) return null;
+
+  const dataset = extractDataset(spreadsheet);
+  if (!dataset) return null;
+
+  return {
+    columns: dataset.columns,
+    rows: dataset.rows,
+    sourceLabel: spreadsheet.filename,
+    sourceDocId: spreadsheet.id,
+  };
+}
 
 // ─── Tool Definitions (OpenAI function-calling format) ──────────────────────
 
@@ -83,13 +123,14 @@ export const SHERPA_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'searchData',
-      description: 'Full-text search across all dataset rows. Returns matching rows.',
+      description: 'Full-text search across dataset rows. Returns matching rows. Pass documentId to search a specific document.',
       parameters: {
         type: 'object',
         properties: {
           query: { type: 'string', description: 'Text to search for' },
           column: { type: 'string', description: 'Optional: limit search to this column' },
           limit: { type: 'number', description: 'Max rows (default 200). Omit for broad search.' },
+          documentId: { type: 'string', description: 'Document ID to search (from UPLOADED DOCUMENTS list).' },
         },
         required: ['query'],
       },
@@ -708,14 +749,13 @@ export async function executeTool(
       }
 
       case 'queryDataset': {
-        // Support optional documentId for multi-document queries
-        const ds = args.documentId
-          ? await getDataset(args.documentId)
-          : null;
-        if (args.documentId && !ds) {
-          return JSON.stringify({ error: `Document "${args.documentId}" not found. Check the UPLOADED DOCUMENTS list for valid IDs.` });
+        const ds = await resolveDataset(args.documentId);
+        if (!ds) {
+          return JSON.stringify({ error: args.documentId
+            ? `Document "${args.documentId}" not found. Check the UPLOADED DOCUMENTS list for valid IDs.`
+            : 'No documents uploaded. Upload a spreadsheet first.' });
         }
-        const result = executeDataQuery({ ...args, _dataset: ds || getActiveDataset() });
+        const result = executeDataQuery({ ...args, _dataset: ds });
         // No artificial cap — return all matched rows so the AI can analyze the full dataset.
         // For very large datasets (500+), truncate and tell the AI to use filters/limits.
         const MAX_AI_ROWS = 500;
@@ -747,7 +787,11 @@ export async function executeTool(
       }
 
       case 'searchData': {
-        const { columns, rows } = getActiveDataset();
+        const searchDs = await resolveDataset(args.documentId);
+        if (!searchDs) {
+          return JSON.stringify({ error: 'No documents available to search.' });
+        }
+        const { columns, rows } = searchDs;
         const query = String(args.query).toLowerCase();
         const colIdx = args.column ? columns.indexOf(args.column) : -1;
         const limit = args.limit || 200;
@@ -1107,7 +1151,9 @@ export async function executeTool(
 
       case 'runSimulation': {
         const { metric, scenarioA, scenarioB, periods = 6, periodLabel = 'months' } = args;
-        const { columns, rows } = getActiveDataset();
+        const simDs = await resolveDataset(args.documentId);
+        const columns = simDs?.columns || [];
+        const rows = simDs?.rows || [];
         const colIdx = columns.findIndex((c: string) => c.toLowerCase().includes(metric.toLowerCase()));
         const baseValues: number[] = colIdx >= 0
           ? rows.map((r: any[]) => parseFloat(String(r[colIdx] ?? '0').replace(/[^0-9.-]/g, '')) || 0).filter((v: number) => !isNaN(v))
@@ -1149,14 +1195,12 @@ export async function executeTool(
       }
 
       case 'editDataset': {
-        // Get the target dataset
-        const resolvedDs = args.documentId
-          ? await getDataset(args.documentId)
-          : null;
-        if (args.documentId && !resolvedDs) {
-          return JSON.stringify({ error: `Document "${args.documentId}" not found.` });
+        const targetDs = await resolveDataset(args.documentId);
+        if (!targetDs) {
+          return JSON.stringify({ error: args.documentId
+            ? `Document "${args.documentId}" not found.`
+            : 'No documents available to edit.' });
         }
-        const targetDs = resolvedDs || getActiveDataset();
 
         const cols = [...targetDs.columns];
         const rows = targetDs.rows.map(r => [...r]);
@@ -1360,13 +1404,13 @@ export async function executeTool(
       }
 
       case 'computeStats': {
-        const statsDs = args.documentId
-          ? await getDataset(args.documentId)
-          : null;
-        if (args.documentId && !statsDs) {
-          return JSON.stringify({ error: `Document "${args.documentId}" not found.` });
+        const statsDs = await resolveDataset(args.documentId);
+        if (!statsDs) {
+          return JSON.stringify({ error: args.documentId
+            ? `Document "${args.documentId}" not found.`
+            : 'No documents available for stats.' });
         }
-        const { columns, rows } = statsDs || getActiveDataset();
+        const { columns, rows } = statsDs;
         const targetCols = (args.columns as string[]) || columns;
 
         // Helper: parse numeric values from cells
