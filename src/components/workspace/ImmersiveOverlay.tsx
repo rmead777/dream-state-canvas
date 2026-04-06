@@ -14,7 +14,6 @@ import { MemoryCleanupPreview } from '@/components/objects/MemoryCleanupPreview'
 import { PdfPreviewMode } from '@/components/workspace/PdfPreviewMode';
 import { getObjectTypeToken } from '@/lib/design-tokens';
 import { exportToExcel, exportToWord } from '@/lib/export-utils';
-import { getActiveDataset } from '@/lib/active-dataset';
 import MarkdownRenderer from '@/components/objects/MarkdownRenderer';
 
 /**
@@ -39,11 +38,8 @@ export function ImmersiveOverlay() {
       const ctx = safeObject.context || {};
       const isDataset = safeObject.type === 'dataset' || safeObject.type === 'inspector' || ctx.columns;
       if (isDataset) {
-        // Use card's own data first. Only fall back to active dataset if card has none.
-        const hasOwnData = ctx.columns?.length > 0 && ctx.rows?.length > 0;
-        const cols = hasOwnData ? ctx.columns : getActiveDataset().columns || [];
-        const rows = hasOwnData ? ctx.rows : getActiveDataset().rows || [];
-        await exportToExcel(safeObject.title, cols, rows);
+        // Export the card's own data. No global fallback.
+        await exportToExcel(safeObject.title, ctx.columns || [], ctx.rows || []);
       } else {
         const cols = ['Field', 'Value'];
         const rows: string[][] = [];
