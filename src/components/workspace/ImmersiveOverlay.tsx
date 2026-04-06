@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { DocumentReader } from '@/components/objects/DocumentReader';
 import { DatasetView } from '@/components/objects/DatasetView';
@@ -13,6 +13,8 @@ import { DatasetEditPreview } from '@/components/objects/DatasetEditPreview';
 import { MemoryCleanupPreview } from '@/components/objects/MemoryCleanupPreview';
 import { PdfPreviewMode } from '@/components/workspace/PdfPreviewMode';
 import { getObjectTypeToken } from '@/lib/design-tokens';
+import { exportToExcel, exportToWord } from '@/lib/export-utils';
+import { getActiveDataset } from '@/lib/active-dataset';
 import MarkdownRenderer from '@/components/objects/MarkdownRenderer';
 
 /**
@@ -34,6 +36,51 @@ export function ImmersiveOverlay() {
   const handleClose = () => {
     dispatch({ type: 'EXIT_IMMERSIVE' });
   };
+
+  const [exporting, setExporting] = useState<'excel' | 'word' | null>(null);
+
+  const handleExportExcel = useCallback(async () => {
+    setExporting('excel');
+    try {
+      // For dataset objects, use live active dataset (full rows) over the card's context
+      const ctx = object.context || {};
+      const isDataset = object.type === 'dataset' || object.type === 'inspector' || ctx.columns;
+      if (isDataset) {
+        const liveDs = getActiveDataset();
+        const cols = liveDs.columns.length > 0 ? liveDs.columns : ctx.columns || [];
+        const rows = liveDs.rows.length > 0 ? liveDs.rows : ctx.rows || [];
+        await exportToExcel(object.title, cols, rows);
+      } else {
+        // For non-tabular cards, build a simple 2-column export from sections
+        const cols = ['Field', 'Value'];
+        const rows: string[][] = [];
+        if (ctx.sections) {
+          for (const s of ctx.sections) {
+            if (s.title) rows.push([s.title, s.content || '']);
+            if (s.items) for (const item of s.items) {
+              const text = typeof item === 'string' ? item : item.label || item.text || '';
+              rows.push(['', text]);
+            }
+          }
+        }
+        if (ctx.content) rows.push(['Content', ctx.content]);
+        await exportToExcel(object.title, cols, rows.length > 0 ? rows : [['No tabular data']]);
+      }
+    } finally {
+      setExporting(null);
+    }
+  }, [object]);
+
+  const handleExportWord = useCallback(async () => {
+    setExporting('word');
+    try {
+      await exportToWord(object);
+    } finally {
+      setExporting(null);
+    }
+  }, [object]);
+
+  const isDataType = object.type === 'dataset' || object.type === 'inspector' || object.context?.columns;
 
   const typeToken = getObjectTypeToken(object.type);
 
@@ -61,6 +108,22 @@ export function ImmersiveOverlay() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportExcel}
+            disabled={exporting === 'excel'}
+            className="workspace-pill rounded-full px-3 py-1.5 text-[10px] text-workspace-text-secondary hover:text-green-600 transition-colors print:hidden disabled:opacity-50"
+            title={isDataType ? 'Download as Excel spreadsheet' : 'Download as Excel'}
+          >
+            {exporting === 'excel' ? '...' : '↓ Excel'}
+          </button>
+          <button
+            onClick={handleExportWord}
+            disabled={exporting === 'word'}
+            className="workspace-pill rounded-full px-3 py-1.5 text-[10px] text-workspace-text-secondary hover:text-blue-600 transition-colors print:hidden disabled:opacity-50"
+            title="Download as Word document"
+          >
+            {exporting === 'word' ? '...' : '↓ Word'}
+          </button>
           <button
             onClick={() => setPdfMode(!pdfMode)}
             className={`workspace-pill rounded-full px-3 py-1.5 text-[10px] transition-colors print:hidden ${
