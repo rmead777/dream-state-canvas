@@ -1,13 +1,15 @@
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 
-export type MobileTab = 'chat' | 'cards' | 'context';
+export type MobileTab = 'chat' | 'cards' | 'log' | 'context' | 'admin';
 
 export function MobileTabBar({
   activeTab,
   onTabChange,
+  adminUnlocked = false,
 }: {
   activeTab: MobileTab;
   onTabChange: (tab: MobileTab) => void;
+  adminUnlocked?: boolean;
 }) {
   const { state } = useWorkspace();
   const activeCount = Object.values(state.objects).filter(o => o.status !== 'dissolved').length;
@@ -15,7 +17,9 @@ export function MobileTabBar({
   const tabs: { id: MobileTab; label: string; icon: string; badge?: number }[] = [
     { id: 'chat', label: 'Chat', icon: '✦' },
     { id: 'cards', label: 'Cards', icon: '⊞', badge: activeCount || undefined },
+    { id: 'log', label: 'Log', icon: '⊘' },
     { id: 'context', label: 'More', icon: '≡' },
+    ...(adminUnlocked ? [{ id: 'admin' as MobileTab, label: 'Admin', icon: '⚙' }] : []),
   ];
 
   return (
