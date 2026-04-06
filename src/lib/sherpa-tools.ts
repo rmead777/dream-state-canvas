@@ -38,7 +38,7 @@ export const SHERPA_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'queryDataset',
-      description: 'Run a filter/sort/limit query against a dataset. Defaults to the active dataset. Pass documentId to query a specific uploaded document.',
+      description: 'Run a filter/sort/limit query against a dataset. ALWAYS pass documentId to target the correct document (see UPLOADED DOCUMENTS list for IDs and columns).',
       parameters: {
         type: 'object',
         properties: {
@@ -47,7 +47,7 @@ export const SHERPA_TOOLS = [
           columns: { type: 'array', items: { type: 'string' }, description: 'Which columns to return' },
           sort: { type: 'object', description: '{ column, direction: "asc"|"desc" }' },
           limit: { type: 'number', description: 'Max rows to return. Omit to get ALL rows (up to 500). Use lower limits only for quick previews.' },
-          documentId: { type: 'string', description: 'Optional: query a specific uploaded document instead of the active dataset' },
+          documentId: { type: 'string', description: 'Document ID to query (from UPLOADED DOCUMENTS list). Always specify this.' },
         },
       },
     },

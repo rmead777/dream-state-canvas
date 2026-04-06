@@ -17,7 +17,7 @@ import { SHERPA_TOOLS, executeTool, getToolStatus } from './sherpa-tools';
 import { WorkspaceState, WorkspaceAction, ActiveContext } from './workspace-types';
 import { getConversationMessages } from './conversation-memory';
 import { getAdminSettings } from './admin-settings';
-import { listDocuments } from './document-store';
+import { listDocuments, extractDataset } from './document-store';
 import { buildWorkspaceIntentContext } from './workspace-intelligence';
 import { getCurrentProfile } from './data-analyzer';
 import { getActiveDataset } from './active-dataset';
@@ -104,9 +104,11 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
   try {
     const docs = await listDocuments();
     if (docs.length > 0) {
-      documentsHint = `\nUPLOADED DOCUMENTS (use getDocumentContent tool to read any of these):\n${docs.map(d => {
+      documentsHint = `\nUPLOADED DOCUMENTS — always pass documentId when using queryDataset, editDataset, or createCard with dataQuery:\n${docs.map(d => {
         const isScratchpad = (d.metadata as any)?.isScratchpad;
-        return `  - ID: ${d.id} | "${d.filename}" (${d.file_type})${isScratchpad ? ' [AI SCRATCHPAD]' : ''} | uploaded ${d.created_at}`;
+        const dataset = (d.file_type === 'xlsx' || d.file_type === 'csv') ? extractDataset(d) : null;
+        const colInfo = dataset ? ` | ${dataset.rows.length} rows | columns: ${dataset.columns.join(', ')}` : '';
+        return `  - ID: ${d.id} | "${d.filename}" (${d.file_type})${isScratchpad ? ' [AI SCRATCHPAD]' : ''}${colInfo}`;
       }).join('\n')}`;
     }
   } catch {}
