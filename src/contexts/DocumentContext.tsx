@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { DocumentRecord, listDocuments, getDocument, extractDataset, updateDocumentData } from '@/lib/document-store';
+import { DocumentRecord, listDocuments, getDocument, extractDataset, updateDocumentData, deleteDocument } from '@/lib/document-store';
 import { CANONICAL_DATASET } from '@/lib/seed-data';
 import { setActiveDataset as setGlobalDataset } from '@/lib/active-dataset';
 import { clearProfileCache, analyzeDataset } from '@/lib/data-analyzer';
@@ -18,6 +18,7 @@ interface DocumentContextValue {
   refreshDocuments: () => Promise<void>;
   setActiveDocumentAsDataset: (docId: string) => Promise<boolean>;
   addDocument: (doc: DocumentRecord) => void;
+  removeDocument: (docId: string) => Promise<boolean>;
   updateActiveDataset: (columns: string[], rows: string[][]) => Promise<boolean>;
 }
 
@@ -34,6 +35,7 @@ const DocumentContext = createContext<DocumentContextValue>({
   refreshDocuments: async () => {},
   setActiveDocumentAsDataset: async () => false,
   addDocument: () => {},
+  removeDocument: async () => false,
   updateActiveDataset: async () => false,
 });
 
@@ -111,6 +113,22 @@ export function DocumentProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const removeDocument = useCallback(async (docId: string) => {
+    const ok = await deleteDocument(docId);
+    if (!ok) return false;
+
+    setDocuments((prev) => prev.filter((d) => d.id !== docId));
+
+    // If we just deleted the active dataset, fall back
+    if (activeDataset.sourceDocId === docId) {
+      setActiveDataset(fallbackDataset);
+      setGlobalDataset(fallbackDataset);
+      clearProfileCache();
+      invalidateProfileCache();
+    }
+    return true;
+  }, [activeDataset.sourceDocId]);
+
   const updateActiveDataset = useCallback(async (columns: string[], rows: string[][]) => {
     // Update local state
     setActiveDataset(prev => ({ ...prev, columns, rows }));
@@ -127,7 +145,7 @@ export function DocumentProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <DocumentContext.Provider
-      value={{ documents, activeDataset, refreshDocuments, setActiveDocumentAsDataset, addDocument, updateActiveDataset }}
+      value={{ documents, activeDataset, refreshDocuments, setActiveDocumentAsDataset, addDocument, removeDocument, updateActiveDataset }}
     >
       {children}
     </DocumentContext.Provider>

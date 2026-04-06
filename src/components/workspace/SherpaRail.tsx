@@ -316,6 +316,41 @@ export function SherpaRail() {
     toast.success('Conversation cleared');
   }, [dispatch]);
 
+  const handleOpenDocument = useCallback((doc: { id: string; filename: string; file_type: string; structured_data: any }) => {
+    const isSpreadsheet = doc.file_type === 'xlsx' || doc.file_type === 'csv';
+    const objectType = isSpreadsheet ? 'dataset' : 'document';
+
+    // Check if a workspace object already exists for this document
+    const existing = Object.values(state.objects).find(
+      (o: any) => o.context?.sourceDocId === doc.id && o.status !== 'dissolved'
+    );
+
+    if (existing) {
+      dispatch({ type: 'ENTER_IMMERSIVE', payload: { id: existing.id } });
+      return;
+    }
+
+    // Materialize a new object and immediately enter immersive
+    const objId = `doc-view-${doc.id.slice(0, 8)}-${Date.now()}`;
+    dispatch({
+      type: 'MATERIALIZE_OBJECT',
+      payload: {
+        id: objId,
+        type: objectType,
+        title: doc.filename,
+        pinned: false,
+        origin: { type: 'user-query' as const, query: `Open ${doc.filename}` },
+        relationships: [],
+        context: { sourceDocId: doc.id, structured_data: doc.structured_data },
+        position: { zone: 'primary' as const, order: 0 },
+      },
+    });
+    // Small delay to let reducer process, then enter immersive
+    requestAnimationFrame(() => {
+      dispatch({ type: 'ENTER_IMMERSIVE', payload: { id: objId } });
+    });
+  }, [state.objects, dispatch]);
+
   // Current model label for the dropdown button
   const currentModel = AVAILABLE_MODELS.find(m => m.id === adminState.model);
   const modelLabel = currentModel?.label || adminState.model.split('/').pop() || 'Model';
@@ -799,6 +834,7 @@ export function SherpaRail() {
                 onSelectionChange={setSelectedDocIds}
                 contextMode={contextMode}
                 onModeChange={setContextMode}
+                onOpenDocument={handleOpenDocument}
               />
               <QBOStatusPanel />
               <OutlookStatusPanel />

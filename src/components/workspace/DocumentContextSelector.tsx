@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useDocuments } from '@/contexts/DocumentContext';
+import { X } from 'lucide-react';
 
 export type ContextMode = 'auto' | 'manual';
 
@@ -8,6 +9,7 @@ interface DocumentContextSelectorProps {
   onSelectionChange: (ids: string[]) => void;
   contextMode: ContextMode;
   onModeChange: (mode: ContextMode) => void;
+  onOpenDocument?: (doc: { id: string; filename: string; file_type: string; structured_data: any }) => void;
 }
 
 const FILE_TYPE_ICONS: Record<string, string> = {
@@ -25,9 +27,12 @@ export function DocumentContextSelector({
   onSelectionChange,
   contextMode,
   onModeChange,
+  onOpenDocument,
 }: DocumentContextSelectorProps) {
-  const { documents } = useDocuments();
+  const { documents, removeDocument } = useDocuments();
   const [isExpanded, setIsExpanded] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const toggleDoc = useCallback(
     (docId: string) => {
@@ -53,6 +58,14 @@ export function DocumentContextSelector({
     onSelectionChange([]);
     onModeChange('manual');
   }, [onSelectionChange, onModeChange]);
+
+  const handleDelete = useCallback(async (docId: string) => {
+    setDeletingId(docId);
+    await removeDocument(docId);
+    onSelectionChange(selectedDocIds.filter((id) => id !== docId));
+    setDeletingId(null);
+    setConfirmId(null);
+  }, [removeDocument, selectedDocIds, onSelectionChange]);
 
   if (documents.length === 0) return null;
 
@@ -127,10 +140,12 @@ export function DocumentContextSelector({
             {documents.map((doc) => {
               const isSelected =
                 contextMode === 'auto' || selectedDocIds.includes(doc.id);
+              const isConfirming = confirmId === doc.id;
+              const isDeleting = deletingId === doc.id;
               return (
-                <label
+                <div
                   key={doc.id}
-                  className={`flex items-center gap-2 rounded px-2 py-1 cursor-pointer transition-colors ${
+                  className={`flex items-center gap-2 rounded px-2 py-1 group transition-colors ${
                     isSelected
                       ? 'bg-workspace-accent/5'
                       : 'hover:bg-workspace-surface/50 opacity-50'
@@ -141,14 +156,20 @@ export function DocumentContextSelector({
                     checked={isSelected}
                     onChange={() => toggleDoc(doc.id)}
                     disabled={contextMode === 'auto'}
-                    className="h-3 w-3 rounded border-workspace-border text-workspace-accent focus:ring-workspace-accent/20 disabled:opacity-30"
+                    className="h-3 w-3 rounded border-workspace-border text-workspace-accent focus:ring-workspace-accent/20 disabled:opacity-30 shrink-0"
                   />
-                  <span className="text-[10px]">
-                    {(doc.metadata as any)?.isScratchpad ? '🧠' : (FILE_TYPE_ICONS[doc.file_type] || '📁')}
-                  </span>
-                  <span className="text-[10px] text-workspace-text truncate flex-1">
-                    {doc.filename}
-                  </span>
+                  <button
+                    onClick={() => onOpenDocument?.(doc as any)}
+                    className="flex items-center gap-2 flex-1 min-w-0 text-left hover:text-workspace-accent transition-colors"
+                    title="Open in viewer"
+                  >
+                    <span className="text-[10px] shrink-0">
+                      {(doc.metadata as any)?.isScratchpad ? '🧠' : (FILE_TYPE_ICONS[doc.file_type] || '📁')}
+                    </span>
+                    <span className="text-[10px] text-inherit truncate flex-1">
+                      {doc.filename}
+                    </span>
+                  </button>
                   {(doc.metadata as any)?.isScratchpad && (
                     <span className="text-[7px] font-medium uppercase tracking-wider text-purple-500 bg-purple-50 px-1 py-0.5 rounded shrink-0">
                       AI Scratchpad
@@ -157,7 +178,24 @@ export function DocumentContextSelector({
                   <span className="text-[8px] text-workspace-text-secondary/30 uppercase shrink-0">
                     {(doc.metadata as any)?.isScratchpad ? '' : doc.file_type}
                   </span>
-                </label>
+                  {isConfirming ? (
+                    <button
+                      onClick={() => handleDelete(doc.id)}
+                      disabled={isDeleting}
+                      className="text-[8px] text-red-400 hover:text-red-300 shrink-0 transition-colors"
+                    >
+                      {isDeleting ? '...' : 'confirm?'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setConfirmId(doc.id); }}
+                      className="opacity-0 group-hover:opacity-100 text-workspace-text-secondary/30 hover:text-red-400 shrink-0 transition-all"
+                      title="Remove document"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>
