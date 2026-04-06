@@ -533,7 +533,7 @@ export function useWorkspaceActions() {
     // Extract entity refs from sections for smart card linking
     const sections = (context as any).sections;
     if (Array.isArray(sections) && sections.length > 0) {
-      const entityRefs = extractEntityRefs(sections);
+      const entityRefs = await extractEntityRefs(sections);
       if (entityRefs.length > 0) {
         dispatch({ type: 'UPDATE_OBJECT_ENTITY_REFS', payload: { id, entityRefs } });
       }

@@ -1,25 +1,25 @@
 import { useState, useEffect } from 'react';
 import { DataProfile, getCurrentProfile, clearProfileCache } from '@/lib/data-analyzer';
-import { getActiveDataset } from '@/lib/active-dataset';
 import { refineDataRules, invalidateProfileCache } from '@/lib/intent-engine';
 import { describeRankingLogic } from '@/lib/data-slicer';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { useDocuments } from '@/contexts/DocumentContext';
 import { previewRows, alertRows, metricAggregate, comparisonPairs } from '@/lib/data-slicer';
 
 export function RulesEditor({ onClose }: { onClose: () => void }) {
   const { state, dispatch } = useWorkspace();
+  const { activeDataset } = useDocuments();
   const [profile, setProfile] = useState<DataProfile | null>(null);
   const [isRefining, setIsRefining] = useState(false);
   const [customInstruction, setCustomInstruction] = useState('');
 
   useEffect(() => {
-    const ds = getActiveDataset();
-    const p = getCurrentProfile(ds.columns, ds.rows);
+    const p = getCurrentProfile(activeDataset.columns, activeDataset.rows);
     setProfile(p);
-  }, []);
+  }, [activeDataset]);
 
   const refreshCards = (updated: DataProfile) => {
-    const { columns, rows } = getActiveDataset();
+    const { columns, rows } = activeDataset;
     const dataObjects = Object.values(state.objects).filter(
       o => ['metric', 'inspector', 'alert', 'comparison'].includes(o.type) && o.status !== 'dissolved'
     );

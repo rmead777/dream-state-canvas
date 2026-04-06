@@ -9,7 +9,7 @@
  * Returns EntityRef[] — used to populate WorkspaceObject.entityRefs for smart card linking.
  */
 import type { EntityRef } from './workspace-types';
-import { getActiveDataset } from './active-dataset';
+import { listDocuments, extractDataset } from './document-store';
 
 // Heuristic column name patterns that suggest entity name columns
 // Exported so AnalysisCard.tsx can use the same set for clickable cells — single source of truth
@@ -39,7 +39,7 @@ function classifyEntityType(colName: string): EntityRef['entityType'] {
  * Extract entity refs from card sections.
  * Scans table cells in entity-type columns and narrative text.
  */
-export function extractEntityRefs(sections: any[]): EntityRef[] {
+export async function extractEntityRefs(sections: any[]): Promise<EntityRef[]> {
   const seen = new Set<string>();
   const refs: EntityRef[] = [];
 
@@ -74,7 +74,7 @@ export function extractEntityRefs(sections: any[]): EntityRef[] {
 
     // Narrative sections — scan against known vendor names from active dataset
     if ((section.type === 'narrative' || section.type === 'summary') && typeof section.text === 'string') {
-      extractNarrativeEntities(section.text, addRef);
+      await extractNarrativeEntities(section.text, addRef);
     }
   }
 
@@ -85,11 +85,16 @@ export function extractEntityRefs(sections: any[]): EntityRef[] {
  * Scan narrative text for known vendor names from the active dataset.
  * Only looks for names 3+ chars to avoid noise.
  */
-function extractNarrativeEntities(
+async function extractNarrativeEntities(
   text: string,
   addRef: (name: string, type: EntityRef['entityType']) => void,
-): void {
-  const { columns, rows } = getActiveDataset();
+): Promise<void> {
+  // Resolve entity names from first available spreadsheet
+  const docs = await listDocuments();
+  const doc = docs.find(d => (d.file_type === 'xlsx' || d.file_type === 'csv') && d.structured_data && !(d.metadata as any)?.isScratchpad);
+  const ds = doc ? extractDataset(doc) : null;
+  const columns = ds?.columns || [];
+  const rows = ds?.rows || [];
 
   // Find the first entity-type column in the active dataset
   const entityColIdx = columns.findIndex((c) => isEntityColumn(c));

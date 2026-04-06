@@ -1,5 +1,5 @@
 import { WorkspaceObject, Suggestion, ActiveContext } from './workspace-types';
-import { getActiveDataset } from './active-dataset';
+import { listDocuments, extractDataset } from './document-store';
 import { getCurrentProfile, DataProfile } from './data-analyzer';
 import { detectCrossTierAnomalies, describeRankingLogic } from './data-slicer';
 import { getObjectViewState } from './workspace-intelligence';
@@ -355,10 +355,13 @@ function buildRefinementSuggestions(
 
 export function generateSuggestions(
   objects: Record<string, WorkspaceObject>,
-  activeContext?: ActiveContext
+  activeContext?: ActiveContext,
+  dataColumns?: string[],
+  dataRows?: string[][],
 ): Suggestion[] {
-  const ds = getActiveDataset();
-  const profile = getCurrentProfile(ds.columns, ds.rows);
+  const columns = dataColumns || [];
+  const rows = dataRows || [];
+  const profile = getCurrentProfile(columns, rows);
 
   const openObjects = Object.values(objects).filter(
     (o) => o.status === 'open' || o.status === 'materializing'
@@ -380,7 +383,9 @@ export function generateSuggestions(
 }
 
 export function generateObservations(
-  objects: Record<string, WorkspaceObject>
+  objects: Record<string, WorkspaceObject>,
+  dataColumns?: string[],
+  dataRows?: string[][],
 ): string[] {
   const observations: string[] = [];
   const objectList = Object.values(objects);
@@ -407,12 +412,13 @@ export function generateObservations(
   }
 
   // Cross-tier anomaly detection — surface in observations, NEVER re-rank
-  const ds2 = getActiveDataset();
-  const profile = getCurrentProfile(ds2.columns, ds2.rows);
+  const cols = dataColumns || [];
+  const rws = dataRows || [];
+  const profile = getCurrentProfile(cols, rws);
   if (profile) {
     const anomalies = detectCrossTierAnomalies(
-      ds2.columns,
-      ds2.rows,
+      cols,
+      rws,
       profile
     );
     observations.push(...anomalies);

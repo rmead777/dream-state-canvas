@@ -10,7 +10,7 @@
  *   create_card → materializes a new card on the canvas via a custom event
  */
 import { supabase } from '@/integrations/supabase/client';
-import { getActiveDataset } from './active-dataset';
+import { listDocuments, extractDataset } from './document-store';
 
 // automation_triggers isn't in generated types yet (migration pending sync).
 // Cast once here; remove when Lovable regenerates types.ts after the migration runs.
@@ -178,10 +178,11 @@ const lastFiredLocal: Record<string, number> = {};
  * Evaluate all loaded triggers against the current dataset.
  * Returns firings — caller decides how to dispatch observations/cards.
  */
-export function checkTriggers(triggers: AutomationTrigger[]): TriggerFiring[] {
+export function checkTriggers(triggers: AutomationTrigger[], dataColumns?: string[], dataRows?: string[][]): TriggerFiring[] {
   if (!triggers.length) return [];
 
-  const { columns, rows } = getActiveDataset();
+  const columns = dataColumns || [];
+  const rows = dataRows || [];
   if (!rows.length) return [];
 
   const now = Date.now();

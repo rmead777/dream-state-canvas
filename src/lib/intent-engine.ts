@@ -11,16 +11,23 @@
  * 2. The agent loop builds its own context and uses tool calling
  * 3. Keyword fallback violated the AI-first principle (CLAUDE.md)
  */
-import { getActiveDataset } from './active-dataset';
 import { analyzeDataset, refineProfile, DataProfile } from './data-analyzer';
+import { listDocuments, extractDataset } from './document-store';
 
 // Cached profile promise (runs once, invalidated on refinement)
 let profilePromise: Promise<DataProfile> | null = null;
 
+/** Resolve the first non-scratchpad spreadsheet for profile analysis. */
+async function getFirstDataset(): Promise<{ columns: string[]; rows: string[][] }> {
+  const docs = await listDocuments();
+  const doc = docs.find(d => (d.file_type === 'xlsx' || d.file_type === 'csv') && d.structured_data && !(d.metadata as any)?.isScratchpad);
+  const ds = doc ? extractDataset(doc) : null;
+  return { columns: ds?.columns || [], rows: ds?.rows || [] };
+}
+
 function getProfile(): Promise<DataProfile> {
   if (!profilePromise) {
-    const ds = getActiveDataset();
-    profilePromise = analyzeDataset(ds.columns, ds.rows);
+    profilePromise = getFirstDataset().then(ds => analyzeDataset(ds.columns, ds.rows));
   }
   return profilePromise;
 }
@@ -36,7 +43,7 @@ export function invalidateProfileCache(): void {
  */
 export async function refineDataRules(userFeedback: string): Promise<DataProfile> {
   const current = await getProfile();
-  const ds = getActiveDataset();
+  const ds = await getFirstDataset();
   const updated = await refineProfile(
     ds.columns,
     ds.rows,

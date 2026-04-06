@@ -40,7 +40,7 @@ export function SherpaProvider({ children }: { children: React.ReactNode }) {
 
   // Proactive observation scanning — runs periodically
   const triggerObservationScan = useCallback(() => {
-    const newObservations = generateObservations(state.objects);
+    const newObservations = generateObservations(state.objects, activeDataset.columns, activeDataset.rows);
     const dismissed = state.sherpa.dismissedObservations || [];
 
     // Only dispatch truly new observations — skip duplicates AND dismissed ones
@@ -110,7 +110,7 @@ export function SherpaProvider({ children }: { children: React.ReactNode }) {
         const triggers = await loadTriggers();
         if (triggers.length === 0) return;
 
-        const firings = checkTriggers(triggers);
+        const firings = checkTriggers(triggers, activeDataset.columns, activeDataset.rows);
         for (const firing of firings) {
           const obs = firing.observation;
           if (!observationsRef.current.includes(obs) && !dismissedRef.current.includes(obs)) {
@@ -154,7 +154,7 @@ export function SherpaProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const AI_SUGGESTION_HOLDOFF_MS = 30_000;
     if (Date.now() - state.sherpa.lastAISuggestionsAt < AI_SUGGESTION_HOLDOFF_MS) return;
-    const suggestions = generateSuggestions(state.objects, state.activeContext);
+    const suggestions = generateSuggestions(state.objects, state.activeContext, activeDataset.columns, activeDataset.rows);
     dispatch({ type: 'SET_SHERPA_SUGGESTIONS', payload: suggestions });
   }, [objectFingerprint, state.activeContext, state.objects, state.sherpa.lastAISuggestionsAt, dispatch]);
 
