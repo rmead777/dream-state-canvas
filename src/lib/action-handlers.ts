@@ -10,7 +10,7 @@
 import { z } from 'zod';
 import { WorkspaceObject } from './workspace-types';
 import { callAI } from '@/hooks/useAI';
-import { getActiveDataset } from './active-dataset';
+import { getActiveDataset, getDataset } from './active-dataset';
 import { previewRows, alertRows, metricAggregate, comparisonPairs } from './data-slicer';
 import { executeFusion } from './fusion-executor';
 import { getFusionOutputType } from './fusion-rules';
@@ -88,7 +88,9 @@ type UpdatePlan = z.infer<typeof UpdatePlanSchema>;
 export async function handleUpdate({ target, instruction, documentIds, dataQuery, sections, sectionOperations }: UpdateParams): Promise<HandlerResult> {
   // FAST PATH: If the AI already provided a dataQuery, apply it directly — no second AI call needed
   if (dataQuery) {
-    const result = executeDataQuery(dataQuery);
+    // Resolve documentId so scratchpads/other docs don't fall back to active dataset
+    const ds = dataQuery.documentId ? await getDataset(dataQuery.documentId) : undefined;
+    const result = executeDataQuery(ds ? { ...dataQuery, _dataset: ds } : dataQuery);
     const newContext = {
       ...target.context,
       columns: result.columns,
@@ -149,7 +151,8 @@ export async function handleUpdate({ target, instruction, documentIds, dataQuery
           break;
         case 'requery':
           if (op.dataQuery) {
-            const result = executeDataQuery(op.dataQuery);
+            const rqDs = op.dataQuery.documentId ? await getDataset(op.dataQuery.documentId) : undefined;
+            const result = executeDataQuery(rqDs ? { ...op.dataQuery, _dataset: rqDs } : op.dataQuery);
             const tableIdx = sections.findIndex(s => s.type === 'table');
             if (tableIdx >= 0) {
               sections[tableIdx] = { ...sections[tableIdx], columns: result.columns, rows: result.rows } as CardSectionType;

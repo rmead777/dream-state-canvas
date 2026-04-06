@@ -9,6 +9,7 @@ import { toast } from '@/hooks/use-toast';
 import { buildDocumentObjectContext, resolveDocumentRecord, getDocument, extractDataset } from '@/lib/document-store';
 import { validateSections } from '@/lib/card-schema';
 import { executeDataQuery } from '@/lib/data-query';
+import { getDataset } from '@/lib/active-dataset';
 import { addQuery, updateLastResponse, updateLastOutcomeCards } from '@/lib/conversation-memory';
 import { extractEntityRefs } from '@/lib/entity-extractor';
 import { retrieveRelevantMemories, formatMemoriesForPrompt, determineWorkspaceState } from '@/lib/memory-retriever';
@@ -496,12 +497,15 @@ export function useWorkspaceActions() {
 
     // If AI provided a dataQuery, execute and merge results
     if ((action as any).dataQuery) {
-      const queryResult = executeDataQuery((action as any).dataQuery);
+      const dq = (action as any).dataQuery;
+      // Resolve documentId so scratchpads/other docs don't fall back to active dataset
+      const ds = dq.documentId ? await getDataset(dq.documentId) : undefined;
+      const queryResult = executeDataQuery(ds ? { ...dq, _dataset: ds } : dq);
       context = {
         ...context,
         columns: queryResult.columns,
         rows: queryResult.rows,
-        dataQuery: (action as any).dataQuery,
+        dataQuery: dq,
         queryMeta: { totalMatched: queryResult.totalMatched, truncated: queryResult.truncated },
       };
     }
