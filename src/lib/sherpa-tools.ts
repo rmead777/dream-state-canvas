@@ -172,6 +172,21 @@ export const SHERPA_TOOLS = [
   {
     type: 'function' as const,
     function: {
+      name: 'fuseCards',
+      description: 'Fuse two workspace cards together to synthesize a new "brief" card that reveals cross-cutting insights from both. Use when the user asks to combine, merge, fuse, or cross-reference two existing cards.',
+      parameters: {
+        type: 'object',
+        properties: {
+          objectIdA: { type: 'string', description: 'ID of the first card to fuse' },
+          objectIdB: { type: 'string', description: 'ID of the second card to fuse' },
+        },
+        required: ['objectIdA', 'objectIdB'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
       name: 'openInImmersive',
       description: 'Open an existing workspace card in full-screen immersive view. Use this when the user asks to "open", "view", "read", or "expand" a card that is already on the canvas.',
       parameters: {
@@ -812,6 +827,14 @@ export async function executeTool(
 
       case 'focusCard':
         return JSON.stringify({ action: 'focus', objectId: args.objectId });
+
+      case 'fuseCards': {
+        const objA = state.objects[args.objectIdA];
+        const objB = state.objects[args.objectIdB];
+        if (!objA) return JSON.stringify({ error: `Card "${args.objectIdA}" not found` });
+        if (!objB) return JSON.stringify({ error: `Card "${args.objectIdB}" not found` });
+        return JSON.stringify({ action: 'fuse', objectIdA: args.objectIdA, objectIdB: args.objectIdB });
+      }
 
       case 'openInImmersive':
         return JSON.stringify({ action: 'immersive', objectId: args.objectId });
