@@ -136,25 +136,36 @@ async function resolveFolderId(folderName: string = DEFAULT_FOLDER_NAME): Promis
   const cached = folderIdCache.get(folderName.toLowerCase());
   if (cached) return cached;
 
-  const result = await graphFetch<{ value: Array<{ id: string; displayName: string }> }>(
-    `/me/mailFolders?$filter=displayName eq '${folderName}'`
+  const target = folderName.toLowerCase();
+
+  // 1. Try all top-level mail folders (case-insensitive client-side match)
+  const topLevel = await graphFetch<{ value: Array<{ id: string; displayName: string }> }>(
+    `/me/mailFolders?$top=100`
   );
 
-  if (result?.value?.[0]) {
-    folderIdCache.set(folderName.toLowerCase(), result.value[0].id);
-    return result.value[0].id;
+  if (topLevel?.value) {
+    const match = topLevel.value.find(f => f.displayName.toLowerCase() === target);
+    if (match) {
+      folderIdCache.set(target, match.id);
+      return match.id;
+    }
+
+    // 2. Search child folders of every top-level folder (handles nested folders)
+    for (const parent of topLevel.value) {
+      const children = await graphFetch<{ value: Array<{ id: string; displayName: string }> }>(
+        `/me/mailFolders/${parent.id}/childFolders?$top=100`
+      );
+      const childMatch = children?.value?.find(f => f.displayName.toLowerCase() === target);
+      if (childMatch) {
+        folderIdCache.set(target, childMatch.id);
+        return childMatch.id;
+      }
+    }
   }
 
-  // Try child folders of Inbox
-  const inbox = await graphFetch<{ value: Array<{ id: string; displayName: string }> }>(
-    `/me/mailFolders/inbox/childFolders`
-  );
-
-  const match = inbox?.value?.find(f => f.displayName.toLowerCase() === folderName.toLowerCase());
-  if (match) {
-    folderIdCache.set(folderName.toLowerCase(), match.id);
-    return match.id;
-  }
+  // 3. Log available folders for debugging
+  const available = topLevel?.value?.map(f => f.displayName).join(', ') || 'none';
+  console.error(`[email-store] Folder "${folderName}" not found. Available top-level folders: ${available}`);
 
   return null;
 }
