@@ -9,16 +9,15 @@
  *   - Simplex noise flow field advects color through the feedback loop
  *   - Decay targets app's lavender-cream background exactly
  *   - 30fps throttle, tab-pause, prefers-reduced-motion respected
- *
- * Usage:
- *   Place as the first child of your root layout — behind everything.
- *   <BackgroundShader />
- *   <YourApp />
+ *   - All visual parameters exposed as uniforms, driven by shader-settings.ts
  *
  * Dependencies: none (WebGL2 + ResizeObserver, both baseline 2024)
  */
 
 import { useEffect, useRef } from 'react'
+import { getShaderSettings } from '@/lib/shader-settings'
+
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 
 // ─── Vertex shader (shared between both passes) ───────────────────────────────
 
@@ -32,8 +31,6 @@ void main() {
 `
 
 // ─── Simulation pass ──────────────────────────────────────────────────────────
-// Noise-driven flow field + diffusion + decay toward app background color.
-// This is the "brain" — it writes to the ping-pong FBO each frame.
 
 const SIM_FRAG = `#version 300 es
 precision highp float;
@@ -42,6 +39,17 @@ uniform sampler2D u_prev;
 uniform vec2      u_resolution;
 uniform float     u_time;
 uniform vec2      u_mouse;
+
+// Tunable uniforms — driven by admin panel
+uniform float u_speed;
+uniform float u_intensity;
+uniform float u_diffusion;
+uniform float u_emission;
+uniform float u_mouse_react;
+uniform float u_decay;
+uniform float u_hue;
+uniform float u_saturation;
+uniform float u_brightness;
 
 in  vec2 v_uv;
 out vec4 out_color;
@@ -78,19 +86,54 @@ float snoise(vec2 v) {
   g.yz = a0.yz * x12.xz  + h.yz * x12.yw;
   return 130.0 * dot(m, g);
 }
+
+// ── HSL helpers for hue/saturation/brightness control ────────────────────────
+vec3 rgb2hsl(vec3 c) {
+  float mx = max(max(c.r, c.g), c.b);
+  float mn = min(min(c.r, c.g), c.b);
+  float l = (mx + mn) * 0.5;
+  if (mx == mn) return vec3(0.0, 0.0, l);
+  float d = mx - mn;
+  float s = l > 0.5 ? d / (2.0 - mx - mn) : d / (mx + mn);
+  float h;
+  if (mx == c.r) h = (c.g - c.b) / d + (c.g < c.b ? 6.0 : 0.0);
+  else if (mx == c.g) h = (c.b - c.r) / d + 2.0;
+  else h = (c.r - c.g) / d + 4.0;
+  return vec3(h / 6.0, s, l);
+}
+
+float hue2rgb(float p, float q, float t) {
+  if (t < 0.0) t += 1.0;
+  if (t > 1.0) t -= 1.0;
+  if (t < 1.0/6.0) return p + (q - p) * 6.0 * t;
+  if (t < 1.0/2.0) return q;
+  if (t < 2.0/3.0) return p + (q - p) * (2.0/3.0 - t) * 6.0;
+  return p;
+}
+
+vec3 hsl2rgb(vec3 hsl) {
+  if (hsl.y == 0.0) return vec3(hsl.z);
+  float q = hsl.z < 0.5 ? hsl.z * (1.0 + hsl.y) : hsl.z + hsl.y - hsl.z * hsl.y;
+  float p = 2.0 * hsl.z - q;
+  return vec3(
+    hue2rgb(p, q, hsl.x + 1.0/3.0),
+    hue2rgb(p, q, hsl.x),
+    hue2rgb(p, q, hsl.x - 1.0/3.0)
+  );
+}
 // ─────────────────────────────────────────────────────────────────────────────
 
 void main() {
   vec2 px = 1.0 / u_resolution;
 
   // Two-octave flow field — slow drift, organic feel
-  float t        = u_time * 0.065;
+  float t        = u_time * u_speed;
   vec2  uv2      = v_uv * 2.8;
   float nx       = snoise(uv2 + vec2(0.0,        t));
   float ny       = snoise(uv2 + vec2(5.2, 1.3) - vec2(0.0, t * 0.75));
   float nx2      = snoise(uv2 * 0.6 + vec2(17.4, t * 0.4)) * 0.4;
   float ny2      = snoise(uv2 * 0.6 + vec2(8.1, 22.3 + t * 0.4)) * 0.4;
-  vec2  flow     = vec2(nx + nx2, ny + ny2) * 0.0028;
+  vec2  flow     = vec2(nx + nx2, ny + ny2) * u_intensity;
 
   // Advect: sample previous frame shifted by flow
   vec4 prev = texture(u_prev, v_uv + flow);
@@ -102,47 +145,50 @@ void main() {
     texture(u_prev, v_uv + vec2(0.0,  px.y)) +
     texture(u_prev, v_uv + vec2(0.0, -px.y));
   diff *= 0.25;
-  prev  = mix(prev, diff, 0.055);
+  prev  = mix(prev, diff, u_diffusion);
 
-  // Decay toward app background color (lavender-cream, matches Sherpa workspace)
-  // Adjust this vec3 if you change the workspace background tone
-  const vec3 BG = vec3(0.970, 0.958, 0.985);
-  prev.rgb = mix(prev.rgb, BG, 0.017);
+  // Decay toward app background color (lavender-cream)
+  // Brightness shifts this target lighter/darker
+  vec3 BG = vec3(0.970, 0.958, 0.985) * (0.5 + u_brightness);
+  prev.rgb = mix(prev.rgb, BG, u_decay);
 
   // ── Color injection ─────────────────────────────────────────────────────────
-  // Three noise layers at different frequencies/speeds for organic variation
   float n1 = snoise(uv2 * 1.3 + vec2(t * 1.15, 0.0));
   float n2 = snoise(uv2 * 1.0 + vec2(100.0, t * 0.85));
   float n3 = snoise(uv2 * 0.7 + vec2(50.0, 200.0 + t * 0.55));
 
-  // Palette: indigo · teal · lavender — tuned to Sherpa's accent system
-  const vec3 INDIGO   = vec3(0.51, 0.44, 0.97);
-  const vec3 TEAL     = vec3(0.22, 0.76, 0.74);
-  const vec3 LAVENDER = vec3(0.69, 0.54, 0.95);
+  // Base palette: indigo, teal, lavender
+  vec3 INDIGO   = vec3(0.51, 0.44, 0.97);
+  vec3 TEAL     = vec3(0.22, 0.76, 0.74);
+  vec3 LAVENDER = vec3(0.69, 0.54, 0.95);
 
   float palette_t = 0.5 + 0.5 * snoise(v_uv * 1.2 + vec2(t * 0.28));
   vec3  inject_c  = mix(mix(INDIGO, TEAL, palette_t), LAVENDER, 0.25 + 0.25 * n3);
 
+  // Apply hue/saturation shift to injected color
+  vec3 hsl = rgb2hsl(inject_c);
+  hsl.x = fract(hsl.x + (u_hue - 0.5));                  // rotate hue
+  hsl.y = clamp(hsl.y * (u_saturation * 2.0), 0.0, 1.0); // scale saturation
+  inject_c = hsl2rgb(hsl);
+
   // Soft thresholded emission — only where noise crests, never uniform
   float emit =
-    smoothstep(0.52, 0.82, n1) * 0.038 +
-    smoothstep(0.55, 0.80, n2) * 0.028;
+    smoothstep(0.52, 0.82, n1) * 0.038 * u_emission +
+    smoothstep(0.55, 0.80, n2) * 0.028 * u_emission;
 
-  // Mouse proximity: subtle bloom within ~25% of screen radius
+  // Mouse proximity bloom
   vec2  mouse_uv = u_mouse / u_resolution;
-  mouse_uv.y     = 1.0 - mouse_uv.y;           // flip Y to match UV space
+  mouse_uv.y     = 1.0 - mouse_uv.y;
   float m_dist   = length(v_uv - mouse_uv);
-  emit += smoothstep(0.22, 0.0, m_dist) * 0.032;
+  emit += smoothstep(0.22, 0.0, m_dist) * u_mouse_react;
 
-  prev.rgb = mix(prev.rgb, inject_c, clamp(emit, 0.0, 0.08));
+  prev.rgb = mix(prev.rgb, inject_c, clamp(emit, 0.0, 0.12));
 
   out_color = clamp(prev, 0.0, 1.0);
 }
 `
 
 // ─── Display pass ─────────────────────────────────────────────────────────────
-// Reads simulation texture, outputs to screen. Simple by design —
-// all the interesting stuff happens in the simulation pass.
 
 const DISP_FRAG = `#version 300 es
 precision highp float;
@@ -193,7 +239,6 @@ function createProgram(
     return null
   }
 
-  // Shaders are now baked into the program; no need to keep them alive
   gl.deleteShader(vert)
   gl.deleteShader(frag)
   return prog
@@ -208,7 +253,6 @@ function createFBO(gl: WebGL2RenderingContext, w: number, h: number): FBO | null
   const tex = gl.createTexture()
   if (!tex) return null
   gl.bindTexture(gl.TEXTURE_2D, tex)
-  // RGBA16F for smooth color accumulation without banding
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
@@ -243,41 +287,44 @@ export function BackgroundShader() {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    // Honor accessibility preference — no animation, no GPU cost
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
 
-    // ── WebGL2 context ────────────────────────────────────────────────────────
     const gl = canvas.getContext('webgl2', {
-      alpha: false,          // we own the background; compositing not needed
-      antialias: false,      // simulation texture is low-res by design
+      alpha: false,
+      antialias: false,
       preserveDrawingBuffer: false,
-      powerPreference: 'low-power',  // background effect — don't request discrete GPU
+      powerPreference: 'low-power',
     }) as WebGL2RenderingContext | null
 
     if (!gl) {
-      // Graceful fallback — app continues with CSS background
       console.info('[BackgroundShader] WebGL2 unavailable, skipping shader background')
       return
     }
 
-    // RGBA16F requires this extension in WebGL2
     if (!gl.getExtension('EXT_color_buffer_float')) {
       console.info('[BackgroundShader] EXT_color_buffer_float unavailable, skipping')
       return
     }
 
-    // ── Compile programs ──────────────────────────────────────────────────────
     const simProg  = createProgram(gl, VERT, SIM_FRAG)
     const dispProg = createProgram(gl, VERT, DISP_FRAG)
     if (!simProg || !dispProg) return
 
-    // ── Pre-cache uniform locations ───────────────────────────────────────────
-    // Doing this outside the frame loop avoids per-frame string lookups
+    // ── Pre-cache all uniform locations ───────────────────────────────────────
     const simUniforms = {
-      prev:       gl.getUniformLocation(simProg,  'u_prev'),
-      resolution: gl.getUniformLocation(simProg,  'u_resolution'),
-      time:       gl.getUniformLocation(simProg,  'u_time'),
-      mouse:      gl.getUniformLocation(simProg,  'u_mouse'),
+      prev:       gl.getUniformLocation(simProg, 'u_prev'),
+      resolution: gl.getUniformLocation(simProg, 'u_resolution'),
+      time:       gl.getUniformLocation(simProg, 'u_time'),
+      mouse:      gl.getUniformLocation(simProg, 'u_mouse'),
+      speed:      gl.getUniformLocation(simProg, 'u_speed'),
+      intensity:  gl.getUniformLocation(simProg, 'u_intensity'),
+      diffusion:  gl.getUniformLocation(simProg, 'u_diffusion'),
+      emission:   gl.getUniformLocation(simProg, 'u_emission'),
+      mouseReact: gl.getUniformLocation(simProg, 'u_mouse_react'),
+      decay:      gl.getUniformLocation(simProg, 'u_decay'),
+      hue:        gl.getUniformLocation(simProg, 'u_hue'),
+      saturation: gl.getUniformLocation(simProg, 'u_saturation'),
+      brightness: gl.getUniformLocation(simProg, 'u_brightness'),
     }
     const dispUniforms = {
       sim: gl.getUniformLocation(dispProg, 'u_sim'),
@@ -293,7 +340,6 @@ export function BackgroundShader() {
       gl.STATIC_DRAW
     )
 
-    // Set up VAOs once — avoids repeated attribute state changes in the loop
     function makeVAO(prog: WebGLProgram): WebGLVertexArrayObject | null {
       const vao = gl!.createVertexArray()
       if (!vao) return null
@@ -317,11 +363,9 @@ export function BackgroundShader() {
     ]
     if (!fbos[0] || !fbos[1]) return
 
-    // Initialize both FBOs to background color so first frame is clean
-    // (avoids the single-frame black flash on load)
     const initData = new Float32Array(SIM_W * SIM_H * 4)
     for (let i = 0; i < SIM_W * SIM_H; i++) {
-      initData[i * 4 + 0] = 0.970  // matches BG const in shader
+      initData[i * 4 + 0] = 0.970
       initData[i * 4 + 1] = 0.958
       initData[i * 4 + 2] = 0.985
       initData[i * 4 + 3] = 1.0
@@ -353,7 +397,6 @@ export function BackgroundShader() {
     let mouseY = canvas.offsetHeight * 0.5
 
     const onMouseMove = (e: MouseEvent) => {
-      // Track in CSS pixels; shader will scale to SIM space
       mouseX = e.clientX
       mouseY = e.clientY
     }
@@ -374,10 +417,12 @@ export function BackgroundShader() {
       if (now - lastFrameTime < FRAME_MS) return
       lastFrameTime = now
 
+      // Read settings each frame — cheap module-level object access
+      const s = getShaderSettings()
+
       const writeIdx = 1 - readIdx
       const time     = now * 0.001
 
-      // Scale mouse from CSS pixels → simulation UV space
       const cssW  = canvas.offsetWidth
       const cssH  = canvas.offsetHeight
       const simMX = (mouseX / cssW)  * SIM_W
@@ -397,9 +442,20 @@ export function BackgroundShader() {
       gl.uniform1f(simUniforms.time, time)
       gl.uniform2f(simUniforms.mouse, simMX, simMY)
 
+      // Tunable uniforms — map 0..1 slider range to shader-appropriate ranges
+      gl.uniform1f(simUniforms.speed,      lerp(0.01,  0.15,  s.speed))
+      gl.uniform1f(simUniforms.intensity,  lerp(0.0005, 0.006, s.intensity))
+      gl.uniform1f(simUniforms.diffusion,  lerp(0.01,  0.12,  s.diffusion))
+      gl.uniform1f(simUniforms.emission,   lerp(0.2,   3.0,   s.emission))
+      gl.uniform1f(simUniforms.mouseReact, lerp(0.0,   0.08,  s.mouseReactivity))
+      gl.uniform1f(simUniforms.decay,      lerp(0.005, 0.04,  s.decay))
+      gl.uniform1f(simUniforms.hue,        s.hue)
+      gl.uniform1f(simUniforms.saturation, s.saturation)
+      gl.uniform1f(simUniforms.brightness, s.brightness)
+
       gl.drawArrays(gl.TRIANGLES, 0, 6)
 
-      // ── Pass 2: Display (upscale to full canvas resolution) ─────────────────
+      // ── Pass 2: Display ─────────────────────────────────────────────────────
       gl.bindFramebuffer(gl.FRAMEBUFFER, null)
       gl.viewport(0, 0, canvas.width, canvas.height)
       gl.useProgram(dispProg)
@@ -416,7 +472,6 @@ export function BackgroundShader() {
 
     raf = requestAnimationFrame(frame)
 
-    // ── Cleanup ───────────────────────────────────────────────────────────────
     return () => {
       cancelAnimationFrame(raf)
       ro.disconnect()
