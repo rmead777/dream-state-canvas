@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { WorkspaceObject } from '@/lib/workspace-types';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useDocuments } from '@/contexts/DocumentContext';
+import { updateDocumentData } from '@/lib/document-store';
 import { toast } from 'sonner';
 
 interface DatasetEditPreviewProps {
@@ -26,7 +27,7 @@ const CHANGE_ICONS: Record<string, string> = {
 
 export function DatasetEditPreview({ object }: DatasetEditPreviewProps) {
   const { dispatch } = useWorkspace();
-  const { updateActiveDataset } = useDocuments();
+  const { updateActiveDataset, activeDataset } = useDocuments();
   const [applying, setApplying] = useState(false);
   const [applied, setApplied] = useState(false);
 
@@ -38,6 +39,7 @@ export function DatasetEditPreview({ object }: DatasetEditPreviewProps) {
   const newRows = ctx.newRows as string[][];
   const operationCount = ctx.operationCount as number;
   const sourceLabel = ctx.sourceLabel as string;
+  const sourceDocId = ctx.sourceDocId as string | undefined;
 
   const handleApply = async () => {
     if (!newColumns || !newRows) {
@@ -47,7 +49,14 @@ export function DatasetEditPreview({ object }: DatasetEditPreviewProps) {
 
     setApplying(true);
     try {
-      const success = await updateActiveDataset(newColumns, newRows);
+      // If the edit targets a specific document (e.g. a scratchpad), write
+      // directly to that document — don't touch the active dataset.
+      let success: boolean;
+      if (sourceDocId && sourceDocId !== activeDataset.sourceDocId) {
+        success = await updateDocumentData(sourceDocId, newColumns, newRows);
+      } else {
+        success = await updateActiveDataset(newColumns, newRows);
+      }
       if (success) {
         setApplied(true);
         toast.success(`Applied ${operationCount} change${operationCount !== 1 ? 's' : ''} to ${sourceLabel}`);
