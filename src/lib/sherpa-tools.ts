@@ -15,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { createTrigger as saveTrigger } from './automation-triggers';
 import { fetchQBOData, clearQBOCache, type QBODataType } from './quickbooks-store';
 import { getStoredEmails, searchStoredEmails, getStoredEmail, syncEmails, isOutlookConnected } from './email-store';
+import { getRagicOrders, getRagicCustomers, syncRagicOrders, syncRagicCustomers, clearRagicCache } from './ragic-store';
 
 // ─── Dataset Resolution Helper ────────────────────────────────────────────
 // No global "active dataset." Every tool resolves its data source explicitly.
@@ -627,6 +628,56 @@ export const SHERPA_TOOLS = [
     },
   },
 
+  // RAGIC ORDERS tool
+  {
+    type: 'function' as const,
+    function: {
+      name: 'queryRagicOrders',
+      description: 'Query cached Ragic orders (sales orders, delivery pipeline). Returns order details including customer, product, quantity (lbs), unit price, total amount, delivery date, due date, payment terms, status, and packaging class. Use when the user asks about orders, deliveries, the order pipeline, "what\'s shipping next week?", customer order history, revenue forecasting, or cash forecast building. Cross-reference with queryQuickBooks AR data for complete receivables picture.',
+      parameters: {
+        type: 'object',
+        properties: {
+          status: { type: 'string', description: 'Filter by order status: "Order Confirmed", "Packaged/Loaded", "Shipped". Omit for all.' },
+          customer: { type: 'string', description: 'Filter by customer name (partial match). Omit for all customers.' },
+          dateFrom: { type: 'string', description: 'Filter orders with delivery_date >= this date (YYYY-MM-DD).' },
+          dateTo: { type: 'string', description: 'Filter orders with delivery_date <= this date (YYYY-MM-DD).' },
+          limit: { type: 'number', description: 'Max number of orders to return (default: all).' },
+        },
+      },
+    },
+  },
+
+  // RAGIC CUSTOMERS tool
+  {
+    type: 'function' as const,
+    function: {
+      name: 'queryRagicCustomers',
+      description: 'Query cached Ragic customer profiles. Returns customer details including account name, QuickBooks name, payment terms, payment method, freight terms, account type, billing/shipping addresses, and notes. Use when the user asks about customer details, "who is this customer?", payment terms, customer lookup, or needs to resolve a Ragic customer name to their QB name.',
+      parameters: {
+        type: 'object',
+        properties: {
+          search: { type: 'string', description: 'Search by customer or QB name (partial match). Omit for all customers.' },
+          limit: { type: 'number', description: 'Max number of results (default: all).' },
+        },
+      },
+    },
+  },
+
+  // RAGIC SYNC tool
+  {
+    type: 'function' as const,
+    function: {
+      name: 'syncRagic',
+      description: 'Sync fresh data from Ragic CRM. Use when the user says "refresh ragic", "sync orders", "update ragic data", "pull latest from ragic", etc. Syncs orders and/or customers from the live Ragic API into the local cache.',
+      parameters: {
+        type: 'object',
+        properties: {
+          target: { type: 'string', enum: ['orders', 'customers', 'all'], description: 'What to sync. Default: "all".' },
+        },
+      },
+    },
+  },
+
   // COMPUTE STATS tool
   {
     type: 'function' as const,
@@ -713,6 +764,9 @@ const TOOL_STATUS: Record<string, string> = {
   refreshQuickBooks: 'Refreshing QuickBooks data...',
   queryEmails: 'Fetching AP emails...',
   refreshEmails: 'Refreshing AP emails...',
+  queryRagicOrders: 'Querying Ragic orders...',
+  queryRagicCustomers: 'Looking up Ragic customers...',
+  syncRagic: 'Syncing from Ragic...',
   computeStats: 'Analyzing data...',
   suggestNextMoves: '',
 };
@@ -1423,6 +1477,47 @@ export async function executeTool(
           newEmails: syncResult.newEmails,
           totalStored: syncResult.totalStored,
         });
+      }
+
+      case 'queryRagicOrders': {
+        const orders = await getRagicOrders({
+          status: args.status as string | undefined,
+          customer: args.customer as string | undefined,
+          dateFrom: args.dateFrom as string | undefined,
+          dateTo: args.dateTo as string | undefined,
+          limit: args.limit as number | undefined,
+        });
+        if (orders.length === 0) {
+          return JSON.stringify({ orders: [], count: 0, hint: 'No orders found matching filters. Try syncRagic to pull fresh data, or broaden your date/status/customer filters.' });
+        }
+        // Return without raw_record to keep token count manageable
+        const clean = orders.map(({ id, ragic_id, ...rest }) => rest);
+        return JSON.stringify({ orders: clean, count: orders.length });
+      }
+
+      case 'queryRagicCustomers': {
+        const customers = await getRagicCustomers({
+          search: args.search as string | undefined,
+          limit: args.limit as number | undefined,
+        });
+        if (customers.length === 0) {
+          return JSON.stringify({ customers: [], count: 0, hint: 'No customers found. Try syncRagic target="customers" to pull from Ragic.' });
+        }
+        const cleanCust = customers.map(({ id, ...rest }) => rest);
+        return JSON.stringify({ customers: cleanCust, count: customers.length });
+      }
+
+      case 'syncRagic': {
+        const target = (args.target as string) || 'all';
+        const results: any = {};
+        if (target === 'orders' || target === 'all') {
+          results.orders = await syncRagicOrders();
+        }
+        if (target === 'customers' || target === 'all') {
+          results.customers = await syncRagicCustomers();
+        }
+        clearRagicCache();
+        return JSON.stringify({ synced: true, ...results });
       }
 
       case 'computeStats': {
