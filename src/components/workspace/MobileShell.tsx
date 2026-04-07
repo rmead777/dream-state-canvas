@@ -23,6 +23,7 @@ import {
   AVAILABLE_MODELS,
 } from '@/lib/admin-settings';
 import { AITelemetryPanel } from './AITelemetryPanel';
+import { BackgroundShader } from './BackgroundShader';
 import { PromptEditor } from './PromptEditor';
 import { toast } from 'sonner';
 
@@ -200,7 +201,8 @@ export function MobileShell() {
   }, [state.objects, dispatch]);
 
   return (
-    <div className="relative flex h-screen flex-col overflow-hidden bg-workspace-bg">
+    <div className="relative flex h-screen flex-col overflow-hidden">
+      <BackgroundShader />
       {/* Immersive overlay */}
       <ImmersiveOverlay />
 
