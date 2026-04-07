@@ -276,33 +276,27 @@ export function MobileShell() {
                           <p className="text-sm text-workspace-text leading-relaxed">{entry.query}</p>
                         </div>
                       </div>
+                      {/* Reasoning steps — inline before final response */}
+                      {entry.steps && entry.steps.length > 1 && (
+                        <div className="flex flex-col items-start gap-1.5 max-w-[92%]">
+                          {entry.steps.map((step, si) => (
+                            <div key={si} className="flex items-start gap-2 w-full">
+                              <div className="mt-1 flex-shrink-0 h-4 w-4 rounded-full bg-workspace-accent/10 flex items-center justify-center">
+                                <span className="text-[8px] font-mono text-workspace-accent/60">{si + 1}</span>
+                              </div>
+                              <div className="rounded-xl bg-workspace-surface/30 border border-workspace-border/25 px-3 py-2 flex-1">
+                                <p className="text-[11px] text-workspace-text-secondary/70 leading-relaxed whitespace-pre-wrap">{step}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       {/* Sherpa response */}
                       {entry.response && (
                         <div className="flex flex-col items-start gap-1">
                           <div className="max-w-[92%] rounded-2xl rounded-bl-md bg-white border border-workspace-border/40 px-3.5 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
                             <MarkdownRenderer content={entry.response} />
                           </div>
-                          {entry.steps && entry.steps.length > 1 && (
-                            <button
-                              onClick={() => setExpandedSteps(prev => ({ ...prev, [i]: !prev[i] }))}
-                              className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] text-workspace-text-secondary/50"
-                            >
-                              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                                className={`transition-transform duration-150 ${expandedSteps[i] ? 'rotate-90' : ''}`}>
-                                <path d="m9 18 6-6-6-6"/>
-                              </svg>
-                              {entry.steps.length} steps
-                            </button>
-                          )}
-                          {expandedSteps[i] && entry.steps && (
-                            <div className="max-w-[92%] space-y-1 pl-1 border-l-2 border-workspace-border/30">
-                              {entry.steps.map((step, si) => (
-                                <div key={si} className="rounded-xl bg-workspace-surface/30 border border-workspace-border/25 px-3 py-2">
-                                  <p className="text-[10px] text-workspace-text-secondary/60 leading-relaxed whitespace-pre-wrap">{step}</p>
-                                </div>
-                              ))}
-                            </div>
-                          )}
                         </div>
                       )}
                       {/* Processing indicator — minimal in-thread hint (main animation is above input) */}
