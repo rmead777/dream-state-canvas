@@ -98,7 +98,7 @@ export default function Auth() {
         <section className="mb-10 max-w-[46rem] space-y-6 lg:mb-0 lg:flex-1">
           <div className="inline-flex items-center gap-2 rounded-full border border-workspace-accent/15 bg-white/55 px-3 py-1.5 text-[11px] uppercase tracking-[0.24em] text-workspace-accent shadow-[0_10px_30px_rgba(99,102,241,0.08)] backdrop-blur-sm">
             <span className="text-sm leading-none">✦</span>
-            Dream State Canvas
+            Sherpa AI
           </div>
 
           <div className="space-y-4">

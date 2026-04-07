@@ -1135,7 +1135,7 @@ export async function executeTool(
         const icsContent = [
           'BEGIN:VCALENDAR',
           'VERSION:2.0',
-          'PRODID:-//Dream State Canvas//EN',
+          'PRODID:-//Sherpa AI//EN',
           'BEGIN:VEVENT',
           `UID:${uid}`,
           `DTSTAMP:${now}`,

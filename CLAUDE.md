@@ -30,7 +30,7 @@ This is an **intent manifestation engine**, not a dashboard with AI. The AI IS t
 
 ## Project Overview
 
-Dream State Canvas is an AI-powered analytical workspace where users upload documents (spreadsheets, PDFs, etc.) and interact with them through natural language. The app materializes data as "workspace objects" — cards that appear, collapse, fuse together, and dissolve — on a spatial canvas. An AI assistant called "Sherpa" observes workspace state and proactively offers suggestions.
+Sherpa AI (formerly Dream State Canvas) is an AI-powered analytical workspace where users upload documents (spreadsheets, PDFs, etc.) and interact with them through natural language. The app materializes data as "workspace objects" — cards that appear, collapse, fuse together, and dissolve — on a spatial canvas. An AI assistant called "Sherpa" observes workspace state and proactively offers suggestions.
 
 Originally scaffolded with Lovable.dev. Uses Supabase for backend (auth, database, storage, edge functions).
 
