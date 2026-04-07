@@ -881,6 +881,9 @@ export async function executeTool(
           getDataset(args.rightDocumentId),
         ]);
 
+        if (!leftDs) return JSON.stringify({ error: `Left document "${args.leftDocumentId}" not found or has no dataset.` });
+        if (!rightDs) return JSON.stringify({ error: `Right document "${args.rightDocumentId}" not found or has no dataset.` });
+
         const leftKeyIdx = leftDs.columns.findIndex(
           (c) => c.toLowerCase() === String(args.leftKey).toLowerCase()
         );
