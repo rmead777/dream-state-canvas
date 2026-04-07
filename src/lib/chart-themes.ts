@@ -11,14 +11,20 @@ export interface ChartTheme {
   text?: string;
 }
 
+/**
+ * Default palette: muted, professional, high-contrast-on-white.
+ * Desaturated tones that look like a Bloomberg terminal or McKinsey deck,
+ * not a toy store. Every theme must clear the "would a CFO present this?" bar.
+ */
 export const CHART_THEMES: Record<string, ChartTheme> = {
+  // ─── DEFAULT — used when AI doesn't specify a theme ─────────────────────
   frosted: {
-    colors: ['#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#ef4444'],
+    colors: ['#4f5d75', '#2b6777', '#7a6c5d', '#8b5a5a', '#5b6e8a', '#6b7f6b', '#826a82', '#5d7a8a', '#8a7a5d', '#6d5d7a'],
     background: 'transparent',
     text: '#6b7280',
   },
   corporate: {
-    colors: ['#1e3a5f', '#2563eb', '#0ea5e9', '#64748b', '#94a3b8'],
+    colors: ['#1e3a5f', '#3d6b8e', '#5a8dad', '#2d4a3e', '#6b5b4e'],
     background: 'transparent',
     text: '#374151',
   },
@@ -28,42 +34,42 @@ export const CHART_THEMES: Record<string, ChartTheme> = {
     text: '#d1d5db',
   },
   midnight: {
-    colors: ['#818cf8', '#a78bfa', '#c084fc', '#e879f9', '#f472b6'],
+    colors: ['#6366a0', '#7b6fa0', '#8e7db0', '#a08bb0', '#9a7da0'],
     background: 'transparent',
-    text: '#c4b5fd',
+    text: '#8b8b9e',
   },
   earth: {
-    colors: ['#78350f', '#b45309', '#d97706', '#65a30d', '#047857'],
+    colors: ['#5d4930', '#7a6040', '#8a7d5a', '#5a6e48', '#3d5a4a'],
     background: 'transparent',
     text: '#6b7280',
   },
   ocean: {
-    colors: ['#0c4a6e', '#0369a1', '#0ea5e9', '#38bdf8', '#7dd3fc', '#bae6fd'],
+    colors: ['#1a3a5c', '#2a5a7a', '#3a7a9a', '#4a8aaa', '#5a9aba', '#6aacca'],
     background: 'transparent',
     text: '#475569',
   },
   sunset: {
-    colors: ['#9f1239', '#e11d48', '#f43f5e', '#fb923c', '#fbbf24', '#fde68a'],
+    colors: ['#7a3040', '#9a4050', '#aa6050', '#ba8060', '#ca9a70', '#dab080'],
     background: 'transparent',
     text: '#6b7280',
   },
   forest: {
-    colors: ['#14532d', '#166534', '#22c55e', '#4ade80', '#86efac'],
+    colors: ['#2a4a30', '#3a5a3a', '#4a6a4a', '#5a7a5a', '#6a8a6a'],
     background: 'transparent',
     text: '#374151',
   },
   royal: {
-    colors: ['#312e81', '#4338ca', '#6366f1', '#818cf8', '#a5b4fc', '#c7d2fe'],
+    colors: ['#2a2860', '#3a3880', '#4a4890', '#5a58a0', '#6a68b0', '#7a78c0'],
     background: 'transparent',
     text: '#4b5563',
   },
   warm: {
-    colors: ['#9a3412', '#ea580c', '#f97316', '#fb923c', '#fdba74', '#fed7aa'],
+    colors: ['#6a3a20', '#8a5030', '#9a6a40', '#aa7a50', '#ba8a60', '#ca9a70'],
     background: 'transparent',
     text: '#6b7280',
   },
   monochrome: {
-    colors: ['#111827', '#374151', '#6b7280', '#9ca3af', '#d1d5db', '#e5e7eb'],
+    colors: ['#1a2030', '#3a4050', '#5a6070', '#7a8090', '#9aa0b0', '#bac0d0'],
     background: 'transparent',
     text: '#374151',
   },
@@ -73,7 +79,7 @@ export const CHART_THEMES: Record<string, ChartTheme> = {
     text: '#6b7280',
   },
   finance: {
-    colors: ['#1e3a5f', '#10b981', '#ef4444', '#f59e0b', '#6366f1', '#8b5cf6'],
+    colors: ['#1e3a5f', '#2d6a4f', '#8b3a3a', '#7a6a3a', '#4a4a7a', '#5a4a6a'],
     background: 'transparent',
     text: '#374151',
   },

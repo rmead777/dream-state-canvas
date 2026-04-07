@@ -537,7 +537,7 @@ function ChartRenderer({ section }: { section: { chartType: string; xAxis: strin
   const yAxisKeys = isMultiSeries
     ? Object.keys(section.data[0] || {}).filter(k => k !== section.xAxis && k !== '__color')
     : [section.yAxis];
-  const colorPalette = resolvedTheme?.colors || (isMultiSeries && section.colors) || [primaryColor, '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+  const colorPalette = resolvedTheme?.colors || (isMultiSeries && section.colors) || defaultPalette;
 
   // Build per-bar color array
   const barColors = usePerBarColoring
