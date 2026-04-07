@@ -20,6 +20,7 @@ import {
   Treemap, FunnelChart, Funnel, LabelList,
 } from 'recharts';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { useWorkspaceActions } from '@/hooks/useWorkspaceActions';
 import { ENTITY_COLUMN_PATTERNS } from '@/lib/entity-extractor';
 
 interface AnalysisCardProps {
@@ -28,6 +29,7 @@ interface AnalysisCardProps {
 
 export function AnalysisCard({ object }: AnalysisCardProps) {
   const { state, dispatch } = useWorkspace();
+  const { processIntent } = useWorkspaceActions();
   const highlightedEntity = state.activeContext.highlightedEntity;
   const sections: CardSectionType[] = object.context?.sections || [];
 
@@ -38,7 +40,8 @@ export function AnalysisCard({ object }: AnalysisCardProps) {
 
   const handleEntityClick = useCallback((entityName: string) => {
     dispatch({ type: 'HIGHLIGHT_ENTITY', payload: { entityName } });
-  }, [dispatch]);
+    processIntent(`tell me about ${entityName}`);
+  }, [dispatch, processIntent]);
 
   if (sections.length === 0) {
     // Fallback: if no sections but there's content, render as narrative
@@ -231,7 +234,7 @@ function TableRenderer({ section, highlightedEntity, onEntityClick }: {
                       {isEntityCol && cellStr && onEntityClick ? (
                         <button
                           onClick={() => onEntityClick(cellStr)}
-                          className={`text-left underline-offset-2 hover:underline hover:text-workspace-accent transition-colors ${isActiveEntity ? 'text-workspace-accent font-semibold' : ''}`}
+                          className={`text-left text-workspace-accent font-medium hover:underline underline-offset-2 cursor-pointer transition-colors ${isActiveEntity ? 'text-workspace-accent font-semibold' : ''}`}
                         >
                           {cellStr}
                         </button>
