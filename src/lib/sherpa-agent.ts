@@ -157,12 +157,21 @@ Cross-reference email data with QuickBooks AP data and the vendor tracker for co
 Emails from this folder are auto-forwarded from ap@incoa.com — the actual sender info is often in the forwarded body, not the envelope "from".
 Use refreshEmails to sync NEW emails from Outlook (requires sign-in). The user can also specify a different folderName.`;
 
+  const ragicHint = `\nRAGIC CRM INTEGRATION: Ragic order and customer data is cached locally and available via queryRagicOrders and queryRagicCustomers tools. Data is synced on demand — call syncRagic to pull fresh data from Ragic.
+  - queryRagicOrders — sales orders with customer, product, quantity (lbs), price, delivery date, due date, payment terms, status (Order Confirmed / Packaged/Loaded / Shipped), packaging class
+  - queryRagicCustomers — customer profiles with account name, QB name, payment terms, addresses, freight terms, notes
+  - syncRagic — pull fresh data from Ragic API (target: "orders", "customers", or "all")
+Use Ragic data when the user asks about orders, deliveries, the shipping pipeline, "what's shipping next week?", customer order history, or revenue forecasting.
+CRITICAL FOR CASH FORECASTING: Cross-reference Ragic orders (upcoming deliveries = future invoices) with QuickBooks AR (existing invoices) to build cash forecasts. Ragic shows what's COMING, QB shows what's already BILLED.
+Use syncRagic when the user says "refresh ragic", "sync orders", "update ragic data", "pull latest from ragic", etc.`;
+
   const textContent = [
     `User query: "${query}"`,
     focusedHint,
     `\nWorkspace state:\n${structuredContext}`,
     documentsHint,
     qboHint,
+    ragicHint,
     editHint,
     scratchpadHint,
     emailHint,

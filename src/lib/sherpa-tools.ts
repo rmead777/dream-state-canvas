@@ -1490,8 +1490,8 @@ export async function executeTool(
         if (orders.length === 0) {
           return JSON.stringify({ orders: [], count: 0, hint: 'No orders found matching filters. Try syncRagic to pull fresh data, or broaden your date/status/customer filters.' });
         }
-        // Return without raw_record to keep token count manageable
-        const clean = orders.map(({ id, ragic_id, ...rest }) => rest);
+        // Strip internal IDs and raw_record JSONB to keep token count manageable
+        const clean = orders.map(({ id, ragic_id, raw_record, cached_at, ...rest }: any) => rest);
         return JSON.stringify({ orders: clean, count: orders.length });
       }
 

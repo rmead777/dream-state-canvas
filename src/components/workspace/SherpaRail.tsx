@@ -11,6 +11,7 @@ import { MODE_LABELS } from '@/lib/cognitive-modes';
 import { VoiceIndicator } from './VoiceIndicator';
 import { DocumentContextSelector, ContextMode } from './DocumentContextSelector';
 import { QBOStatusPanel } from './QBOStatusPanel';
+import { RagicStatusPanel } from './RagicStatusPanel';
 import { OutlookStatusPanel } from './OutlookStatusPanel';
 import { useDocuments } from '@/contexts/DocumentContext';
 import { invalidateProfileCache } from '@/lib/intent-engine';
@@ -844,6 +845,7 @@ export function SherpaRail() {
                 onOpenDocument={handleOpenDocument}
               />
               <QBOStatusPanel />
+              <RagicStatusPanel />
               <OutlookStatusPanel />
             </div>
           )}
