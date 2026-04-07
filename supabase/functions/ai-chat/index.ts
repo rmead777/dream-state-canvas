@@ -169,10 +169,10 @@ ALWAYS call computeStats BEFORE creating charts to understand the data shape, co
 ── RECHARTS (fast, native rendering) ──
 
 chart → { type: "chart", chartType: "<TYPE>", xAxis: "field", yAxis: "field",
-           data: [{...}, ...], caption: "...", height: 300, theme: "frosted" }
+           data: [{...}, ...], caption: "...", height: 300 }
 
   Shared options for ALL chart types:
-    theme: "frosted" (DEFAULT — use this unless you have a reason not to) |"corporate"|"neon"|"midnight"|"earth"|"ocean"|"sunset"|"forest"|"royal"|"warm"|"monochrome"|"candy"|"finance"
+    theme: "default" (muted professional tones — ALWAYS use this) |"corporate"|"earth"|"ocean"|"forest"|"royal"|"warm"|"monochrome"|"finance"|"midnight"
     color: "#hex"                    ← single color (overrides theme primary)
     colors: ["#ef4444", ...]         ← per-item colors or multi-series palette (overrides theme)
     fillOpacity: 0.85                ← 0-1 (default 0.85 for bar, 0.15 for area)

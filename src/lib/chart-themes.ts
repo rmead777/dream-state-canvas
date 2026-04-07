@@ -1,7 +1,7 @@
 /**
  * Chart Themes — named color palettes for chart and vegalite sections.
  *
- * The AI can reference these by name (e.g. theme: "frosted") instead of
+ * The AI can reference these by name (e.g. theme: "default") instead of
  * specifying hex codes. The renderer resolves the name to a palette.
  */
 
@@ -17,8 +17,8 @@ export interface ChartTheme {
  * not a toy store. Every theme must clear the "would a CFO present this?" bar.
  */
 export const CHART_THEMES: Record<string, ChartTheme> = {
-  // ─── DEFAULT — used when AI doesn't specify a theme ─────────────────────
-  frosted: {
+  // ─── DEFAULT — muted, professional, desaturated ──────────────────────────
+  default: {
     colors: ['#4f5d75', '#2b6777', '#7a6c5d', '#8b5a5a', '#5b6e8a', '#6b7f6b', '#826a82', '#5d7a8a', '#8a7a5d', '#6d5d7a'],
     background: 'transparent',
     text: '#6b7280',
