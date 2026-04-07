@@ -149,6 +149,126 @@ export type Database = {
         }
         Relationships: []
       }
+      customer_product_prices: {
+        Row: {
+          created_at: string | null
+          customer_name: string
+          id: string
+          price_per_lb: number | null
+          price_per_ton: number
+          product_name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          customer_name: string
+          id?: string
+          price_per_lb?: number | null
+          price_per_ton: number
+          product_name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          customer_name?: string
+          id?: string
+          price_per_lb?: number | null
+          price_per_ton?: number
+          product_name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      customer_profiles: {
+        Row: {
+          account_id: string | null
+          account_name: string
+          account_notes: string | null
+          account_short_name: string | null
+          account_type: string | null
+          billing_city: string | null
+          billing_company_name: string | null
+          billing_country: string | null
+          billing_state: string | null
+          billing_street: string | null
+          billing_zip: string | null
+          created_at: string | null
+          freight_terms: string | null
+          id: string
+          is_distributor_account: boolean | null
+          parent_account: string | null
+          payment_method: string | null
+          payment_terms: string | null
+          po_required: boolean | null
+          quickbooks_name: string | null
+          shipping_city: string | null
+          shipping_company_name: string | null
+          shipping_country: string | null
+          shipping_state: string | null
+          shipping_street: string | null
+          shipping_zip: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          account_id?: string | null
+          account_name: string
+          account_notes?: string | null
+          account_short_name?: string | null
+          account_type?: string | null
+          billing_city?: string | null
+          billing_company_name?: string | null
+          billing_country?: string | null
+          billing_state?: string | null
+          billing_street?: string | null
+          billing_zip?: string | null
+          created_at?: string | null
+          freight_terms?: string | null
+          id?: string
+          is_distributor_account?: boolean | null
+          parent_account?: string | null
+          payment_method?: string | null
+          payment_terms?: string | null
+          po_required?: boolean | null
+          quickbooks_name?: string | null
+          shipping_city?: string | null
+          shipping_company_name?: string | null
+          shipping_country?: string | null
+          shipping_state?: string | null
+          shipping_street?: string | null
+          shipping_zip?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          account_id?: string | null
+          account_name?: string
+          account_notes?: string | null
+          account_short_name?: string | null
+          account_type?: string | null
+          billing_city?: string | null
+          billing_company_name?: string | null
+          billing_country?: string | null
+          billing_state?: string | null
+          billing_street?: string | null
+          billing_zip?: string | null
+          created_at?: string | null
+          freight_terms?: string | null
+          id?: string
+          is_distributor_account?: boolean | null
+          parent_account?: string | null
+          payment_method?: string | null
+          payment_terms?: string | null
+          po_required?: boolean | null
+          quickbooks_name?: string | null
+          shipping_city?: string | null
+          shipping_company_name?: string | null
+          shipping_country?: string | null
+          shipping_state?: string | null
+          shipping_street?: string | null
+          shipping_zip?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       documents: {
         Row: {
           created_at: string
@@ -215,6 +335,114 @@ export type Database = {
           display_name?: string | null
           id?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      ragic_connections: {
+        Row: {
+          account_name: string
+          api_key_encrypted: string
+          created_at: string | null
+          customer_database: string | null
+          customer_sheet_id: string | null
+          id: string
+          is_active: boolean | null
+          last_sync_at: string | null
+          sheet_path: string
+          shipment_sheet_path: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          account_name: string
+          api_key_encrypted: string
+          created_at?: string | null
+          customer_database?: string | null
+          customer_sheet_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_sync_at?: string | null
+          sheet_path: string
+          shipment_sheet_path?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          account_name?: string
+          api_key_encrypted?: string
+          created_at?: string | null
+          customer_database?: string | null
+          customer_sheet_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_sync_at?: string | null
+          sheet_path?: string
+          shipment_sheet_path?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      ragic_orders_cache: {
+        Row: {
+          cached_at: string | null
+          class_name: string | null
+          customer_name: string | null
+          customer_po: string | null
+          delivery_date: string | null
+          due_date: string | null
+          id: string
+          invoice_date: string | null
+          order_number: string | null
+          payment_terms: string | null
+          product_name: string | null
+          quantity: number | null
+          ragic_id: string
+          raw_record: Json | null
+          resolved_qb_customer_name: string | null
+          status: string | null
+          total_amount: number | null
+          unit_price: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          cached_at?: string | null
+          class_name?: string | null
+          customer_name?: string | null
+          customer_po?: string | null
+          delivery_date?: string | null
+          due_date?: string | null
+          id?: string
+          invoice_date?: string | null
+          order_number?: string | null
+          payment_terms?: string | null
+          product_name?: string | null
+          quantity?: number | null
+          ragic_id: string
+          raw_record?: Json | null
+          resolved_qb_customer_name?: string | null
+          status?: string | null
+          total_amount?: number | null
+          unit_price?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          cached_at?: string | null
+          class_name?: string | null
+          customer_name?: string | null
+          customer_po?: string | null
+          delivery_date?: string | null
+          due_date?: string | null
+          id?: string
+          invoice_date?: string | null
+          order_number?: string | null
+          payment_terms?: string | null
+          product_name?: string | null
+          quantity?: number | null
+          ragic_id?: string
+          raw_record?: Json | null
+          resolved_qb_customer_name?: string | null
+          status?: string | null
+          total_amount?: number | null
+          unit_price?: number | null
+          updated_at?: string | null
         }
         Relationships: []
       }
