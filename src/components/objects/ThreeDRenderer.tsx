@@ -16,6 +16,7 @@ import { Suspense, useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Text, RoundedBox, Float } from '@react-three/drei';
 import { CHART_THEMES } from '@/lib/chart-themes';
+import { easeOutCubic, easeOutSpring, getStaggerDelay } from '@/hooks/useAnimationTimeline';
 import * as THREE from 'three';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -378,6 +379,311 @@ function SurfaceScene({ data, xAxis, yAxis, zAxis, colors }: {
   );
 }
 
+// ─── Bar Race Scene (Animated) ────────────────────────────────────────────────
+
+function BarRaceScene({ data, labelKey, valueKey, colors }: {
+  data: Record<string, string | number>[];
+  labelKey: string;
+  valueKey: string;
+  colors: string[];
+}) {
+  const maxVal = useMemo(() => Math.max(...data.map(d => Number(d[valueKey]) || 0), 1), [data, valueKey]);
+  const sorted = useMemo(() =>
+    [...data].sort((a, b) => (Number(b[valueKey]) || 0) - (Number(a[valueKey]) || 0)),
+    [data, valueKey]
+  );
+
+  const barWidth = 0.6;
+  const gap = 0.3;
+  const totalWidth = data.length * (barWidth + gap) - gap;
+  const startRef = useRef<number | null>(null);
+  const groupRef = useRef<THREE.Group>(null);
+
+  // Compute sorted positions for phase 2
+  const sortedPositions = useMemo(() => {
+    const map = new Map<number, number>();
+    sorted.forEach((d, sortIdx) => {
+      const origIdx = data.indexOf(d);
+      map.set(origIdx, sortIdx * (barWidth + gap));
+    });
+    return map;
+  }, [data, sorted, barWidth, gap]);
+
+  useFrame(({ clock }) => {
+    if (startRef.current === null) startRef.current = clock.getElapsedTime();
+    const elapsed = clock.getElapsedTime() - startRef.current;
+
+    if (!groupRef.current) return;
+    const children = groupRef.current.children;
+
+    for (let i = 0; i < data.length; i++) {
+      const child = children[i] as THREE.Group;
+      if (!child) continue;
+
+      const val = Number(data[i][valueKey]) || 0;
+      const targetHeight = (val / maxVal) * 4;
+      const stagger = getStaggerDelay(i, 0.06);
+
+      // Phase 1: grow (0 → 1.2s)
+      const growT = Math.min(1, Math.max(0, elapsed - stagger) / 1.0);
+      const height = targetHeight * easeOutCubic(growT);
+
+      // Phase 2: slide to sorted position (1.2s → 2.0s)
+      const origX = i * (barWidth + gap);
+      const sortedX = sortedPositions.get(i) ?? origX;
+      const slideT = Math.min(1, Math.max(0, elapsed - 1.2) / 0.8);
+      const x = origX + (sortedX - origX) * easeOutSpring(slideT);
+
+      child.position.x = x + barWidth / 2 - totalWidth / 2;
+
+      // Update bar mesh scale
+      const bar = child.children[0] as THREE.Mesh;
+      if (bar) {
+        bar.scale.y = Math.max(0.001, height);
+        bar.position.y = height / 2;
+      }
+      // Update wireframe
+      const wire = child.children[1] as THREE.LineSegments;
+      if (wire) {
+        wire.scale.y = Math.max(0.001, height);
+        wire.position.y = height / 2;
+      }
+      // Update value label
+      const valLabel = child.children[2] as any;
+      if (valLabel) valLabel.position.y = height + 0.3;
+    }
+  });
+
+  return (
+    <group ref={groupRef}>
+      {data.map((d, i) => {
+        const color = colors[i % colors.length];
+        return (
+          <group key={i}>
+            <RoundedBox args={[barWidth, 1, barWidth]} position={[0, 0, 0]} radius={0.05} smoothness={4}>
+              <meshStandardMaterial color={color} transparent opacity={0.35} roughness={0.2} metalness={0.1} />
+            </RoundedBox>
+            <lineSegments>
+              <edgesGeometry args={[new THREE.BoxGeometry(barWidth, 1, barWidth)]} />
+              <lineBasicMaterial color={color} />
+            </lineSegments>
+            <Text position={[0, 0.3, 0]} fontSize={0.2} color="#374151" anchorX="center" anchorY="bottom">
+              {''}
+            </Text>
+            <Text position={[0, -0.15, barWidth / 2 + 0.3]} fontSize={0.16} color="#6b7280" anchorX="center" anchorY="top" maxWidth={1.2}>
+              {String(d[labelKey] || '')}
+            </Text>
+          </group>
+        );
+      })}
+      <GridFloor size={Math.max(totalWidth + 2, 6)} />
+    </group>
+  );
+}
+
+// ─── Radial Burst Scene (Animated) ────────────────────────────────────────────
+
+function RadialBurstScene({ data, labelKey, valueKey, colors }: {
+  data: Record<string, string | number>[];
+  labelKey: string;
+  valueKey: string;
+  colors: string[];
+}) {
+  const total = useMemo(() => data.reduce((sum, d) => sum + (Number(d[valueKey]) || 0), 0), [data, valueKey]);
+  const startRef = useRef<number | null>(null);
+  const groupRef = useRef<THREE.Group>(null);
+
+  const segments = useMemo(() => {
+    let startAngle = 0;
+    return data.map((d, i) => {
+      const val = Number(d[valueKey]) || 0;
+      const angle = (val / total) * Math.PI * 2;
+      const seg = { startAngle, angle, color: colors[i % colors.length], label: String(d[labelKey] || ''), val };
+      startAngle += angle;
+      return seg;
+    });
+  }, [data, valueKey, labelKey, total, colors]);
+
+  useFrame(({ clock }) => {
+    if (startRef.current === null) startRef.current = clock.getElapsedTime();
+    const elapsed = clock.getElapsedTime() - startRef.current;
+
+    if (!groupRef.current) return;
+
+    segments.forEach((seg, i) => {
+      const child = groupRef.current!.children[i] as THREE.Group;
+      if (!child) return;
+
+      const delay = getStaggerDelay(i, 0.1);
+      const t = Math.min(1, Math.max(0, elapsed - delay) / 0.8);
+      const scale = easeOutSpring(t);
+
+      child.scale.set(scale, scale, scale);
+
+      // Emissive pulse on completion
+      const mesh = child.children[0] as THREE.Mesh;
+      if (mesh?.material && 'emissiveIntensity' in (mesh.material as any)) {
+        const mat = mesh.material as THREE.MeshStandardMaterial;
+        if (t >= 1 && elapsed - delay < 1.2) {
+          mat.emissiveIntensity = 0.3 * (1 - (elapsed - delay - 0.8) / 0.4);
+        } else {
+          mat.emissiveIntensity = 0;
+        }
+      }
+    });
+  });
+
+  return (
+    <group rotation={[-0.3, 0, 0]} ref={groupRef}>
+      {segments.map((seg, i) => {
+        const midAngle = seg.startAngle + seg.angle / 2;
+        const shape = new THREE.Shape();
+        const outerR = 2;
+        const innerR = 1;
+        const steps = 32;
+
+        for (let s = 0; s <= steps; s++) {
+          const a = seg.startAngle + (seg.angle * s) / steps;
+          if (s === 0) shape.moveTo(Math.cos(a) * outerR, Math.sin(a) * outerR);
+          else shape.lineTo(Math.cos(a) * outerR, Math.sin(a) * outerR);
+        }
+        for (let s = steps; s >= 0; s--) {
+          const a = seg.startAngle + (seg.angle * s) / steps;
+          shape.lineTo(Math.cos(a) * innerR, Math.sin(a) * innerR);
+        }
+        shape.closePath();
+
+        const labelX = Math.cos(midAngle) * 2.5;
+        const labelY = Math.sin(midAngle) * 2.5;
+
+        return (
+          <group key={i}>
+            <mesh rotation={[-Math.PI / 2, 0, 0]}>
+              <extrudeGeometry args={[shape, { depth: 0.4, bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.03, bevelSegments: 2 }]} />
+              <meshStandardMaterial
+                color={seg.color}
+                transparent
+                opacity={0.4}
+                roughness={0.2}
+                metalness={0.1}
+                emissive={seg.color}
+                emissiveIntensity={0}
+                side={THREE.DoubleSide}
+              />
+            </mesh>
+            <Text position={[labelX, 0.5, -labelY]} fontSize={0.18} color="#374151" anchorX="center">
+              {seg.label}
+            </Text>
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
+// ─── Connection Map Scene (Animated) ──────────────────────────────────────────
+
+function ConnectionMapScene({ data, labelKey, valueKey, colors }: {
+  data: Record<string, string | number>[];
+  labelKey: string;
+  valueKey: string;
+  colors: string[];
+}) {
+  const maxVal = useMemo(() => Math.max(...data.map(d => Number(d[valueKey]) || 1), 1), [data, valueKey]);
+  const radius = 3;
+  const startRef = useRef<number | null>(null);
+  const groupRef = useRef<THREE.Group>(null);
+
+  useFrame(({ clock }) => {
+    if (startRef.current === null) startRef.current = clock.getElapsedTime();
+    const elapsed = clock.getElapsedTime() - startRef.current;
+
+    if (!groupRef.current) return;
+
+    // Each node has: nodeGroup, lineGroup
+    for (let i = 0; i < data.length; i++) {
+      const nodeGroup = groupRef.current.children[i * 2] as THREE.Group;
+      const lineGroup = groupRef.current.children[i * 2 + 1] as THREE.LineSegments;
+
+      if (!nodeGroup || !lineGroup) continue;
+
+      const delay = getStaggerDelay(i, 0.15);
+
+      // Node: scale in
+      const nodeT = Math.min(1, Math.max(0, elapsed - delay) / 0.4);
+      const nodeScale = easeOutSpring(nodeT);
+      nodeGroup.scale.set(nodeScale, nodeScale, nodeScale);
+
+      // Line: draw on (progressive reveal)
+      const lineDelay = delay + 0.2;
+      const lineT = Math.min(1, Math.max(0, elapsed - lineDelay) / 0.3);
+      const geom = lineGroup.geometry as THREE.BufferGeometry;
+      if (geom) {
+        const totalVerts = geom.attributes.position?.count || 2;
+        geom.setDrawRange(0, Math.ceil(totalVerts * easeOutCubic(lineT)));
+      }
+
+      // Node emissive pulse when line completes
+      const mesh = nodeGroup.children[0] as THREE.Mesh;
+      if (mesh?.material && lineT >= 1) {
+        const mat = mesh.material as THREE.MeshStandardMaterial;
+        const pulseT = elapsed - lineDelay - 0.3;
+        if (pulseT > 0 && pulseT < 0.4) {
+          mat.emissiveIntensity = 0.4 * (1 - pulseT / 0.4);
+        } else {
+          mat.emissiveIntensity = 0;
+        }
+      }
+    }
+  });
+
+  return (
+    <group ref={groupRef}>
+      {data.map((d, i) => {
+        const angle = (i / data.length) * Math.PI * 2;
+        const x = Math.cos(angle) * radius;
+        const z = Math.sin(angle) * radius;
+        const val = Number(d[valueKey]) || 1;
+        const nodeSize = 0.15 + (val / maxVal) * 0.4;
+        const color = colors[i % colors.length];
+
+        // Line geometry from node to center
+        const points = [];
+        const segments = 10;
+        for (let s = 0; s <= segments; s++) {
+          const t = s / segments;
+          points.push(new THREE.Vector3(x * (1 - t), 0, z * (1 - t)));
+        }
+        const lineGeom = new THREE.BufferGeometry().setFromPoints(points);
+
+        return [
+          <group key={`node-${i}`} position={[x, 0, z]}>
+            <mesh>
+              <sphereGeometry args={[nodeSize, 16, 16]} />
+              <meshStandardMaterial color={color} transparent opacity={0.4} roughness={0.2} emissive={color} emissiveIntensity={0} />
+            </mesh>
+            <mesh>
+              <sphereGeometry args={[nodeSize + 0.02, 8, 8]} />
+              <meshBasicMaterial color={color} wireframe />
+            </mesh>
+            <Text position={[0, nodeSize + 0.2, 0]} fontSize={0.16} color="#374151" anchorX="center">
+              {String(d[labelKey] || '')}
+            </Text>
+          </group>,
+          <lineSegments key={`line-${i}`} geometry={lineGeom}>
+            <lineBasicMaterial color={color} transparent opacity={0.5} />
+          </lineSegments>,
+        ];
+      })}
+      {/* Center hub */}
+      <mesh>
+        <sphereGeometry args={[0.2, 16, 16]} />
+        <meshStandardMaterial color="#6366f1" transparent opacity={0.3} />
+      </mesh>
+    </group>
+  );
+}
+
 // ─── Main Renderer ────────────────────────────────────────────────────────────
 
 export function ThreeDRenderer({ section }: ThreeDRendererProps) {
@@ -434,6 +740,17 @@ export function ThreeDRenderer({ section }: ThreeDRendererProps) {
                 zAxis={section.zAxis || 'z'}
                 colors={colors}
               />
+            )}
+
+            {/* Animated scene types */}
+            {section.sceneType === 'barRace' && (
+              <BarRaceScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} />
+            )}
+            {section.sceneType === 'radialBurst' && (
+              <RadialBurstScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} />
+            )}
+            {section.sceneType === 'connectionMap' && (
+              <ConnectionMapScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} />
             )}
 
             <OrbitControls

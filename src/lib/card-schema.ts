@@ -111,9 +111,24 @@ export const EmbedSection = z.object({
   caption: z.string().optional(),
 });
 
+export const AnimatedMetricsSection = z.object({
+  type: z.literal('animated-metrics'),
+  metrics: z.array(z.object({
+    label: z.string(),
+    value: z.number(),
+    unit: z.string().optional(),
+    prefix: z.string().optional(),
+    trend: z.enum(['up', 'down', 'flat']).optional(),
+    trendValue: z.string().optional(),
+    color: z.string().optional(),
+  })),
+  columns: z.number().min(1).max(4).optional(),
+  caption: z.string().optional(),
+});
+
 export const ThreeDSection = z.object({
   type: z.literal('3d'),
-  sceneType: z.enum(['bar3d', 'scatter3d', 'pie3d', 'network', 'surface']),
+  sceneType: z.string(),
   data: z.array(z.record(z.union([z.string(), z.number()]))),
   xAxis: z.string().optional(),
   yAxis: z.string().optional(),
@@ -139,6 +154,7 @@ export const CardSection = z.discriminatedUnion('type', [
   ChartGridSection,
   EmbedSection,
   ThreeDSection,
+  AnimatedMetricsSection,
 ]);
 
 export type CardSectionType = z.infer<typeof CardSection>;
@@ -240,6 +256,10 @@ function normalizeSection(item: unknown): unknown {
         data: { values: (s.data as unknown[]) || [] },
       },
     };
+  }
+  // animated-metrics aliases
+  if (s.type === 'counterDash' || s.type === 'counter-dash' || s.type === 'kpi-grid' || s.type === 'animated-kpi' || s.type === 'animatedMetrics') {
+    return { ...s, type: 'animated-metrics' };
   }
   // 3D aliases
   if (s.type === 'three' || s.type === 'threejs' || s.type === 'three-d' || s.type === '3D') {

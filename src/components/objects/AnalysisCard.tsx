@@ -14,6 +14,8 @@ import { CHART_THEMES } from '@/lib/chart-themes';
 import MarkdownRenderer from './MarkdownRenderer';
 import DOMPurify from 'dompurify';
 
+import { AnimatedMetricsRenderer } from './AnimatedMetricsRenderer';
+
 // Lazy-load ThreeDRenderer to avoid bundling Three.js unless needed
 const ThreeDRenderer = lazy(() => import('./ThreeDRenderer').then(m => ({ default: m.ThreeDRenderer })));
 import {
@@ -112,6 +114,7 @@ function SectionRenderer({ section, highlightedEntity, onEntityClick }: {
     case 'vegalite': return <VegaLiteRenderer section={section as any} />;
     case 'chart-grid': return <ChartGridRenderer section={section as any} />;
     case 'embed': return <EmbedRenderer section={section as any} />;
+    case 'animated-metrics': return <AnimatedMetricsRenderer section={section as any} />;
     case '3d': return (
       <Suspense fallback={<div className="flex items-center justify-center h-48 text-[11px] text-workspace-text-secondary/50">Loading 3D...</div>}>
         <ThreeDRenderer section={section as any} />

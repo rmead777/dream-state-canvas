@@ -276,12 +276,20 @@ chart-grid → { type: "chart-grid", columns: 2, charts: [
 
 3d → { type: "3d", sceneType: "<TYPE>", data: [{...}], caption: "...", height: 320 }
 
-  sceneType values:
+  sceneType values (STATIC):
     bar3d     — 3D bar chart. data: [{ name: "Label", value: 123 }, ...]. Uses labelKey/valueKey.
     scatter3d — 3D scatter plot. data: [{ x: 1, y: 2, z: 3 }, ...]. Uses xAxis/yAxis/zAxis.
     pie3d     — Extruded 3D donut chart. data: [{ name: "Label", value: 123 }, ...]. Uses labelKey/valueKey.
     network   — Force-directed node graph. data: [{ name: "Node", value: 10 }, ...]. Node size = value.
     surface   — 3D surface/terrain from grid data. data: [{ x: 0, y: 5, z: 0 }, ...].
+
+  sceneType values (ANIMATED — premium, visually striking):
+    barRace       — Bars grow from zero with stagger, then sort by value. Same data as bar3d.
+                    Great for "show me top 10 by X" or ranked comparisons. Most impressive for presentations.
+    radialBurst   — Donut segments burst outward from center with spring physics. Same data as pie3d.
+                    Great for composition/breakdown questions. "Show AP breakdown as a radial burst."
+    connectionMap — Nodes appear sequentially, connections draw on one by one, pulse on connect. Same data as network.
+                    Great for "show me vendor relationships" or "map the customer network."
 
   Options:
     labelKey: "name"        ← which field is the label (default: xAxis or "name")
@@ -292,9 +300,21 @@ chart-grid → { type: "chart-grid", columns: 2, charts: [
     caption: "description"  ← ALWAYS include
 
   Use for: impressive executive presentations, spatial data exploration, when 2D charts feel flat.
+  PREFER ANIMATED sceneTypes (barRace, radialBurst, connectionMap) over static ones — they're more engaging.
   The user can click-drag to orbit, scroll to zoom. Frosted glass style matches 2D charts.
-  Use bar3d for ranked data, scatter3d for 3-variable correlation, pie3d for composition,
-  network for relationships/connections, surface for grid/heatmap data.
+
+── ANIMATED METRICS (CSS, no Three.js) ──
+
+animated-metrics → { type: "animated-metrics", metrics: [
+    { label: "Total AP", value: 4150000, unit: "$", trend: "up", trendValue: "+12%" },
+    { label: "Open Orders", value: 127, trend: "down", trendValue: "-3" },
+    { label: "Cash Position", value: 892000, unit: "$", prefix: "$", trend: "flat" }
+  ], columns: 3, caption: "Key financial metrics" }
+
+  Each metric: label (required), value (number, required), unit?, prefix?, trend? (up/down/flat), trendValue? (string), color? (accent border)
+  Values count up from 0 → target with staggered timing and easing. Trend arrows animate in.
+  Use for: KPI dashboards, executive summaries, "show me the key numbers", financial snapshots.
+  columns: 1-4 (default: number of metrics, max 3)
 
 ── EMBEDDED SVG (custom diagrams) ──
 
@@ -599,9 +619,12 @@ When creating analysis or CFO cards, populate sections:
   embed        → { type: "embed", html: "<svg>...</svg>", height: 200, caption: "..." }
                  Custom SVG diagrams, flowcharts, org charts, gauges.
 
-  3d           → { type: "3d", sceneType: "bar3d|scatter3d|pie3d|network|surface",
+  3d           → { type: "3d", sceneType: "bar3d|scatter3d|pie3d|network|surface|barRace|radialBurst|connectionMap",
                    data: [...], labelKey: "name", valueKey: "value", height: 320, caption: "..." }
-                 Interactive 3D with orbit controls. Use for executive presentations, spatial exploration.
+                 Interactive 3D with orbit controls. PREFER animated types (barRace, radialBurst, connectionMap).
+
+  animated-metrics → { type: "animated-metrics", metrics: [{ label, value, unit?, trend? }], columns: 3 }
+                     KPI dashboard with counting numbers. Use for executive summaries.
 
   USE CHARTS PROACTIVELY:
   - Bar for comparisons, line for trends, pie/donut for proportions, scatter for correlations
