@@ -227,7 +227,7 @@ Use syncRagic when the user says "refresh ragic", "sync orders", "update ragic d
     }
 
     // Call AI with tools — only inject docs/memories on first iteration
-    const response = await callAIWithTools(messages, documentIds, memories, iteration === 0);
+    const response = await callAIWithTools(messages, documentIds, memories, iteration === 0, query);
 
     if (!response) {
       return { response: bestText || 'Sherpa could not reach the AI service. Please try again.', actions: remapPendingActions(), toolCallsUsed, nextMoves: capturedNextMoves, steps: allSteps };
@@ -603,6 +603,7 @@ async function callAIWithTools(
   documentIds: string[],
   memories: string,
   isFirstIteration: boolean = true,
+  query: string = '',
 ): Promise<string | null> {
   // We need a non-streaming call that returns the full response including tool_calls.
   // The current callAI streams SSE. For tool calling, we need the full JSON response.
@@ -616,7 +617,7 @@ async function callAIWithTools(
   const token = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
   // Detect special modes from the query
-  const isMorningBrief = /morning\s*brief/i.test(params.query);
+  const isMorningBrief = /morning\s*brief/i.test(query);
   const aiMode = isMorningBrief ? 'morning-brief' : 'agent';
 
   const body: Record<string, unknown> = {
