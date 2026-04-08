@@ -754,8 +754,119 @@ function ConnectionMapScene({ data, labelKey, valueKey, colors, nodeMin = 0.08, 
 }
 
 // ─── Particle Flow Scene (Animated) ───────────────────────────────────────────
+// Tube-based liquid flow with highlight particles on top.
+// Each vendor gets a TubeGeometry along a cubic bezier, width ∝ AP value.
+// A custom ShaderMaterial scrolls UV for the liquid animation.
+// Instanced sparkle particles ride along the tubes for detail.
 
-const PARTICLE_GEO = new THREE.SphereGeometry(0.08, 8, 8);
+const HIGHLIGHT_GEO = new THREE.SphereGeometry(0.03, 6, 6);
+
+/** Cubic bezier curve for Three.js TubeGeometry */
+class FlowBezier extends THREE.Curve<THREE.Vector3> {
+  p0: THREE.Vector3; p1: THREE.Vector3; p2: THREE.Vector3; p3: THREE.Vector3;
+  constructor(p0: THREE.Vector3, p1: THREE.Vector3, p2: THREE.Vector3, p3: THREE.Vector3) {
+    super();
+    this.p0 = p0; this.p1 = p1; this.p2 = p2; this.p3 = p3;
+  }
+  getPoint(t: number) {
+    const mt = 1 - t;
+    return new THREE.Vector3(
+      mt*mt*mt*this.p0.x + 3*mt*mt*t*this.p1.x + 3*mt*t*t*this.p2.x + t*t*t*this.p3.x,
+      mt*mt*mt*this.p0.y + 3*mt*mt*t*this.p1.y + 3*mt*t*t*this.p2.y + t*t*t*this.p3.y,
+      mt*mt*mt*this.p0.z + 3*mt*mt*t*this.p1.z + 3*mt*t*t*this.p2.z + t*t*t*this.p3.z,
+    );
+  }
+}
+
+/** Liquid flow shader — scrolling UV with noise-like pulsing */
+const flowVertexShader = `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const flowFragmentShader = `
+  uniform vec3 uColor;
+  uniform float uTime;
+  uniform float uOpacity;
+  uniform float uSpeed;
+  // Simple pseudo-noise for organic feel
+  float hash(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+  }
+  float noise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(
+      mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
+      mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x),
+      f.y
+    );
+  }
+  varying vec2 vUv;
+  void main() {
+    // Scroll UV along the tube length
+    float scrolledX = vUv.x - uTime * uSpeed;
+    // Noise-based variation for organic liquid feel
+    float n = noise(vec2(scrolledX * 6.0, vUv.y * 3.0 + uTime * 0.5));
+    // Core brightness — brighter in the center of the tube
+    float centerGlow = 1.0 - abs(vUv.y - 0.5) * 2.0;
+    centerGlow = pow(centerGlow, 0.6);
+    // Combine: base color + noise variation + center glow
+    float intensity = 0.5 + 0.3 * n + 0.2 * centerGlow;
+    // Flowing bright bands
+    float band = sin(scrolledX * 12.0) * 0.5 + 0.5;
+    band = pow(band, 2.0);
+    intensity += band * 0.25;
+    // Edge fade for soft tube edges
+    float edgeFade = smoothstep(0.0, 0.15, centerGlow);
+    vec3 col = uColor * intensity;
+    // Add slight white highlight at center
+    col += vec3(0.15) * centerGlow * band;
+    gl_FragColor = vec4(col, uOpacity * edgeFade * (0.6 + 0.4 * intensity));
+  }
+`;
+
+/** A single animated tube for one flow */
+function FlowTube({ curve, color, radius, speed }: {
+  curve: FlowBezier;
+  color: THREE.Color;
+  radius: number;
+  speed: number;
+}) {
+  const matRef = useRef<THREE.ShaderMaterial>(null);
+  const geom = useMemo(() => new THREE.TubeGeometry(curve, 64, radius, 12, false), [curve, radius]);
+
+  useFrame(({ clock }) => {
+    if (matRef.current) {
+      matRef.current.uniforms.uTime.value = clock.getElapsedTime();
+    }
+  });
+
+  const uniforms = useMemo(() => ({
+    uColor: { value: color },
+    uTime: { value: 0 },
+    uOpacity: { value: 0.7 },
+    uSpeed: { value: speed },
+  }), [color, speed]);
+
+  return (
+    <mesh geometry={geom}>
+      <shaderMaterial
+        ref={matRef}
+        vertexShader={flowVertexShader}
+        fragmentShader={flowFragmentShader}
+        uniforms={uniforms}
+        transparent
+        depthWrite={false}
+        side={THREE.DoubleSide}
+      />
+    </mesh>
+  );
+}
 
 function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity: propDensity, flowSpeed: propSpeed }: {
   data: Record<string, string | number>[];
@@ -765,50 +876,54 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity: 
   particleDensity?: number;
   flowSpeed?: number;
 }) {
-  // Read admin settings (structural values used in memos, per-frame values read in useFrame)
   const cfg = mapped3D();
   const density = propDensity ?? cfg.particleDensity;
   const baseSpeed = propSpeed ?? cfg.flowSpeed;
 
-  // Data items are flow sources; each gets particles proportional to value
   const maxVal = useMemo(() => Math.max(...data.map(d => Number(d[valueKey]) || 1), 1), [data, valueKey]);
-  const meshRef = useRef<THREE.InstancedMesh>(null);
+  const highlightRef = useRef<THREE.InstancedMesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
 
-  // Pre-compute flow paths: source (left) → center → destination (right)
+  // Build flows with bezier curves and tube radii
   const flows = useMemo(() => {
     return data.map((d, i) => {
       const val = Number(d[valueKey]) || 1;
-      const ratio = val / maxVal; // 0..1 proportion of largest value
-      const count = Math.max(4, Math.round(ratio * density));
+      const ratio = val / maxVal;
       const yOffset = ((i / (data.length - 1 || 1)) - 0.5) * 5;
+      const p0 = new THREE.Vector3(-5, yOffset, 0);
+      const p1 = new THREE.Vector3(-1.5, yOffset * 0.3, (Math.random() - 0.5) * cfg.trailSpread);
+      const p2 = new THREE.Vector3(1.5, -yOffset * 0.3, (Math.random() - 0.5) * cfg.trailSpread);
+      const p3 = new THREE.Vector3(5, 0, 0);
+      // Tube radius: 0.02 (tiny vendor) → 0.18 (largest), scaled by admin size
+      const sizeScale = cfg.particleRadius / 0.08;
+      const tubeRadius = (0.02 + Math.pow(ratio, mapped3D().valueExponent) * 0.16) * sizeScale;
       return {
         label: String(d[labelKey] || ''),
         val,
         ratio,
-        count,
         sourceY: yOffset,
         color: new THREE.Color(colors[i % colors.length]),
-        p0: new THREE.Vector3(-5, yOffset, 0),
-        p1: new THREE.Vector3(-1.5, yOffset * 0.3, (Math.random() - 0.5) * cfg.trailSpread),
-        p2: new THREE.Vector3(1.5, -yOffset * 0.3, (Math.random() - 0.5) * cfg.trailSpread),
-        p3: new THREE.Vector3(5, 0, 0),
+        curve: new FlowBezier(p0, p1, p2, p3),
+        tubeRadius,
+        // Highlight particle count: small number riding along tubes
+        highlightCount: Math.max(2, Math.round(ratio * density * 0.3)),
+        speedScale: cfg.speedMin + ratio * (cfg.speedMax - cfg.speedMin),
       };
     });
   }, [data, labelKey, valueKey, maxVal, colors, density]);
 
-  const totalParticles = useMemo(() => flows.reduce((sum, f) => sum + f.count, 0), [flows]);
+  // Sparkle particles: small highlights riding on the tubes
+  const totalHighlights = useMemo(() => flows.reduce((sum, f) => sum + f.highlightCount, 0), [flows]);
 
-  // Pre-compute particle offsets (which flow, which index within flow)
-  const particleMap = useMemo(() => {
+  const highlightMap = useMemo(() => {
     const map: { flowIdx: number; timeOffset: number; color: THREE.Color }[] = [];
     for (let fi = 0; fi < flows.length; fi++) {
       const f = flows[fi];
-      for (let pi = 0; pi < f.count; pi++) {
+      for (let pi = 0; pi < f.highlightCount; pi++) {
         map.push({
           flowIdx: fi,
-          timeOffset: pi / f.count,
-          color: f.color,
+          timeOffset: pi / f.highlightCount,
+          color: new THREE.Color().copy(f.color).lerp(new THREE.Color('#ffffff'), 0.5),
         });
       }
     }
@@ -818,57 +933,66 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity: 
   const colorsApplied = useRef(false);
 
   useFrame(({ clock }) => {
-    if (!meshRef.current) return;
+    if (!highlightRef.current) return;
 
-    // Apply instance colors once after mesh is mounted
+    // Apply highlight colors once
     if (!colorsApplied.current) {
-      const colorArr = new Float32Array(totalParticles * 3);
-      particleMap.forEach((p, i) => {
+      const colorArr = new Float32Array(totalHighlights * 3);
+      highlightMap.forEach((p, i) => {
         colorArr[i * 3] = p.color.r;
         colorArr[i * 3 + 1] = p.color.g;
         colorArr[i * 3 + 2] = p.color.b;
       });
-      meshRef.current.instanceColor = new THREE.InstancedBufferAttribute(colorArr, 3);
+      highlightRef.current.instanceColor = new THREE.InstancedBufferAttribute(colorArr, 3);
       colorsApplied.current = true;
     }
 
-    // Read live settings each frame for responsive slider tuning
     const live = mapped3D();
     const elapsed = clock.getElapsedTime() * baseSpeed;
 
-    for (let i = 0; i < particleMap.length; i++) {
-      const { flowIdx, timeOffset } = particleMap[i];
+    for (let i = 0; i < highlightMap.length; i++) {
+      const { flowIdx, timeOffset } = highlightMap[i];
       const f = flows[flowIdx];
 
-      // Per-flow speed: scale by value ratio using admin speed range
       const speedScale = live.speedMin + f.ratio * (live.speedMax - live.speedMin);
-      const t = (elapsed * speedScale + timeOffset) % 1;
+      const t = (elapsed * speedScale * 1.2 + timeOffset) % 1;
 
-      // Cubic bezier interpolation
-      const mt = 1 - t;
-      const x = mt * mt * mt * f.p0.x + 3 * mt * mt * t * f.p1.x + 3 * mt * t * t * f.p2.x + t * t * t * f.p3.x;
-      const y = mt * mt * mt * f.p0.y + 3 * mt * mt * t * f.p1.y + 3 * mt * t * t * f.p2.y + t * t * t * f.p3.y;
-      const z = mt * mt * mt * f.p0.z + 3 * mt * mt * t * f.p1.z + 3 * mt * t * t * f.p2.z + t * t * t * f.p3.z;
+      // Sample position from the bezier curve
+      const pos = f.curve.getPoint(t);
 
-      // Fade opacity at start/end of path
-      const opacity = t < 0.1 ? t / 0.1 : t > 0.9 ? (1 - t) / 0.1 : 1;
+      // Fade at endpoints
+      const fade = t < 0.05 ? t / 0.05 : t > 0.95 ? (1 - t) / 0.05 : 1;
 
-      // Per-flow size: scale by value^exponent for differentiation
-      const sizeRatio = Math.pow(f.ratio, live.valueExponent);
-      const baseSize = live.particleRadius / 0.08; // normalize to geometry radius
-      dummy.position.set(x, y, z);
-      dummy.scale.setScalar((0.5 + opacity * 0.6) * (0.4 + sizeRatio * 1.1) * baseSize);
+      dummy.position.copy(pos);
+      // Slight random offset perpendicular to path for sparkle effect
+      dummy.position.y += Math.sin(elapsed * 8 + i * 1.7) * f.tubeRadius * 0.3;
+      dummy.position.z += Math.cos(elapsed * 6 + i * 2.3) * f.tubeRadius * 0.3;
+      dummy.scale.setScalar(fade * (0.8 + 0.5 * Math.sin(elapsed * 12 + i)));
       dummy.updateMatrix();
-      meshRef.current.setMatrixAt(i, dummy.matrix);
+      highlightRef.current.setMatrixAt(i, dummy.matrix);
     }
-    meshRef.current.instanceMatrix.needsUpdate = true;
+    highlightRef.current.instanceMatrix.needsUpdate = true;
   });
 
   return (
     <group>
-      <instancedMesh ref={meshRef} args={[PARTICLE_GEO, undefined, totalParticles]}>
-        <meshStandardMaterial transparent opacity={cfg.opacity} roughness={0.3} />
-      </instancedMesh>
+      {/* Liquid flow tubes */}
+      {flows.map((f, i) => (
+        <FlowTube
+          key={`tube-${i}`}
+          curve={f.curve}
+          color={f.color}
+          radius={f.tubeRadius}
+          speed={f.speedScale * baseSpeed * 3}
+        />
+      ))}
+
+      {/* Sparkle highlight particles riding on tubes */}
+      {totalHighlights > 0 && (
+        <instancedMesh ref={highlightRef} args={[HIGHLIGHT_GEO, undefined, totalHighlights]}>
+          <meshStandardMaterial transparent opacity={0.9} roughness={0.1} metalness={0.3} />
+        </instancedMesh>
+      )}
 
       {/* Source labels + markers (left side) — sized by value */}
       {flows.map((f, i) => (
