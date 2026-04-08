@@ -14,12 +14,12 @@ import { z } from 'zod';
 export const SummarySection = z.object({
   type: z.literal('summary'),
   text: z.string(),
-});
+}).passthrough();
 
 export const NarrativeSection = z.object({
   type: z.literal('narrative'),
   text: z.string(),
-});
+}).passthrough();
 
 export const MetricSection = z.object({
   type: z.literal('metric'),
@@ -28,7 +28,7 @@ export const MetricSection = z.object({
   unit: z.string().optional(),
   trend: z.enum(['up', 'down', 'flat']).optional(),
   trendLabel: z.string().optional(),
-});
+}).passthrough();
 
 export const TableSection = z.object({
   type: z.literal('table'),
@@ -40,13 +40,13 @@ export const TableSection = z.object({
     style: z.enum(['warning', 'danger', 'success', 'info']),
   })).optional(),
   caption: z.string().optional(),
-});
+}).passthrough();
 
 export const CalloutSection = z.object({
   type: z.literal('callout'),
   severity: z.enum(['info', 'warning', 'danger', 'success']),
   text: z.string(),
-});
+}).passthrough();
 
 export const MetricsRowSection = z.object({
   type: z.literal('metrics-row'),
@@ -54,8 +54,8 @@ export const MetricsRowSection = z.object({
     label: z.string(),
     value: z.union([z.string(), z.number()]),
     unit: z.string().optional(),
-  })),
-});
+  }).passthrough()),
+}).passthrough();
 
 export const ChartSection = z.object({
   type: z.literal('chart'),
@@ -87,11 +87,11 @@ export const ChartSection = z.object({
 
 export const VegaLiteSection = z.object({
   type: z.literal('vegalite'),
-  spec: z.record(z.any()),   // full Vega-Lite JSON spec
+  spec: z.record(z.any()),
   height: z.number().optional(),
   caption: z.string().optional(),
   theme: z.string().optional(),
-});
+}).passthrough();
 
 export const ChartGridSection = z.object({
   type: z.literal('chart-grid'),
@@ -100,16 +100,18 @@ export const ChartGridSection = z.object({
     z.object({ type: z.literal('chart') }).passthrough(),
     z.object({ type: z.literal('vegalite') }).passthrough(),
     z.object({ type: z.literal('embed') }).passthrough(),
+    z.object({ type: z.literal('3d') }).passthrough(),
+    z.object({ type: z.literal('animated-metrics') }).passthrough(),
   ])),
   caption: z.string().optional(),
-});
+}).passthrough();
 
 export const EmbedSection = z.object({
   type: z.literal('embed'),
   html: z.string(),
   height: z.number().optional(),
   caption: z.string().optional(),
-});
+}).passthrough();
 
 export const AnimatedMetricsSection = z.object({
   type: z.literal('animated-metrics'),
@@ -121,10 +123,10 @@ export const AnimatedMetricsSection = z.object({
     trend: z.enum(['up', 'down', 'flat']).optional(),
     trendValue: z.string().optional(),
     color: z.string().optional(),
-  })),
+  }).passthrough()),
   columns: z.number().min(1).max(4).optional(),
   caption: z.string().optional(),
-});
+}).passthrough();
 
 export const ThreeDSection = z.object({
   type: z.literal('3d'),
