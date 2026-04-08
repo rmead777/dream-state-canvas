@@ -16,6 +16,60 @@ import { PublicClientApplication, InteractionRequiredAuthError, type AccountInfo
 import { loginRequest } from './msal-config';
 import { supabase } from '@/integrations/supabase/client';
 
+// ─── EMAIL FOLDER GUARDRAIL ──────────────────────────────────────────────────
+// STRICT SECURITY: Only this folder is accessible. No browsing, no overrides.
+// The app has Mail.Read on the user's entire mailbox, but we ONLY touch this
+// one folder. This cannot be changed without the super admin passphrase.
+//
+// To change: call unlockEmailFolderChange() with the correct passphrase,
+// then call setAllowedEmailFolder(). Lock resets on page reload.
+
+const EMAIL_FOLDER_STORAGE_KEY = 'sherpa-email-allowed-folder';
+const EMAIL_FOLDER_LOCK_PASSPHRASE = 'fairlead-email-vault-2026';
+
+let folderChangeLocked = true;
+
+function getLockedFolder(): string {
+  return localStorage.getItem(EMAIL_FOLDER_STORAGE_KEY) || 'Incoa AP Automated';
+}
+
+/**
+ * Attempt to unlock folder change. Returns true if passphrase matches.
+ * Lock resets on page reload — cannot be permanently unlocked.
+ */
+export function unlockEmailFolderChange(passphrase: string): boolean {
+  if (passphrase.trim() === EMAIL_FOLDER_LOCK_PASSPHRASE) {
+    folderChangeLocked = false;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Change the allowed email folder. Requires unlock first.
+ * Throws if locked.
+ */
+export function setAllowedEmailFolder(folderName: string): void {
+  if (folderChangeLocked) {
+    throw new Error('Email folder change is locked. Unlock with super admin passphrase first.');
+  }
+  localStorage.setItem(EMAIL_FOLDER_STORAGE_KEY, folderName.trim());
+  folderChangeLocked = true; // Re-lock immediately after change
+}
+
+/**
+ * Enforce that a folder name matches the allowed folder.
+ * Any request for a different folder is silently redirected to the allowed folder.
+ */
+function enforceAllowedFolder(requestedFolder?: string): string {
+  const allowed = getLockedFolder();
+  if (requestedFolder && requestedFolder.toLowerCase() !== allowed.toLowerCase()) {
+    console.warn(`[email-store] BLOCKED: Requested folder "${requestedFolder}" — only "${allowed}" is allowed. Redirecting.`);
+  }
+  return allowed;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 // ─── Types ─────────────────────────────────────────────────────────────────
 
 export interface EmailSummary {
@@ -112,7 +166,22 @@ async function graphFetch<T>(endpoint: string): Promise<T | null> {
 
 // ─── Folder Discovery ─────────────────────────────────────────────────────
 
-export async function listMailFolders(): Promise<Array<{ id: string; displayName: string; totalItemCount: number; childFolderCount: number }>> {
+/**
+ * List mail folders — INTERNAL ONLY for folder resolution.
+ * Not exposed to Sherpa tools. Users cannot browse folders.
+ */
+/**
+ * Public: returns ONLY the allowed folder name. No browsing.
+ */
+export function getAllowedEmailFolder(): string {
+  return getLockedFolder();
+}
+
+/**
+ * List mail folders — INTERNAL ONLY for folder resolution.
+ * Not exposed to Sherpa tools. Users cannot browse folders.
+ */
+async function listMailFoldersInternal(): Promise<Array<{ id: string; displayName: string; totalItemCount: number; childFolderCount: number }>> {
   const folders: Array<{ id: string; displayName: string; totalItemCount: number; childFolderCount: number }> = [];
 
   // Top-level folders
@@ -138,7 +207,7 @@ export async function listMailFolders(): Promise<Array<{ id: string; displayName
 }
 
 const folderIdCache = new Map<string, string>();
-const DEFAULT_FOLDER_NAME = 'Incoa AP Automated';
+const DEFAULT_FOLDER_NAME = 'Incoa AP Automated'; // Legacy — enforceAllowedFolder() overrides this
 
 async function resolveFolderId(folderName: string = DEFAULT_FOLDER_NAME): Promise<string | null> {
   const cached = folderIdCache.get(folderName.toLowerCase());
@@ -225,6 +294,7 @@ export async function syncEmails(
   folderName: string = DEFAULT_FOLDER_NAME,
   options?: { fullResync?: boolean; daysBack?: number },
 ): Promise<SyncResult> {
+  folderName = enforceAllowedFolder(folderName);
   const account = getOutlookAccount();
   if (!account) throw new Error('Not signed in to Outlook');
   const userId = account.username || account.homeAccountId;
@@ -414,6 +484,7 @@ export async function getStoredEmails(
   afterDate?: string,
   folderName: string = DEFAULT_FOLDER_NAME,
 ): Promise<EmailSummary[]> {
+  folderName = enforceAllowedFolder(folderName);
   const account = getOutlookAccount();
   const userId = account?.username || account?.homeAccountId || '';
 
@@ -529,6 +600,7 @@ export async function getStoredEmail(graphMessageId: string): Promise<EmailFull 
  * Get sync state for a folder.
  */
 export async function getSyncState(folderName: string = DEFAULT_FOLDER_NAME) {
+  folderName = enforceAllowedFolder(folderName);
   const account = getOutlookAccount();
   const userId = account?.username || account?.homeAccountId || '';
 
@@ -546,6 +618,7 @@ export async function getSyncState(folderName: string = DEFAULT_FOLDER_NAME) {
  * Get total stored email count for a folder.
  */
 export async function getStoredEmailCount(folderName: string = DEFAULT_FOLDER_NAME): Promise<number> {
+  folderName = enforceAllowedFolder(folderName);
   const account = getOutlookAccount();
   const userId = account?.username || account?.homeAccountId || '';
 

@@ -7,9 +7,9 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { isOutlookConnected, getOutlookAccount, signInToOutlook, signOutOfOutlook, syncEmails, getStoredEmailCount, getSyncState, listMailFolders } from '@/lib/email-store';
+import { isOutlookConnected, getOutlookAccount, signInToOutlook, signOutOfOutlook, syncEmails, getStoredEmailCount, getSyncState, getAllowedEmailFolder } from '@/lib/email-store';
 
-const DEFAULT_FOLDER = 'Incoa AP Automated';
+const DEFAULT_FOLDER = getAllowedEmailFolder();
 
 export function OutlookStatusPanel() {
   const [connected, setConnected] = useState(false);
@@ -19,12 +19,8 @@ export function OutlookStatusPanel() {
   const [isExpanded, setIsExpanded] = useState(true);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
-  const [folderName, setFolderName] = useState(DEFAULT_FOLDER);
-  const [editingFolder, setEditingFolder] = useState(false);
-  const [folderInput, setFolderInput] = useState(DEFAULT_FOLDER);
+  const [folderName] = useState(DEFAULT_FOLDER);
   const [syncDays, setSyncDays] = useState(90);
-  const [browsing, setBrowsing] = useState(false);
-  const [folders, setFolders] = useState<Array<{ id: string; displayName: string; totalItemCount: number }> | null>(null);
 
   const checkConnection = useCallback(() => {
     const conn = isOutlookConnected();
@@ -79,36 +75,7 @@ export function OutlookStatusPanel() {
     setLoading(false);
   };
 
-  const handleFolderChange = () => {
-    const trimmed = folderInput.trim();
-    if (trimmed && trimmed !== folderName) {
-      setFolderName(trimmed);
-      setEmailCount(null);
-      setLastSync(null);
-    }
-    setEditingFolder(false);
-  };
-
-  const handleBrowseFolders = async () => {
-    setBrowsing(true);
-    try {
-      const result = await listMailFolders();
-      setFolders(result);
-    } catch {
-      setFolders([]);
-    }
-    setBrowsing(false);
-  };
-
-  const handleSelectFolder = (name: string) => {
-    // For child folders shown as "Parent / Child", use just the child name for the Graph API filter
-    const actualName = name.includes(' / ') ? name.split(' / ').pop()! : name;
-    setFolderName(actualName);
-    setFolderInput(actualName);
-    setEmailCount(null);
-    setLastSync(null);
-    setFolders(null);
-  };
+  // Folder change requires super admin passphrase via unlockEmailFolderChange() + setAllowedEmailFolder().
 
   return (
     <div className="border-b border-workspace-border/30 mb-3">
@@ -175,64 +142,19 @@ export function OutlookStatusPanel() {
                 </span>
               </div>
 
-              {/* Folder — click to edit */}
+              {/* Folder — locked, display only */}
               <div className="flex items-center gap-2 rounded px-2 py-1 bg-workspace-surface/30">
                 <span className="text-[9px] text-workspace-text-secondary/40 shrink-0">Folder:</span>
-                {editingFolder ? (
-                  <input
-                    type="text"
-                    value={folderInput}
-                    onChange={e => setFolderInput(e.target.value)}
-                    onBlur={handleFolderChange}
-                    onKeyDown={e => { if (e.key === 'Enter') handleFolderChange(); if (e.key === 'Escape') { setFolderInput(folderName); setEditingFolder(false); } }}
-                    autoFocus
-                    className="flex-1 bg-transparent text-[10px] text-workspace-text border-b border-workspace-accent/30 outline-none px-0 py-0"
-                  />
-                ) : (
-                  <button
-                    onClick={() => { setFolderInput(folderName); setEditingFolder(true); }}
-                    className="flex-1 text-left text-[10px] text-workspace-text truncate hover:text-workspace-accent transition-colors"
-                    title="Click to change folder"
-                  >
-                    {folderName}
-                  </button>
-                )}
+                <span className="flex-1 text-[10px] text-workspace-text truncate">
+                  {folderName}
+                </span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-workspace-text-secondary/30 shrink-0">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
                 <span className="text-[8px] text-workspace-text-secondary/40 shrink-0 tabular-nums">
                   {emailCount != null ? `${emailCount}` : '—'}
                 </span>
               </div>
-
-              {/* Browse folders button + folder list */}
-              <button
-                onClick={handleBrowseFolders}
-                disabled={browsing}
-                className="w-full rounded px-2 py-1 text-[9px] text-workspace-text-secondary/40 hover:text-workspace-accent border border-dashed border-workspace-border/20 hover:border-workspace-accent/20 transition-colors disabled:opacity-50"
-              >
-                {browsing ? 'Loading folders...' : 'Browse Outlook Folders'}
-              </button>
-
-              {folders && (
-                <div className="max-h-40 overflow-y-auto rounded border border-workspace-border/30 bg-workspace-surface/20">
-                  {folders.length === 0 ? (
-                    <p className="text-[9px] text-workspace-text-secondary/40 px-2 py-2 text-center">No folders found</p>
-                  ) : (
-                    folders.map(f => (
-                      <button
-                        key={f.id}
-                        onClick={() => handleSelectFolder(f.displayName)}
-                        className={`flex w-full items-center justify-between px-2 py-1.5 text-left hover:bg-workspace-accent/5 transition-colors border-b border-workspace-border/10 last:border-0 ${
-                          f.displayName.toLowerCase() === folderName.toLowerCase() || f.displayName.split(' / ').pop()?.toLowerCase() === folderName.toLowerCase()
-                            ? 'bg-workspace-accent/10 text-workspace-accent'
-                            : ''
-                        }`}
-                      >
-                        <span className="text-[10px] text-workspace-text truncate">{f.displayName}</span>
-                        <span className="text-[8px] text-workspace-text-secondary/30 shrink-0 tabular-nums ml-2">{f.totalItemCount}</span>
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
 
               {/* Date range — only on first sync */}
               {!lastSync && (
@@ -290,7 +212,6 @@ export function OutlookStatusPanel() {
                     setAccountName(null);
                     setEmailCount(null);
                     setLastSync(null);
-                    setFolders(null);
                   }}
                   className="text-[8px] text-workspace-text-secondary/30 hover:text-destructive transition-colors shrink-0 ml-2"
                 >
