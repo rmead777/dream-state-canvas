@@ -300,9 +300,9 @@ function NetworkScene({ data, labelKey, valueKey, colors }: {
   valueKey: string;
   colors: string[];
 }) {
-  // Position nodes in a circle, with size proportional to value
+  // Position nodes in a circle, with size proportional to sqrt(value) for area-proportional perception
   const maxVal = useMemo(() => Math.max(...data.map(d => Number(d[valueKey]) || 1), 1), [data, valueKey]);
-  const radius = 3;
+  const radius = 4;
 
   return (
     <group>
@@ -311,7 +311,8 @@ function NetworkScene({ data, labelKey, valueKey, colors }: {
         const x = Math.cos(angle) * radius;
         const z = Math.sin(angle) * radius;
         const val = Number(d[valueKey]) || 1;
-        const nodeSize = 0.15 + (val / maxVal) * 0.4;
+        // sqrt scale: 0.08 min → 1.2 max, so largest node is 15x smallest
+        const nodeSize = 0.08 + Math.sqrt(val / maxVal) * 1.12;
         const color = colors[i % colors.length];
 
         return (
@@ -605,7 +606,7 @@ function ConnectionMapScene({ data, labelKey, valueKey, colors }: {
   colors: string[];
 }) {
   const maxVal = useMemo(() => Math.max(...data.map(d => Number(d[valueKey]) || 1), 1), [data, valueKey]);
-  const radius = 3;
+  const radius = 4;
   const startRef = useRef<number | null>(null);
   const groupRef = useRef<THREE.Group>(null);
 
@@ -659,7 +660,7 @@ function ConnectionMapScene({ data, labelKey, valueKey, colors }: {
         const x = Math.cos(angle) * radius;
         const z = Math.sin(angle) * radius;
         const val = Number(d[valueKey]) || 1;
-        const nodeSize = 0.15 + (val / maxVal) * 0.4;
+        const nodeSize = 0.08 + Math.sqrt(val / maxVal) * 1.12;
         const color = colors[i % colors.length];
 
         // Line geometry from node to center
