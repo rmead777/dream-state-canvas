@@ -598,7 +598,7 @@ function ChartRenderer({ section }: { section: { chartType: string; xAxis: strin
               <Legend formatter={(value) => <span style={{ fontSize: 10 }}>{value}</span>} />
             )}
             {usePerBarColoring && barColors ? (
-              <Bar dataKey={section.yAxis} fillOpacity={defaultFillOpacity} radius={[3, 3, 0, 0]}>
+              <Bar key="per-bar" dataKey={section.yAxis} fillOpacity={defaultFillOpacity} radius={[3, 3, 0, 0]}>
                 {barColors.map((color, i) => (
                   <Cell key={i} fill={color} fillOpacity={defaultFillOpacity} stroke={color} strokeWidth={defaultStrokeWidth} />
                 ))}
