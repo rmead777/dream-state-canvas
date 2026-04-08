@@ -26,6 +26,7 @@ import { MemoryPanel } from './MemoryPanel';
 import { RulesEditor } from './RulesEditor';
 import { AITelemetryPanel } from './AITelemetryPanel';
 import { ShaderControlPanel } from './ShaderControlPanel';
+import { ThreeDControlPanel } from './ThreeDControlPanel';
 import MarkdownRenderer from '../objects/MarkdownRenderer';
 import { compressImage } from '@/lib/image-utils';
 import { extractDataset } from '@/lib/document-store';
@@ -956,6 +957,11 @@ export function SherpaRail() {
               {/* Shader Controls */}
               <div className="pt-4 border-t border-workspace-border/30">
                 <ShaderControlPanel />
+              </div>
+
+              {/* 3D Scene Controls */}
+              <div className="pt-4 border-t border-workspace-border/30">
+                <ThreeDControlPanel />
               </div>
             </div>
           )}

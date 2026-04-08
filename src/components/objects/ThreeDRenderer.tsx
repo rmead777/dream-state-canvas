@@ -17,6 +17,7 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Text, RoundedBox, Float } from '@react-three/drei';
 import { CHART_THEMES } from '@/lib/chart-themes';
 import { easeOutCubic, easeOutSpring, getStaggerDelay } from '@/hooks/useAnimationTimeline';
+import { mapped3D } from '@/lib/threed-settings';
 import * as THREE from 'three';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -754,10 +755,9 @@ function ConnectionMapScene({ data, labelKey, valueKey, colors, nodeMin = 0.08, 
 
 // ─── Particle Flow Scene (Animated) ───────────────────────────────────────────
 
-const PARTICLE_COUNT_PER_FLOW = 30;
 const PARTICLE_GEO = new THREE.SphereGeometry(0.08, 8, 8);
 
-function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity = 30, flowSpeed = 0.3 }: {
+function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity: propDensity, flowSpeed: propSpeed }: {
   data: Record<string, string | number>[];
   labelKey: string;
   valueKey: string;
@@ -765,37 +765,37 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity =
   particleDensity?: number;
   flowSpeed?: number;
 }) {
+  // Read admin settings (structural values used in memos, per-frame values read in useFrame)
+  const cfg = mapped3D();
+  const density = propDensity ?? cfg.particleDensity;
+  const baseSpeed = propSpeed ?? cfg.flowSpeed;
+
   // Data items are flow sources; each gets particles proportional to value
   const maxVal = useMemo(() => Math.max(...data.map(d => Number(d[valueKey]) || 1), 1), [data, valueKey]);
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
 
   // Pre-compute flow paths: source (left) → center → destination (right)
-  // Each flow's particle count, size, and speed scale with its value
   const flows = useMemo(() => {
     return data.map((d, i) => {
       const val = Number(d[valueKey]) || 1;
       const ratio = val / maxVal; // 0..1 proportion of largest value
-      const count = Math.max(4, Math.round(ratio * particleDensity));
+      const count = Math.max(4, Math.round(ratio * density));
       const yOffset = ((i / (data.length - 1 || 1)) - 0.5) * 5;
       return {
         label: String(d[labelKey] || ''),
         val,
         ratio,
         count,
-        // Larger values → bigger particles (0.4–1.5x) and faster flow (0.6–1.4x)
-        sizeScale: 0.4 + ratio * 1.1,
-        speedScale: 0.6 + ratio * 0.8,
         sourceY: yOffset,
         color: new THREE.Color(colors[i % colors.length]),
-        // Bezier control points: source(-5, y, 0) → ctrl(-1, y*0.3, 0) → ctrl(1, -y*0.3, 0) → dest(5, 0, 0)
         p0: new THREE.Vector3(-5, yOffset, 0),
-        p1: new THREE.Vector3(-1.5, yOffset * 0.3, (Math.random() - 0.5) * 2),
-        p2: new THREE.Vector3(1.5, -yOffset * 0.3, (Math.random() - 0.5) * 2),
+        p1: new THREE.Vector3(-1.5, yOffset * 0.3, (Math.random() - 0.5) * cfg.trailSpread),
+        p2: new THREE.Vector3(1.5, -yOffset * 0.3, (Math.random() - 0.5) * cfg.trailSpread),
         p3: new THREE.Vector3(5, 0, 0),
       };
     });
-  }, [data, labelKey, valueKey, maxVal, colors]);
+  }, [data, labelKey, valueKey, maxVal, colors, density]);
 
   const totalParticles = useMemo(() => flows.reduce((sum, f) => sum + f.count, 0), [flows]);
 
@@ -807,7 +807,7 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity =
       for (let pi = 0; pi < f.count; pi++) {
         map.push({
           flowIdx: fi,
-          timeOffset: pi / f.count, // spread particles along path
+          timeOffset: pi / f.count,
           color: f.color,
         });
       }
@@ -832,14 +832,17 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity =
       colorsApplied.current = true;
     }
 
-    const elapsed = clock.getElapsedTime() * flowSpeed;
+    // Read live settings each frame for responsive slider tuning
+    const live = mapped3D();
+    const elapsed = clock.getElapsedTime() * baseSpeed;
 
     for (let i = 0; i < particleMap.length; i++) {
       const { flowIdx, timeOffset } = particleMap[i];
       const f = flows[flowIdx];
 
-      // Per-flow speed: larger values flow faster
-      const t = (elapsed * f.speedScale + timeOffset) % 1;
+      // Per-flow speed: scale by value ratio using admin speed range
+      const speedScale = live.speedMin + f.ratio * (live.speedMax - live.speedMin);
+      const t = (elapsed * speedScale + timeOffset) % 1;
 
       // Cubic bezier interpolation
       const mt = 1 - t;
@@ -850,9 +853,11 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity =
       // Fade opacity at start/end of path
       const opacity = t < 0.1 ? t / 0.1 : t > 0.9 ? (1 - t) / 0.1 : 1;
 
-      // Per-flow size: larger values → bigger particles
+      // Per-flow size: scale by value^exponent for differentiation
+      const sizeRatio = Math.pow(f.ratio, live.valueExponent);
+      const baseSize = live.particleRadius / 0.08; // normalize to geometry radius
       dummy.position.set(x, y, z);
-      dummy.scale.setScalar((0.5 + opacity * 0.6) * f.sizeScale);
+      dummy.scale.setScalar((0.5 + opacity * 0.6) * (0.4 + sizeRatio * 1.1) * baseSize);
       dummy.updateMatrix();
       meshRef.current.setMatrixAt(i, dummy.matrix);
     }
@@ -862,7 +867,7 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity =
   return (
     <group>
       <instancedMesh ref={meshRef} args={[PARTICLE_GEO, undefined, totalParticles]}>
-        <meshStandardMaterial transparent opacity={0.6} roughness={0.3} />
+        <meshStandardMaterial transparent opacity={cfg.opacity} roughness={0.3} />
       </instancedMesh>
 
       {/* Source labels + markers (left side) — sized by value */}
@@ -887,10 +892,10 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity =
 
       {/* Destination hub (right side) */}
       <mesh position={[5, 0, 0]}>
-        <sphereGeometry args={[0.5, 16, 16]} />
+        <sphereGeometry args={[cfg.hubRadius, 16, 16]} />
         <meshStandardMaterial color="#6366f1" transparent opacity={0.4} />
       </mesh>
-      <Text position={[5, -0.9, 0]} fontSize={0.2} color="#374151" anchorX="center">
+      <Text position={[5, -(cfg.hubRadius + 0.4), 0]} fontSize={0.2} color="#374151" anchorX="center">
         Total
       </Text>
     </group>
@@ -1021,16 +1026,22 @@ function TimelineFlowScene({ data, labelKey, valueKey, colors, dollySpeed: ds = 
 // ─── Main Renderer ────────────────────────────────────────────────────────────
 
 export function ThreeDRenderer({ section }: ThreeDRendererProps) {
+  const cfg = mapped3D();
   const colors = section.colors || DEFAULT_COLORS;
   const chartHeight = section.height || 320;
   const labelKey = section.labelKey || section.xAxis || 'name';
   const valueKey = section.valueKey || section.yAxis || 'value';
   const autoRotate = section.autoRotate !== false;
-  const autoRotateSpeed = section.autoRotateSpeed ?? 0.5;
+  const autoRotateSpeed = section.autoRotateSpeed ?? cfg.autoRotateSpeed;
   const showGrid = section.showGrid !== false;
   const showLabels = section.showLabels !== false;
   const showValues = section.showValues !== false;
-  const cameraPos = section.cameraPosition || [5, 4, 5];
+  // For particleFlow, use admin camera distance; others use default or AI-specified
+  const isParticleFlow = section.sceneType === 'particleFlow';
+  const defaultCam: [number, number, number] = isParticleFlow
+    ? [0, 0, cfg.cameraDistance]
+    : [5, 4, 5];
+  const cameraPos = section.cameraPosition || defaultCam;
   const ambientIntensity = section.ambientIntensity ?? 0.6;
   const lightIntensity = section.lightIntensity ?? 0.8;
   const materialOpacity = section.opacity ?? 0.35;
