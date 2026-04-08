@@ -188,6 +188,7 @@ export type WorkspaceReducerAction =
   | { type: 'SET_SHERPA_SUGGESTIONS_AI'; payload: Suggestion[] }
   | { type: 'ADD_SHERPA_OBSERVATION'; payload: string }
   | { type: 'SET_SHERPA_PROCESSING'; payload: boolean }
+  | { type: 'SET_SHERPA_STATUS'; payload: string | null }
   | { type: 'ADD_RECENT_INTENT'; payload: IntentOrigin }
   | { type: 'UPDATE_RECENT_INTENT_OUTCOME'; payload: { intentId: string; patch: Partial<IntentOrigin> } }
   | { type: 'REORDER_ZONE'; payload: { zone: 'primary' | 'secondary'; ids: string[] } }
