@@ -242,7 +242,12 @@ interface MarkdownRendererProps {
 }
 
 export default function MarkdownRenderer({ content, isStreaming }: MarkdownRendererProps) {
-  const blocks = useMemo(() => parseMarkdown(content), [content]);
+  // Guard: AI may pass undefined, null, or an object instead of a string
+  const safeContent = typeof content === 'string' ? content
+    : content == null ? ''
+    : typeof content === 'object' ? JSON.stringify(content, null, 2)
+    : String(content);
+  const blocks = useMemo(() => parseMarkdown(safeContent), [safeContent]);
 
   return (
     <div className="space-y-1 text-sm leading-relaxed">

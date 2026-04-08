@@ -165,6 +165,7 @@ function CalendarDownloadButton({ icsContent, filename }: { icsContent: string; 
 // ─── Section Renderers ───────────────────────────────────────────────────────
 
 function SummaryRenderer({ text, section }: { text: string; section?: any }) {
+  const safeText = typeof text === 'string' ? text : text == null ? '' : typeof text === 'object' ? JSON.stringify(text) : String(text);
   const customStyle: React.CSSProperties = section?.fontSize || section?.color || section?.fontWeight ? {
     fontSize: section.fontSize,
     color: section.color,
@@ -174,7 +175,7 @@ function SummaryRenderer({ text, section }: { text: string; section?: any }) {
 
   return (
     <p className="text-base font-medium text-workspace-text leading-relaxed" style={customStyle}>
-      {text}
+      {safeText}
     </p>
   );
 }
