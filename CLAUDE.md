@@ -91,18 +91,52 @@ Objects are placed in spatial zones (`primary`, `secondary`, `peripheral`) by `s
 ### AI Integration
 
 - `hooks/useAI.ts` — exposes `useAI()` (streaming hook) and `callAI()` (non-streaming). Both call the Supabase `ai-chat` edge function at `VITE_SUPABASE_URL/functions/v1/ai-chat`. Streams use SSE with OpenAI-compatible `data:` lines.
-- `lib/sherpa-agent.ts` — Multi-turn tool-using agent loop. The primary AI pipeline. Calls AI with tool definitions, executes tools client-side, loops until the AI has enough context to respond. Returns response + workspace actions.
-- `lib/sherpa-tools.ts` — Tool definitions (OpenAI function-calling format) and client-side executors. Read tools: getCardData, queryDataset, searchData, getWorkspaceState, getDocumentContent. Write tools: createCard, updateCard, dissolveCard, focusCard. Memory tools: rememberFact, recallMemories.
-- `lib/data-analyzer.ts` — `DataProfile` is an AI-generated schema analysis (domain, key columns, sort rules, display columns). Cached in localStorage with version key. Profile drives all data slicing. Tier 2 memory overrides modify the profile mechanically before the slicer runs.
-- `lib/data-slicer.ts` — Pure deterministic functions that derive preview subsets using the DataProfile. Respects ordinal priority columns (tier-based sorting) above numeric sorting.
-- `lib/fusion-executor.ts` — AI-synthesizes two workspace objects into a new "brief" object. Uses `fusion-rules.ts` to block incompatible pairs.
+- `lib/sherpa-agent.ts` — Multi-turn tool-using agent loop. The primary AI pipeline. Calls AI with tool definitions, executes tools client-side, loops until the AI has enough context to respond. Returns response + workspace actions. Includes context hint blocks for QuickBooks, Ragic, email, scratchpads, and editing.
+- `lib/sherpa-tools.ts` — Tool definitions (OpenAI function-calling format) and client-side executors:
+  - **Read tools**: getCardData, queryDataset, searchData, getWorkspaceState, getDocumentContent, computeStats, joinDatasets
+  - **Write tools**: createCard, updateCard, dissolveCard, focusCard, editDataset, createScratchpad
+  - **Memory tools**: rememberFact, recallMemories, consolidateMemories
+  - **QuickBooks tools**: queryQuickBooks, refreshQuickBooks
+  - **Ragic tools**: queryRagicOrders, queryRagicCustomers, syncRagic
+  - **Email tools**: queryEmails, refreshEmails
+  - **Other**: draftEmail, createCalendarEvent, exportWorkspace, runSimulation, suggestNextMoves
+- `lib/data-analyzer.ts` — `DataProfile` is an AI-generated schema analysis (domain, key columns, sort rules, display columns). Cached in localStorage with version key.
+- `lib/data-slicer.ts` — Pure deterministic functions that derive preview subsets using the DataProfile.
+- `lib/fusion-executor.ts` — AI-synthesizes two workspace objects into a new "brief" object.
+
+### External Data Integrations
+
+All follow the same pattern: edge function → Supabase cache → client-side store → Sherpa tools.
+
+- **QuickBooks** (`lib/quickbooks-store.ts`) — Live QB data via `qbo-data` edge function. Session cache (45-min TTL). Reads token from WCW's Supabase. Data types: ap, ar, bank, pnl, vendors, customers, bill_payments, summary.
+- **Ragic CRM** (`lib/ragic-store.ts`) — Sales orders + customer profiles synced from Ragic API. Edge functions: `ragic-fetch-orders`, `ragic-sync-customers`, `ragic-status`. Cached in Supabase tables (`ragic_orders_cache`, `customer_profiles`, `customer_product_prices`). Connection config in `ragic_connections` table.
+- **Outlook Email** (`lib/email-store.ts`) — MSAL client-side auth, Graph API sync to Supabase `ap_emails` table. **LOCKED to a single designated folder** — `enforceAllowedFolder()` blocks access to any other folder. Folder change requires super admin passphrase.
+- **Status Panels** — `QBOStatusPanel.tsx`, `RagicStatusPanel.tsx`, `OutlookStatusPanel.tsx` in the Context tab.
+
+### Visualization System
+
+Cards render structured sections via `AnalysisCard.tsx` → `SectionRenderer`. Section types:
+- **Text**: summary, narrative, callout, metrics-row
+- **Data**: table (with conditional highlights), metric
+- **2D Charts** (`ChartRenderer`): bar, line, area, pie, donut, scatter, radialBar, funnel, treemap, composed. Frosted glass palette (25% fill opacity + full-opacity borders). Themes in `lib/chart-themes.ts`.
+- **Vega-Lite**: heatmap, boxplot, waterfall, histogram, violin, etc.
+- **3D** (`ThreeDRenderer.tsx`, lazy-loaded): bar3d, scatter3d, pie3d, network, surface + animated: barRace, radialBurst, connectionMap, particleFlow, timelineFlow. 30+ configurable props per scene. Uses React Three Fiber + Drei.
+- **Animated Metrics** (`AnimatedMetricsRenderer.tsx`): CSS+RAF counter dashboard with counting numbers.
+- **Embed**: DOMPurify-sanitized SVG/HTML.
+
+**Styling control**: AI can pass `style: { css }` on any section. Metrics/animated-metrics accept labelSize, valueSize, labelColor, valueColor, backgroundColor, etc. 3D scenes accept camera, lighting, material, animation props. The AI has FULL control over visual appearance — do NOT hardcode styles that prevent AI overrides.
+
+### WebGL Shader Background
+
+`BackgroundShader.tsx` — ping-pong FBO simplex noise flow field. 14 tunable parameters via `ShaderControlPanel.tsx` in admin tab. Settings in `lib/shader-settings.ts` (localStorage-backed). 30fps, tab-pause, prefers-reduced-motion.
 
 ### Key Hooks
 
-- `useWorkspaceActions` — Orchestrates intent processing, object CRUD, fusion execution, and data rule refinement. The main action dispatcher.
-- `useWorkspacePersistence` — Saves/restores workspace state.
+- `useWorkspaceActions` — Orchestrates intent processing, object CRUD, fusion execution, and data rule refinement. The main action dispatcher. Status updates go to `SET_SHERPA_STATUS` (separate from `SET_SHERPA_RESPONSE` to prevent chat text from disappearing).
+- `useWorkspacePersistence` — Saves/restores workspace state to localStorage.
 - `useCognitiveMode` — Tracks user engagement patterns.
 - `useWorkspaceBreathing` — Monitors object density, triggers over-capacity warnings.
+- `useAnimationTimeline` — Shared animation utilities (easing, stagger, reduced-motion).
 
 ### Tailwind Design Tokens
 
@@ -111,13 +145,31 @@ Custom `workspace-*` color tokens defined in `tailwind.config.ts` and set via CS
 ### Supabase Edge Functions
 
 Located in `supabase/functions/`:
-- `ai-chat` — Main AI endpoint (intent parsing, brief generation, chat)
+- `ai-chat` — Main AI endpoint. Contains the system prompt that defines ALL of Sherpa's capabilities.
 - `ai-image` — Image generation
 - `ingest-document` — Document upload processing (spreadsheet parsing, PDF extraction, AI analysis)
+- `qbo-data` — QuickBooks data fetching (reads token from WCW Supabase)
+- `qbo-status` — QuickBooks connection health check
+- `ragic-fetch-orders` — Ragic order sync with field aliasing, weight/price resolution, customer mapping
+- `ragic-sync-customers` — Ragic customer profile sync
+- `ragic-status` — Ragic connection status (DB-only, no API call)
+- `generate-report` — PDF report generation
+- `_shared/qbo-client.ts` — QB OAuth token management + API wrapper
+- `_shared/ragic-utils.ts` — Ragic API utilities (retry, auth, record extraction)
+- `_shared/sync-utils.ts` — Batch upsert + payment terms parsing
 
 ### Environment Variables
 
 Configured via `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` (loaded through Vite's `import.meta.env`).
+
+### User Authentication & Profile
+
+- Supabase auth (email/password + Google OAuth)
+- User profile pill in top-right corner shows name/avatar + sign out dropdown
+- `MobileShell.tsx` — completely separate component tree for mobile (early return pattern)
+- Sherpa memories (`sherpa_memories` table) are per-user (RLS enforced)
+- Documents are per-user (RLS enforced)
+- Ragic/QB data is shared (global, not user-scoped) — internal tool for same company
 
 ## AI-Native Architecture Principle: Permissive Execution, Not Rigid Validation
 
