@@ -111,6 +111,22 @@ export const EmbedSection = z.object({
   caption: z.string().optional(),
 });
 
+export const ThreeDSection = z.object({
+  type: z.literal('3d'),
+  sceneType: z.enum(['bar3d', 'scatter3d', 'pie3d', 'network', 'surface']),
+  data: z.array(z.record(z.union([z.string(), z.number()]))),
+  xAxis: z.string().optional(),
+  yAxis: z.string().optional(),
+  zAxis: z.string().optional(),
+  labelKey: z.string().optional(),
+  valueKey: z.string().optional(),
+  colorKey: z.string().optional(),
+  colors: z.array(z.string()).optional(),
+  height: z.number().optional(),
+  caption: z.string().optional(),
+  autoRotate: z.boolean().optional(),
+}).passthrough();
+
 export const CardSection = z.discriminatedUnion('type', [
   SummarySection,
   NarrativeSection,
@@ -122,6 +138,7 @@ export const CardSection = z.discriminatedUnion('type', [
   VegaLiteSection,
   ChartGridSection,
   EmbedSection,
+  ThreeDSection,
 ]);
 
 export type CardSectionType = z.infer<typeof CardSection>;
@@ -223,6 +240,10 @@ function normalizeSection(item: unknown): unknown {
         data: { values: (s.data as unknown[]) || [] },
       },
     };
+  }
+  // 3D aliases
+  if (s.type === 'three' || s.type === 'threejs' || s.type === 'three-d' || s.type === '3D') {
+    return { ...s, type: '3d' };
   }
   // embed aliases — AI may say 'svg', 'html', 'html-embed'
   if (s.type === 'svg' || s.type === 'html' || s.type === 'html-embed') {

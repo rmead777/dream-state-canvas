@@ -7,12 +7,15 @@
  * The AI decides the structure; this component renders whatever it produces.
  * Unknown or malformed sections are silently skipped.
  */
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { WorkspaceObject } from '@/lib/workspace-types';
 import { CardSectionType } from '@/lib/card-schema';
 import { CHART_THEMES } from '@/lib/chart-themes';
 import MarkdownRenderer from './MarkdownRenderer';
 import DOMPurify from 'dompurify';
+
+// Lazy-load ThreeDRenderer to avoid bundling Three.js unless needed
+const ThreeDRenderer = lazy(() => import('./ThreeDRenderer').then(m => ({ default: m.ThreeDRenderer })));
 import {
   BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid, Cell, Legend, PieChart, Pie,
@@ -109,6 +112,11 @@ function SectionRenderer({ section, highlightedEntity, onEntityClick }: {
     case 'vegalite': return <VegaLiteRenderer section={section as any} />;
     case 'chart-grid': return <ChartGridRenderer section={section as any} />;
     case 'embed': return <EmbedRenderer section={section as any} />;
+    case '3d': return (
+      <Suspense fallback={<div className="flex items-center justify-center h-48 text-[11px] text-workspace-text-secondary/50">Loading 3D...</div>}>
+        <ThreeDRenderer section={section as any} />
+      </Suspense>
+    );
     default: return null;
   }
 }

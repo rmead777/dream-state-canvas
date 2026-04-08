@@ -272,6 +272,30 @@ chart-grid → { type: "chart-grid", columns: 2, charts: [
   Use for: executive dashboards, multi-metric summaries, side-by-side comparisons
   Child charts should use height: 160. Use columns: 2 for pairs, 3 for dense dashboards.
 
+── 3D VISUALIZATIONS (Three.js, interactive orbit) ──
+
+3d → { type: "3d", sceneType: "<TYPE>", data: [{...}], caption: "...", height: 320 }
+
+  sceneType values:
+    bar3d     — 3D bar chart. data: [{ name: "Label", value: 123 }, ...]. Uses labelKey/valueKey.
+    scatter3d — 3D scatter plot. data: [{ x: 1, y: 2, z: 3 }, ...]. Uses xAxis/yAxis/zAxis.
+    pie3d     — Extruded 3D donut chart. data: [{ name: "Label", value: 123 }, ...]. Uses labelKey/valueKey.
+    network   — Force-directed node graph. data: [{ name: "Node", value: 10 }, ...]. Node size = value.
+    surface   — 3D surface/terrain from grid data. data: [{ x: 0, y: 5, z: 0 }, ...].
+
+  Options:
+    labelKey: "name"        ← which field is the label (default: xAxis or "name")
+    valueKey: "value"       ← which field is the value (default: yAxis or "value")
+    colors: ["#hex", ...]   ← custom colors (default: frosted glass palette)
+    height: 320             ← pixels (default 320, use 280-400)
+    autoRotate: true        ← slow auto-rotation (default true)
+    caption: "description"  ← ALWAYS include
+
+  Use for: impressive executive presentations, spatial data exploration, when 2D charts feel flat.
+  The user can click-drag to orbit, scroll to zoom. Frosted glass style matches 2D charts.
+  Use bar3d for ranked data, scatter3d for 3-variable correlation, pie3d for composition,
+  network for relationships/connections, surface for grid/heatmap data.
+
 ── EMBEDDED SVG (custom diagrams) ──
 
 embed → { type: "embed", html: "<svg viewBox='0 0 400 200'>...</svg>", height: 200, caption: "..." }
@@ -574,6 +598,10 @@ When creating analysis or CFO cards, populate sections:
 
   embed        → { type: "embed", html: "<svg>...</svg>", height: 200, caption: "..." }
                  Custom SVG diagrams, flowcharts, org charts, gauges.
+
+  3d           → { type: "3d", sceneType: "bar3d|scatter3d|pie3d|network|surface",
+                   data: [...], labelKey: "name", valueKey: "value", height: 320, caption: "..." }
+                 Interactive 3D with orbit controls. Use for executive presentations, spatial exploration.
 
   USE CHARTS PROACTIVELY:
   - Bar for comparisons, line for trends, pie/donut for proportions, scatter for correlations
