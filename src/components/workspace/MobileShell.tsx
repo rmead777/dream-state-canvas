@@ -276,14 +276,23 @@ export function MobileShell() {
                           <p className="text-sm text-workspace-text leading-relaxed">{entry.query}</p>
                         </div>
                       </div>
-                      {/* Reasoning steps + final response — all rendered identically */}
-                      {entry.steps && entry.steps.length > 1 && entry.steps.map((step, si) => (
-                        <div key={si} className="flex flex-col items-start gap-1">
-                          <div className="max-w-[92%] rounded-2xl rounded-bl-md bg-white border border-workspace-border/40 px-3.5 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
-                            <MarkdownRenderer content={step} />
+                      {/* Reasoning steps — readable but visually distinct */}
+                      {entry.steps && entry.steps.length > 1 && (() => {
+                        const responseNorm = (entry.response || '').trim().slice(0, 200);
+                        const steps = entry.steps.filter((s, si) =>
+                          si < entry.steps!.length - 1 || s.trim().slice(0, 200) !== responseNorm
+                        );
+                        return steps.map((step, si) => (
+                          <div key={si} className="flex flex-col items-start gap-1">
+                            <div className="max-w-[92%] rounded-2xl rounded-bl-md bg-workspace-surface/20 border border-workspace-border/25 px-3.5 py-2 shadow-none">
+                              <div className="text-[12px] leading-relaxed text-workspace-text-secondary">
+                                <MarkdownRenderer content={step} />
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ));
+                      })()}
+                      {/* Final response */}
                       {entry.response && (
                         <div className="flex flex-col items-start gap-1">
                           <div className="max-w-[92%] rounded-2xl rounded-bl-md bg-white border border-workspace-border/40 px-3.5 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
