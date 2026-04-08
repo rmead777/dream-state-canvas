@@ -12,9 +12,9 @@
  * Lazy-loaded to avoid bundling Three.js for users who never see 3D.
  */
 
-import { Suspense, useMemo, useRef } from 'react';
+import { Suspense, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Text, RoundedBox, Float } from '@react-three/drei';
+import { OrbitControls, Text, RoundedBox, Float, Environment, ContactShadows } from '@react-three/drei';
 import { CHART_THEMES } from '@/lib/chart-themes';
 import { easeOutCubic, easeOutSpring, getStaggerDelay } from '@/hooks/useAnimationTimeline';
 import { mapped3D } from '@/lib/threed-settings';
@@ -103,7 +103,7 @@ function AutoRotate({ speed = 0.3 }: { speed?: number }) {
 
 function GridFloor({ size = 10 }: { size?: number }) {
   return (
-    <gridHelper args={[size, size, '#d1d5db', '#e5e7eb']} position={[0, -0.01, 0]} />
+    <gridHelper args={[size, size, '#2a2a3e', '#1e1e30']} position={[0, -0.01, 0]} />
   );
 }
 
@@ -112,7 +112,7 @@ function AxisLabel({ position, text }: { position: [number, number, number]; tex
     <Text
       position={position}
       fontSize={0.25}
-      color="#6b7280"
+      color="#9ca3af"
       anchorX="center"
       anchorY="middle"
     >
@@ -175,7 +175,7 @@ function Bar3DScene({ data, labelKey, valueKey, colors, showGrid = true, showLab
               <Text
                 position={[0, height + 0.3, 0]}
                 fontSize={0.2}
-                color="#374151"
+                color="#e5e7eb"
                 anchorX="center"
                 anchorY="bottom"
               >
@@ -188,7 +188,7 @@ function Bar3DScene({ data, labelKey, valueKey, colors, showGrid = true, showLab
               <Text
                 position={[0, -0.15, barWidth / 2 + 0.3]}
                 fontSize={0.16}
-                color="#6b7280"
+                color="#9ca3af"
                 anchorX="center"
                 anchorY="top"
                 maxWidth={1.2}
@@ -324,7 +324,7 @@ function Pie3DScene({ data, labelKey, valueKey, colors, opacity: op = 0.4, inner
             <Text
               position={[labelX, 0.5, -labelY]}
               fontSize={0.18}
-              color="#374151"
+              color="#e5e7eb"
               anchorX="center"
             >
               {seg.label}
@@ -374,7 +374,7 @@ function NetworkScene({ data, labelKey, valueKey, colors, nodeMin = 0.08, nodeMa
               <Text
                 position={[0, nodeSize + 0.2, 0]}
                 fontSize={0.16}
-                color="#374151"
+                color="#e5e7eb"
                 anchorX="center"
               >
                 {String(d[labelKey] || '')}
@@ -392,7 +392,7 @@ function NetworkScene({ data, labelKey, valueKey, colors, nodeMin = 0.08, nodeMa
         const geometry = new THREE.BufferGeometry().setFromPoints(points);
         return (
           <lineSegments key={`line-${i}`} geometry={geometry}>
-            <lineBasicMaterial color="#d1d5db" transparent opacity={0.3} />
+            <lineBasicMaterial color="#4a4a6a" transparent opacity={0.4} />
           </lineSegments>
         );
       })}
@@ -528,10 +528,10 @@ function BarRaceScene({ data, labelKey, valueKey, colors, showGrid = true }: {
               <edgesGeometry args={[new THREE.BoxGeometry(barWidth, 1, barWidth)]} />
               <lineBasicMaterial color={color} />
             </lineSegments>
-            <Text position={[0, 0.3, 0]} fontSize={0.2} color="#374151" anchorX="center" anchorY="bottom">
+            <Text position={[0, 0.3, 0]} fontSize={0.2} color="#e5e7eb" anchorX="center" anchorY="bottom">
               {''}
             </Text>
-            <Text position={[0, -0.15, barWidth / 2 + 0.3]} fontSize={0.16} color="#6b7280" anchorX="center" anchorY="top" maxWidth={1.2}>
+            <Text position={[0, -0.15, barWidth / 2 + 0.3]} fontSize={0.16} color="#9ca3af" anchorX="center" anchorY="top" maxWidth={1.2}>
               {String(d[labelKey] || '')}
             </Text>
           </group>
@@ -636,7 +636,7 @@ function RadialBurstScene({ data, labelKey, valueKey, colors, opacity: op = 0.4,
                 side={THREE.DoubleSide}
               />
             </mesh>
-            <Text position={[labelX, 0.5, -labelY]} fontSize={0.18} color="#374151" anchorX="center">
+            <Text position={[labelX, 0.5, -labelY]} fontSize={0.18} color="#e5e7eb" anchorX="center">
               {seg.label}
             </Text>
           </group>
@@ -735,7 +735,7 @@ function ConnectionMapScene({ data, labelKey, valueKey, colors, nodeMin = 0.08, 
               <sphereGeometry args={[nodeSize + 0.02, 8, 8]} />
               <meshBasicMaterial color={color} wireframe />
             </mesh>
-            <Text position={[0, nodeSize + 0.2, 0]} fontSize={0.16} color="#374151" anchorX="center">
+            <Text position={[0, nodeSize + 0.2, 0]} fontSize={0.16} color="#e5e7eb" anchorX="center">
               {String(d[labelKey] || '')}
             </Text>
           </group>,
@@ -1004,7 +1004,7 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity: 
           <Text
             position={[-5.5, f.sourceY, 0]}
             fontSize={0.18}
-            color="#374151"
+            color="#e5e7eb"
             anchorX="right"
             anchorY="middle"
             maxWidth={2.5}
@@ -1019,7 +1019,7 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity: 
         <sphereGeometry args={[cfg.hubRadius, 16, 16]} />
         <meshStandardMaterial color="#6366f1" transparent opacity={0.4} />
       </mesh>
-      <Text position={[5, -(cfg.hubRadius + 0.4), 0]} fontSize={0.2} color="#374151" anchorX="center">
+      <Text position={[5, -(cfg.hubRadius + 0.4), 0]} fontSize={0.2} color="#e5e7eb" anchorX="center">
         Total
       </Text>
     </group>
@@ -1088,7 +1088,7 @@ function TimelineFlowScene({ data, labelKey, valueKey, colors, dollySpeed: ds = 
       {/* Path tube */}
       {tubeGeom && (
         <mesh geometry={tubeGeom}>
-          <meshStandardMaterial color="#d1d5db" transparent opacity={0.4} />
+          <meshStandardMaterial color="#2a2a3e" transparent opacity={0.4} />
         </mesh>
       )}
 
@@ -1113,12 +1113,12 @@ function TimelineFlowScene({ data, labelKey, valueKey, colors, dollySpeed: ds = 
             {/* Event card — frosted glass panel */}
             <group position={[0.8, 0.5, 0]}>
               <RoundedBox args={[2.2, 0.8, 0.05]} radius={0.05} smoothness={4}>
-                <meshStandardMaterial color="white" transparent opacity={0.7} roughness={0.1} />
+                <meshStandardMaterial color="#1e1e30" transparent opacity={0.85} roughness={0.1} />
               </RoundedBox>
               <Text
                 position={[0, 0.15, 0.03]}
                 fontSize={0.12}
-                color="#374151"
+                color="#e5e7eb"
                 anchorX="center"
                 anchorY="middle"
                 maxWidth={2}
@@ -1130,7 +1130,7 @@ function TimelineFlowScene({ data, labelKey, valueKey, colors, dollySpeed: ds = 
                 <Text
                   position={[0, -0.12, 0.03]}
                   fontSize={0.1}
-                  color="#6b7280"
+                  color="#9ca3af"
                   anchorX="center"
                   anchorY="middle"
                 >
@@ -1147,12 +1147,65 @@ function TimelineFlowScene({ data, labelKey, valueKey, colors, dollySpeed: ds = 
   );
 }
 
+// ─── Scene Type Labels ───────────────────────────────────────────────────────
+
+const SCENE_LABELS: Record<string, string> = {
+  bar3d: 'BAR CHART',
+  scatter3d: 'SCATTER PLOT',
+  pie3d: 'PIE CHART',
+  network: 'NETWORK GRAPH',
+  surface: 'SURFACE MAP',
+  barRace: 'BAR RACE',
+  radialBurst: 'RADIAL BURST',
+  connectionMap: 'CONNECTION MAP',
+  particleFlow: 'PARTICLE FLOW',
+  timelineFlow: 'TIMELINE FLOW',
+};
+
+// Format numbers for display
+function fmtValue(v: number): string {
+  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `$${(v / 1_000).toFixed(0)}K`;
+  return v.toLocaleString();
+}
+
+// Scene types that use categorical colors and should show a legend
+const LEGEND_SCENES = new Set(['bar3d', 'pie3d', 'particleFlow', 'network', 'connectionMap', 'barRace', 'radialBurst']);
+
+// Scenes that have a ground plane (not flow/network types)
+const GROUNDED_SCENES = new Set(['bar3d', 'scatter3d', 'pie3d', 'surface', 'barRace']);
+
+// ─── Dark Environment Sub-component ──────────────────────────────────────────
+
+function SceneEnvironment({ grounded }: { grounded: boolean }) {
+  return (
+    <>
+      {/* Soft environment reflections for material depth */}
+      <Environment preset="city" environmentIntensity={0.15} />
+      {/* Subtle distance fog for spatial reading */}
+      <fog attach="fog" args={['#0e0e16', 10, 25]} />
+      {/* Ground plane with contact shadows for grounded scenes */}
+      {grounded && (
+        <>
+          <ContactShadows position={[0, -0.01, 0]} opacity={0.3} scale={12} blur={2} far={4} />
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
+            <planeGeometry args={[20, 20]} />
+            <meshStandardMaterial color="#141420" transparent opacity={0.5} roughness={0.9} />
+          </mesh>
+          {/* Subtle grid lines */}
+          <gridHelper args={[20, 20, '#1a1a2e', '#1a1a2e']} position={[0, -0.01, 0]} />
+        </>
+      )}
+    </>
+  );
+}
+
 // ─── Main Renderer ────────────────────────────────────────────────────────────
 
 export function ThreeDRenderer({ section }: ThreeDRendererProps) {
   const cfg = mapped3D();
   const colors = section.colors || DEFAULT_COLORS;
-  const chartHeight = section.height || 320;
+  const chartHeight = section.height || 380;
   const labelKey = section.labelKey || section.xAxis || 'name';
   const valueKey = section.valueKey || section.yAxis || 'value';
   const autoRotate = section.autoRotate !== false;
@@ -1160,71 +1213,159 @@ export function ThreeDRenderer({ section }: ThreeDRendererProps) {
   const showGrid = section.showGrid !== false;
   const showLabels = section.showLabels !== false;
   const showValues = section.showValues !== false;
-  // For particleFlow, use admin camera distance; others use default or AI-specified
   const isParticleFlow = section.sceneType === 'particleFlow';
   const defaultCam: [number, number, number] = isParticleFlow
     ? [0, 0, cfg.cameraDistance]
     : [5, 4, 5];
   const cameraPos = section.cameraPosition || defaultCam;
-  const ambientIntensity = section.ambientIntensity ?? 0.6;
-  const lightIntensity = section.lightIntensity ?? 0.8;
+  const ambientIntensity = section.ambientIntensity ?? 0.4;
+  const lightIntensity = section.lightIntensity ?? 0.6;
   const materialOpacity = section.opacity ?? 0.35;
   const nodeMin = section.nodeMinSize ?? 0.08;
   const nodeMax = section.nodeMaxSize ?? 1.2;
   const circleRadius = section.circleRadius ?? 4;
+  const isGrounded = GROUNDED_SCENES.has(section.sceneType);
+
+  // Compute data summary for overlays
+  const data = section.data || [];
+  const values = useMemo(() => data.map(d => Number(d[valueKey]) || 0).filter(v => v > 0), [data, valueKey]);
+  const totalValue = useMemo(() => values.reduce((s, v) => s + v, 0), [values]);
+  const minValue = values.length > 0 ? Math.min(...values) : 0;
+  const maxValue = values.length > 0 ? Math.max(...values) : 0;
+
+  // Legend: top N items by value
+  const legendItems = useMemo(() => {
+    if (!LEGEND_SCENES.has(section.sceneType)) return [];
+    const items = data
+      .map((d, i) => ({ label: String(d[labelKey] || ''), value: Number(d[valueKey]) || 0, color: colors[i % colors.length] }))
+      .sort((a, b) => b.value - a.value);
+    const MAX_LEGEND = 6;
+    const shown = items.slice(0, MAX_LEGEND);
+    const remaining = items.length - MAX_LEGEND;
+    return { shown, remaining: remaining > 0 ? remaining : 0 };
+  }, [data, labelKey, valueKey, colors, section.sceneType]);
+
+  const sceneLabel = SCENE_LABELS[section.sceneType] || '3D SCENE';
+  const dataSummary = `${data.length} items` + (totalValue > 0 ? ` · ${fmtValue(totalValue)} total` : '');
 
   return (
     <div className="space-y-1">
+      {/* ─── Dark Analytical Viewport ─────────────────────────────────── */}
       <div
-        className="w-full rounded-lg overflow-hidden border border-workspace-border/20 bg-gradient-to-b from-white to-workspace-surface/10"
-        style={{ height: chartHeight }}
+        className="w-full rounded-xl overflow-hidden relative"
+        style={{
+          height: chartHeight,
+          background: 'linear-gradient(180deg, #0c0c14 0%, #0a0a12 50%, #080810 100%)',
+          border: '1px solid rgba(255,255,255,0.06)',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03), 0 4px 24px rgba(0,0,0,0.3)',
+        }}
       >
+        {/* ─── Title Bar Overlay ─────────────────────────────────────── */}
+        <div
+          className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-3 py-2"
+          style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.5) 0%, transparent 100%)' }}
+        >
+          <div className="flex items-center gap-2">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-violet-400/80 animate-pulse" />
+            <span className="text-[9px] font-medium uppercase tracking-[0.2em] text-white/40">
+              {sceneLabel}
+            </span>
+          </div>
+          <span className="text-[9px] font-mono text-white/30 tabular-nums">
+            {dataSummary}
+          </span>
+        </div>
+
+        {/* ─── Legend Overlay (bottom-left) ──────────────────────────── */}
+        {legendItems && 'shown' in legendItems && legendItems.shown.length > 0 && (
+          <div className="absolute bottom-2 left-3 z-10 flex flex-col gap-0.5">
+            {legendItems.shown.map((item, i) => (
+              <div key={i} className="flex items-center gap-1.5">
+                <span
+                  className="inline-block h-1.5 w-1.5 rounded-full shrink-0"
+                  style={{ backgroundColor: item.color }}
+                />
+                <span className="text-[8px] text-white/50 leading-none truncate max-w-[100px]">
+                  {item.label}
+                </span>
+              </div>
+            ))}
+            {legendItems.remaining > 0 && (
+              <span className="text-[8px] text-white/30 pl-3">
+                + {legendItems.remaining} more
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* ─── Value Annotation (bottom-right) ──────────────────────── */}
+        {totalValue > 0 && (
+          <div className="absolute bottom-2 right-3 z-10 text-right">
+            {minValue !== maxValue && (
+              <div className="text-[8px] font-mono text-white/30 tabular-nums">
+                {fmtValue(minValue)} — {fmtValue(maxValue)}
+              </div>
+            )}
+            <div className="text-[10px] font-mono text-white/50 tabular-nums">
+              {fmtValue(totalValue)}
+            </div>
+          </div>
+        )}
+
+        {/* ─── 3D Canvas ────────────────────────────────────────────── */}
         <Suspense fallback={
-          <div className="flex items-center justify-center h-full text-[11px] text-workspace-text-secondary/50">
+          <div className="flex items-center justify-center h-full text-[11px] text-white/20">
             Loading 3D scene...
           </div>
         }>
           <Canvas
             camera={{ position: cameraPos, fov: 45 }}
             dpr={[1, 1.5]}
-            gl={{ antialias: true, alpha: true }}
-            style={{ background: 'transparent' }}
+            gl={{ antialias: true, alpha: false }}
           >
+            {/* Dark scene background */}
+            <color attach="background" args={['#0e0e16']} />
+
+            {/* Lighting — reduced ambient, added rim light for edge definition */}
             <ambientLight intensity={ambientIntensity} />
             <directionalLight position={[5, 8, 5]} intensity={lightIntensity} castShadow />
-            <directionalLight position={[-3, 4, -3]} intensity={lightIntensity * 0.375} />
+            <directionalLight position={[-3, 4, -3]} intensity={lightIntensity * 0.4} />
+            <directionalLight position={[0, -2, 5]} intensity={0.15} color="#6366f1" />
+
+            {/* Environment: reflections, fog, ground */}
+            <SceneEnvironment grounded={isGrounded} />
 
             {section.sceneType === 'bar3d' && (
-              <Bar3DScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} showGrid={showGrid} showLabels={showLabels} showValues={showValues} barWidth={section.barWidth} barGap={section.barGap} maxHeight={section.maxHeight} opacity={materialOpacity} />
+              <Bar3DScene data={data} labelKey={labelKey} valueKey={valueKey} colors={colors} showGrid={showGrid} showLabels={showLabels} showValues={showValues} barWidth={section.barWidth} barGap={section.barGap} maxHeight={section.maxHeight} opacity={materialOpacity} />
             )}
             {section.sceneType === 'scatter3d' && (
-              <Scatter3DScene data={section.data} xAxis={section.xAxis || 'x'} yAxis={section.yAxis || 'y'} zAxis={section.zAxis || 'z'} colors={colors} />
+              <Scatter3DScene data={data} xAxis={section.xAxis || 'x'} yAxis={section.yAxis || 'y'} zAxis={section.zAxis || 'z'} colors={colors} />
             )}
             {section.sceneType === 'pie3d' && (
-              <Pie3DScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} opacity={materialOpacity} innerRadius={section.innerRadius} outerRadius={section.outerRadius} extrudeDepth={section.extrudeDepth} />
+              <Pie3DScene data={data} labelKey={labelKey} valueKey={valueKey} colors={colors} opacity={materialOpacity} innerRadius={section.innerRadius} outerRadius={section.outerRadius} extrudeDepth={section.extrudeDepth} />
             )}
             {section.sceneType === 'network' && (
-              <NetworkScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} nodeMin={nodeMin} nodeMax={nodeMax} radius={circleRadius} />
+              <NetworkScene data={data} labelKey={labelKey} valueKey={valueKey} colors={colors} nodeMin={nodeMin} nodeMax={nodeMax} radius={circleRadius} />
             )}
             {section.sceneType === 'surface' && (
-              <SurfaceScene data={section.data} xAxis={section.xAxis || 'x'} yAxis={section.yAxis || 'y'} zAxis={section.zAxis || 'z'} colors={colors} />
+              <SurfaceScene data={data} xAxis={section.xAxis || 'x'} yAxis={section.yAxis || 'y'} zAxis={section.zAxis || 'z'} colors={colors} />
             )}
 
             {/* Animated scene types */}
             {section.sceneType === 'barRace' && (
-              <BarRaceScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} showGrid={showGrid} />
+              <BarRaceScene data={data} labelKey={labelKey} valueKey={valueKey} colors={colors} showGrid={showGrid} />
             )}
             {section.sceneType === 'radialBurst' && (
-              <RadialBurstScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} opacity={materialOpacity} stagger={section.stagger} innerRadius={section.innerRadius} outerRadius={section.outerRadius} />
+              <RadialBurstScene data={data} labelKey={labelKey} valueKey={valueKey} colors={colors} opacity={materialOpacity} stagger={section.stagger} innerRadius={section.innerRadius} outerRadius={section.outerRadius} />
             )}
             {section.sceneType === 'connectionMap' && (
-              <ConnectionMapScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} nodeMin={nodeMin} nodeMax={nodeMax} radius={circleRadius} stagger={section.stagger} />
+              <ConnectionMapScene data={data} labelKey={labelKey} valueKey={valueKey} colors={colors} nodeMin={nodeMin} nodeMax={nodeMax} radius={circleRadius} stagger={section.stagger} />
             )}
             {section.sceneType === 'particleFlow' && (
-              <ParticleFlowScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} particleDensity={section.particleDensity} flowSpeed={section.flowSpeed} />
+              <ParticleFlowScene data={data} labelKey={labelKey} valueKey={valueKey} colors={colors} particleDensity={section.particleDensity} flowSpeed={section.flowSpeed} />
             )}
             {section.sceneType === 'timelineFlow' && (
-              <TimelineFlowScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} dollySpeed={section.dollySpeed} eventSpacing={section.eventSpacing} />
+              <TimelineFlowScene data={data} labelKey={labelKey} valueKey={valueKey} colors={colors} dollySpeed={section.dollySpeed} eventSpacing={section.eventSpacing} />
             )}
 
             <OrbitControls
