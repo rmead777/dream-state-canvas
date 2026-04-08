@@ -121,6 +121,38 @@ function AxisLabel({ position, text }: { position: [number, number, number]; tex
   );
 }
 
+// ─── Tooltip3D — reusable hover tooltip via drei Html ────────────────────────
+
+function Tooltip3D({ position, label, value, total, color, visible }: {
+  position: [number, number, number];
+  label: string;
+  value: number;
+  total: number;
+  color: string;
+  visible: boolean;
+}) {
+  if (!visible) return null;
+  const pct = total > 0 ? ((value / total) * 100).toFixed(1) : '0';
+  return (
+    <Html position={position} center style={{ pointerEvents: 'none' }}>
+      <div style={{
+        background: 'rgba(0,0,0,0.85)',
+        backdropFilter: 'blur(8px)',
+        borderRadius: '6px',
+        padding: '6px 10px',
+        whiteSpace: 'nowrap',
+        border: `1px solid ${color}40`,
+        boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+      }}>
+        <div style={{ fontSize: '10px', fontWeight: 600, color: '#e5e7eb', marginBottom: '2px' }}>{label}</div>
+        <div style={{ fontSize: '11px', fontFamily: 'monospace', color }}>
+          {fmtValue(value)} <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '9px' }}>({pct}%)</span>
+        </div>
+      </div>
+    </Html>
+  );
+}
+
 // ─── Bar3D Scene ──────────────────────────────────────────────────────────────
 
 function Bar3DScene({ data, labelKey, valueKey, colors, showGrid = true, showLabels = true, showValues = true, barWidth: bw, barGap: bg, maxHeight: mh, opacity: op }: {
@@ -137,11 +169,13 @@ function Bar3DScene({ data, labelKey, valueKey, colors, showGrid = true, showLab
   opacity?: number;
 }) {
   const maxVal = useMemo(() => Math.max(...data.map(d => Number(d[valueKey]) || 0), 1), [data, valueKey]);
+  const totalVal = useMemo(() => data.reduce((s, d) => s + (Number(d[valueKey]) || 0), 0), [data, valueKey]);
   const barWidth = bw ?? 0.6;
   const gap = bg ?? 0.3;
   const heightScale = mh ?? 4;
   const opacity = op ?? 0.35;
   const totalWidth = data.length * (barWidth + gap) - gap;
+  const [hovered, setHovered] = useState<number | null>(null);
 
   return (
     <group position={[-totalWidth / 2, 0, 0]}>
@@ -150,6 +184,8 @@ function Bar3DScene({ data, labelKey, valueKey, colors, showGrid = true, showLab
         const height = (val / maxVal) * heightScale;
         const color = colors[i % colors.length];
         const x = i * (barWidth + gap);
+        const isHovered = hovered === i;
+        const dimmed = hovered !== null && !isHovered;
 
         return (
           <group key={i} position={[x + barWidth / 2, 0, 0]}>
@@ -158,20 +194,22 @@ function Bar3DScene({ data, labelKey, valueKey, colors, showGrid = true, showLab
               position={[0, height / 2, 0]}
               radius={0.05}
               smoothness={4}
+              onPointerOver={(e) => { e.stopPropagation(); setHovered(i); }}
+              onPointerOut={() => setHovered(null)}
             >
               <meshStandardMaterial
                 color={color}
                 transparent
-                opacity={opacity}
+                opacity={dimmed ? opacity * 0.3 : isHovered ? Math.min(opacity * 1.5, 0.9) : opacity}
                 roughness={0.2}
                 metalness={0.1}
               />
             </RoundedBox>
             <lineSegments position={[0, height / 2, 0]}>
               <edgesGeometry args={[new THREE.BoxGeometry(barWidth, height, barWidth)]} />
-              <lineBasicMaterial color={color} linewidth={1} />
+              <lineBasicMaterial color={color} linewidth={1} transparent opacity={dimmed ? 0.15 : 1} />
             </lineSegments>
-            {showValues && (
+            {showValues && !isHovered && (
               <Text
                 position={[0, height + 0.3, 0]}
                 fontSize={0.2}
@@ -179,9 +217,7 @@ function Bar3DScene({ data, labelKey, valueKey, colors, showGrid = true, showLab
                 anchorX="center"
                 anchorY="bottom"
               >
-                {val >= 1000000 ? `${(val / 1000000).toFixed(1)}M` :
-                 val >= 1000 ? `${(val / 1000).toFixed(0)}K` :
-                 val.toLocaleString()}
+                {fmtValue(val)}
               </Text>
             )}
             {showLabels && (
@@ -196,10 +232,32 @@ function Bar3DScene({ data, labelKey, valueKey, colors, showGrid = true, showLab
                 {String(d[labelKey] || '')}
               </Text>
             )}
+            <Tooltip3D
+              position={[0, height + 0.5, 0]}
+              label={String(d[labelKey] || '')}
+              value={val}
+              total={totalVal}
+              color={color}
+              visible={isHovered}
+            />
           </group>
         );
       })}
       {showGrid && <GridFloor size={Math.max(totalWidth + 2, 6)} />}
+      {/* Y-axis scale ticks */}
+      {[0.25, 0.5, 0.75, 1].map((frac) => {
+        const y = frac * heightScale;
+        const val = frac * maxVal;
+        return (
+          <group key={`ytick-${frac}`} position={[-totalWidth / 2 - 0.3, y, 0]}>
+            <Html center style={{ pointerEvents: 'none' }}>
+              <span style={{ fontSize: '8px', fontFamily: 'monospace', color: 'rgba(255,255,255,0.3)', whiteSpace: 'nowrap' }}>
+                {fmtValue(val)}
+              </span>
+            </Html>
+          </group>
+        );
+      })}
     </group>
   );
 }
@@ -839,25 +897,31 @@ const flowFragmentShader = `
 `;
 
 /** A single animated tube for one flow */
-function FlowTube({ curve, color, radius, speed }: {
+function FlowTube({ curve, color, radius, speed, entranceDelay = 0 }: {
   curve: FlowBezier;
   color: THREE.Color;
   radius: number;
   speed: number;
+  entranceDelay?: number;
 }) {
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const geom = useMemo(() => new THREE.TubeGeometry(curve, 64, radius, 12, false), [curve, radius]);
+  const startRef = useRef<number | null>(null);
 
   useFrame(({ clock }) => {
-    if (matRef.current) {
-      matRef.current.uniforms.uTime.value = clock.getElapsedTime();
-    }
+    if (!matRef.current) return;
+    if (startRef.current === null) startRef.current = clock.getElapsedTime();
+    const elapsed = clock.getElapsedTime() - startRef.current;
+    matRef.current.uniforms.uTime.value = clock.getElapsedTime();
+    // Entrance fade: 0→0.7 over 0.8s after delay
+    const entranceProgress = Math.min(1, Math.max(0, (elapsed - entranceDelay) / 0.8));
+    matRef.current.uniforms.uOpacity.value = easeOutCubic(entranceProgress) * 0.7;
   });
 
   const uniforms = useMemo(() => ({
     uColor: { value: color },
     uTime: { value: 0 },
-    uOpacity: { value: 0.7 },
+    uOpacity: { value: 0 },
     uSpeed: { value: speed },
   }), [color, speed]);
 
@@ -893,6 +957,7 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity: 
   const highlightRef = useRef<THREE.InstancedMesh>(null);
   const hubRef = useRef<THREE.Mesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
+  const [hoveredFlow, setHoveredFlow] = useState<number | null>(null);
 
   // Build flows with bezier curves and tube radii
   // Tubes converge toward a funnel point (p2 → p3 tightens near destination)
@@ -1003,7 +1068,7 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity: 
 
   return (
     <group>
-      {/* Liquid flow tubes */}
+      {/* Liquid flow tubes — staggered entrance, largest first */}
       {flows.map((f, i) => (
         <FlowTube
           key={`tube-${i}`}
@@ -1011,6 +1076,7 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity: 
           color={f.color}
           radius={f.tubeRadius}
           speed={f.speedScale * baseSpeed * 3}
+          entranceDelay={f.entranceDelay}
         />
       ))}
 
@@ -1024,9 +1090,13 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity: 
       {/* Source labels + markers + value annotations (left side) */}
       {flows.map((f, i) => (
         <group key={`src-${i}`}>
-          <mesh position={[-5, f.sourceY, 0]}>
+          <mesh
+            position={[-5, f.sourceY, 0]}
+            onPointerOver={(e) => { e.stopPropagation(); setHoveredFlow(i); }}
+            onPointerOut={() => setHoveredFlow(null)}
+          >
             <sphereGeometry args={[0.06 + f.ratio * 0.14, 12, 12]} />
-            <meshStandardMaterial color={colors[i % colors.length]} transparent opacity={0.7} />
+            <meshStandardMaterial color={colors[i % colors.length]} transparent opacity={hoveredFlow === i ? 1 : 0.7} />
           </mesh>
           <Text
             position={[-5.5, f.sourceY, 0]}
@@ -1038,14 +1108,22 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity: 
           >
             {f.label}
           </Text>
-          {/* Html value label — visible for top items by value */}
-          {f.ratio > 0.15 && (
+          {/* Html value label — visible for top items or hovered */}
+          {(f.ratio > 0.15 || hoveredFlow === i) && (
             <Html position={[-5, f.sourceY + 0.25, 0]} center style={{ pointerEvents: 'none' }}>
-              <span style={{ fontSize: '9px', fontFamily: 'monospace', color: 'rgba(255,255,255,0.45)', whiteSpace: 'nowrap' }}>
+              <span style={{ fontSize: '9px', fontFamily: 'monospace', color: hoveredFlow === i ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.45)', whiteSpace: 'nowrap' }}>
                 {fmtValue(f.val)}
               </span>
             </Html>
           )}
+          <Tooltip3D
+            position={[-5, f.sourceY + 0.45, 0]}
+            label={f.label}
+            value={f.val}
+            total={totalValue}
+            color={colors[i % colors.length]}
+            visible={hoveredFlow === i}
+          />
         </group>
       ))}
 
