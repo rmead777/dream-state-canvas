@@ -24,6 +24,15 @@ export interface ThreeDSettings {
   // Material
   opacity: number;       // particle opacity
   trailSpread: number;   // z-axis spread of bezier control points
+
+  // Environment
+  fogDensity: number;    // fog near/far range
+  groundOpacity: number; // ground plane opacity
+  envIntensity: number;  // environment map intensity
+
+  // Overlays
+  labelThreshold: number; // min ratio to show value labels (0..1)
+  entranceSpeed: number;  // entrance animation speed
 }
 
 export const DEFAULT_3D_SETTINGS: ThreeDSettings = {
@@ -37,6 +46,11 @@ export const DEFAULT_3D_SETTINGS: ThreeDSettings = {
   hubSize: 0.5,
   opacity: 0.5,
   trailSpread: 0.5,
+  fogDensity: 0.5,
+  groundOpacity: 0.5,
+  envIntensity: 0.3,
+  labelThreshold: 0.3,
+  entranceSpeed: 0.5,
 };
 
 const STORAGE_KEY = 'threed-settings';
@@ -94,6 +108,14 @@ export function mapped3D() {
     hubRadius: lerp(0.25, 0.8, s.hubSize),
     opacity: lerp(0.3, 0.9, s.opacity),
     trailSpread: lerp(0.5, 4.0, s.trailSpread),
+    // Environment
+    fogNear: lerp(6, 18, s.fogDensity),
+    fogFar: lerp(15, 35, s.fogDensity),
+    groundOpacity: lerp(0.1, 0.8, s.groundOpacity),
+    envIntensity: lerp(0.05, 0.4, s.envIntensity),
+    // Overlays
+    labelThreshold: lerp(0.05, 0.5, s.labelThreshold),
+    entranceMaxDelay: lerp(0.5, 2.5, s.entranceSpeed),
   };
 }
 
@@ -115,6 +137,8 @@ const BUILT_IN_PRESETS: ThreeDPreset[] = [
       valueExponent: 0.7, speedRange: 0.7,
       cameraDistance: 0.4, autoRotateSpeed: 0.3,
       hubSize: 0.6, opacity: 0.6, trailSpread: 0.4,
+      fogDensity: 0.4, groundOpacity: 0.5, envIntensity: 0.3,
+      labelThreshold: 0.2, entranceSpeed: 0.6,
     },
   },
   {
@@ -125,6 +149,8 @@ const BUILT_IN_PRESETS: ThreeDPreset[] = [
       valueExponent: 0.3, speedRange: 0.2,
       cameraDistance: 0.6, autoRotateSpeed: 0.2,
       hubSize: 0.4, opacity: 0.4, trailSpread: 0.3,
+      fogDensity: 0.7, groundOpacity: 0.3, envIntensity: 0.2,
+      labelThreshold: 0.4, entranceSpeed: 0.3,
     },
   },
   {
@@ -135,6 +161,8 @@ const BUILT_IN_PRESETS: ThreeDPreset[] = [
       valueExponent: 0.9, speedRange: 0.9,
       cameraDistance: 0.3, autoRotateSpeed: 0.5,
       hubSize: 0.7, opacity: 0.7, trailSpread: 0.7,
+      fogDensity: 0.3, groundOpacity: 0.6, envIntensity: 0.4,
+      labelThreshold: 0.15, entranceSpeed: 0.7,
     },
   },
 ];

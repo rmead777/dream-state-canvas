@@ -49,6 +49,21 @@ const GROUPS: { title: string; sliders: SliderDef[] }[] = [
       { key: 'trailSpread', label: 'Trail Spread', icon: 'T' },
     ],
   },
+  {
+    title: 'Environment',
+    sliders: [
+      { key: 'fogDensity', label: 'Fog Density', icon: 'F' },
+      { key: 'groundOpacity', label: 'Ground Opacity', icon: 'G' },
+      { key: 'envIntensity', label: 'Reflections', icon: 'E' },
+    ],
+  },
+  {
+    title: 'Overlays',
+    sliders: [
+      { key: 'labelThreshold', label: 'Label Threshold', icon: 'L' },
+      { key: 'entranceSpeed', label: 'Entrance Speed', icon: 'N' },
+    ],
+  },
 ];
 
 export function ThreeDControlPanel() {

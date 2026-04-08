@@ -258,7 +258,7 @@ function Bar3DScene({ data, labelKey, valueKey, colors, showGrid = true, showLab
         const y = frac * heightScale;
         const val = frac * maxVal;
         return (
-          <group key={`ytick-${frac}`} position={[-totalWidth / 2 - 0.3, y, 0]}>
+          <group key={`ytick-${frac}`} position={[-0.5, y, 0]}>
             <Html center style={{ pointerEvents: 'none' }}>
               <span style={{ fontSize: '8px', fontFamily: 'monospace', color: 'rgba(255,255,255,0.3)', whiteSpace: 'nowrap' }}>
                 {fmtValue(val)}
@@ -996,7 +996,7 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity: 
         highlightCount: Math.max(2, Math.round(ratio * density * 0.3)),
         speedScale: cfg.speedMin + ratio * (cfg.speedMax - cfg.speedMin),
         // Staggered entrance: larger values enter first
-        entranceDelay: (1 - ratio) * 1.2,
+        entranceDelay: (1 - ratio) * cfg.entranceMaxDelay,
         // Critical flag: AI may set priority/critical/risk fields
         critical: d.critical === true || d.priority === 'high' || d.priority === 'critical' || d.risk === 'high' || d.risk === 'critical',
       };
@@ -1022,9 +1022,11 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity: 
   }, [flows]);
 
   const colorsApplied = useRef(false);
+  const sparkleStartRef = useRef<number | null>(null);
 
   useFrame(({ clock }) => {
     if (!highlightRef.current) return;
+    if (sparkleStartRef.current === null) sparkleStartRef.current = clock.getElapsedTime();
 
     // Apply highlight colors once
     if (!colorsApplied.current) {
@@ -1054,11 +1056,14 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity: 
       // Fade at endpoints
       const fade = t < 0.05 ? t / 0.05 : t > 0.95 ? (1 - t) / 0.05 : 1;
 
+      // Gate sparkles behind tube entrance (BB-007)
+      const sparkleElapsed = clock.getElapsedTime() - (sparkleStartRef.current || 0);
+      const entranceVisible = sparkleElapsed > f.entranceDelay + 0.8;
+
       dummy.position.copy(pos);
-      // Slight random offset perpendicular to path for sparkle effect
       dummy.position.y += Math.sin(elapsed * 8 + i * 1.7) * f.tubeRadius * 0.3;
       dummy.position.z += Math.cos(elapsed * 6 + i * 2.3) * f.tubeRadius * 0.3;
-      dummy.scale.setScalar(fade * (0.8 + 0.5 * Math.sin(elapsed * 12 + i)));
+      dummy.scale.setScalar(entranceVisible ? fade * (0.8 + 0.5 * Math.sin(elapsed * 12 + i)) : 0);
       dummy.updateMatrix();
       highlightRef.current.setMatrixAt(i, dummy.matrix);
     }
@@ -1138,7 +1143,7 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity: 
             {f.label}
           </Text>
           {/* Html value label — visible for top items or hovered */}
-          {(f.ratio > 0.15 || hoveredFlow === i) && (
+          {(f.ratio > cfg.labelThreshold || hoveredFlow === i) && (
             <Html position={[-5, f.sourceY + 0.25, 0]} center style={{ pointerEvents: 'none' }}>
               <span style={{ fontSize: '9px', fontFamily: 'monospace', color: hoveredFlow === i ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.45)', whiteSpace: 'nowrap' }}>
                 {fmtValue(f.val)}
@@ -1332,21 +1337,18 @@ const GROUNDED_SCENES = new Set(['bar3d', 'scatter3d', 'pie3d', 'surface', 'barR
 // ─── Dark Environment Sub-component ──────────────────────────────────────────
 
 function SceneEnvironment({ grounded }: { grounded: boolean }) {
+  const cfg = mapped3D();
   return (
     <>
-      {/* Soft environment reflections for material depth */}
-      <Environment preset="city" environmentIntensity={0.15} />
-      {/* Subtle distance fog for spatial reading */}
-      <fog attach="fog" args={['#0e0e16', 10, 25]} />
-      {/* Ground plane with contact shadows for grounded scenes */}
+      <Environment preset="city" environmentIntensity={cfg.envIntensity} />
+      <fog attach="fog" args={['#0e0e16', cfg.fogNear, cfg.fogFar]} />
       {grounded && (
         <>
-          <ContactShadows position={[0, -0.01, 0]} opacity={0.3} scale={12} blur={2} far={4} />
+          <ContactShadows position={[0, -0.01, 0]} opacity={cfg.groundOpacity * 0.6} scale={12} blur={2} far={4} />
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
             <planeGeometry args={[20, 20]} />
-            <meshStandardMaterial color="#141420" transparent opacity={0.5} roughness={0.9} />
+            <meshStandardMaterial color="#141420" transparent opacity={cfg.groundOpacity} roughness={0.9} />
           </mesh>
-          {/* Grid handled by per-scene GridFloor — no duplicate here (BB-004) */}
         </>
       )}
     </>
