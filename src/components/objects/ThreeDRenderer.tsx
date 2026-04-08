@@ -887,12 +887,15 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity: 
   const cfg = mapped3D();
   const density = propDensity ?? cfg.particleDensity;
   const baseSpeed = propSpeed ?? cfg.flowSpeed;
+  const totalValue = useMemo(() => data.reduce((s, d) => s + (Number(d[valueKey]) || 0), 0), [data, valueKey]);
 
   const maxVal = useMemo(() => Math.max(...data.map(d => Number(d[valueKey]) || 1), 1), [data, valueKey]);
   const highlightRef = useRef<THREE.InstancedMesh>(null);
+  const hubRef = useRef<THREE.Mesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
 
   // Build flows with bezier curves and tube radii
+  // Tubes converge toward a funnel point (p2 → p3 tightens near destination)
   const flows = useMemo(() => {
     return data.map((d, i) => {
       const val = Number(d[valueKey]) || 1;
@@ -900,9 +903,9 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity: 
       const yOffset = ((i / (data.length - 1 || 1)) - 0.5) * 5;
       const p0 = new THREE.Vector3(-5, yOffset, 0);
       const p1 = new THREE.Vector3(-1.5, yOffset * 0.3, (Math.random() - 0.5) * cfg.trailSpread);
-      const p2 = new THREE.Vector3(1.5, -yOffset * 0.3, (Math.random() - 0.5) * cfg.trailSpread);
+      // Funnel convergence: p2 pulls toward center more tightly
+      const p2 = new THREE.Vector3(2.5, yOffset * 0.08, (Math.random() - 0.5) * cfg.trailSpread * 0.3);
       const p3 = new THREE.Vector3(5, 0, 0);
-      // Tube radius: 0.02 (tiny vendor) → 0.18 (largest), scaled by admin size
       const sizeScale = cfg.particleRadius / 0.08;
       const tubeRadius = (0.02 + Math.pow(ratio, mapped3D().valueExponent) * 0.16) * sizeScale;
       return {
@@ -913,9 +916,10 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity: 
         color: new THREE.Color(colors[i % colors.length]),
         curve: new FlowBezier(p0, p1, p2, p3),
         tubeRadius,
-        // Highlight particle count: small number riding along tubes
         highlightCount: Math.max(2, Math.round(ratio * density * 0.3)),
         speedScale: cfg.speedMin + ratio * (cfg.speedMax - cfg.speedMin),
+        // Staggered entrance: larger values enter first
+        entranceDelay: (1 - ratio) * 1.2,
       };
     });
   }, [data, labelKey, valueKey, maxVal, colors, density]);
@@ -980,7 +984,22 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity: 
       highlightRef.current.setMatrixAt(i, dummy.matrix);
     }
     highlightRef.current.instanceMatrix.needsUpdate = true;
+
+    // Hub breathing animation — pulsing speed increases with flow count
+    if (hubRef.current) {
+      const pulse = 1 + Math.sin(elapsed * 2.5) * 0.06;
+      hubRef.current.scale.setScalar(pulse);
+    }
   });
+
+  // Hub color based on data pressure (total value relative to count)
+  const hubColor = useMemo(() => {
+    const avgVal = totalValue / (data.length || 1);
+    // More items or higher total → warmer color
+    if (data.length > 15 || totalValue > 1_000_000) return '#ef4444'; // red — high pressure
+    if (data.length > 8 || totalValue > 500_000) return '#f59e0b';   // amber — moderate
+    return '#6366f1'; // indigo — normal
+  }, [data.length, totalValue]);
 
   return (
     <group>
@@ -1022,13 +1041,25 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity: 
         </group>
       ))}
 
-      {/* Destination hub (right side) */}
+      {/* Destination hub — pressure-colored, breathing */}
+      <mesh ref={hubRef} position={[5, 0, 0]}>
+        <sphereGeometry args={[cfg.hubRadius, 24, 24]} />
+        <meshStandardMaterial
+          color={hubColor}
+          transparent
+          opacity={0.35}
+          roughness={0.15}
+          emissive={hubColor}
+          emissiveIntensity={0.15}
+        />
+      </mesh>
+      {/* Outer glow ring */}
       <mesh position={[5, 0, 0]}>
-        <sphereGeometry args={[cfg.hubRadius, 16, 16]} />
-        <meshStandardMaterial color="#6366f1" transparent opacity={0.4} />
+        <sphereGeometry args={[cfg.hubRadius + 0.05, 16, 16]} />
+        <meshBasicMaterial color={hubColor} wireframe transparent opacity={0.15} />
       </mesh>
       <Text position={[5, -(cfg.hubRadius + 0.4), 0]} fontSize={0.2} color="#e5e7eb" anchorX="center">
-        Total
+        {fmtValue(totalValue)}
       </Text>
     </group>
   );
