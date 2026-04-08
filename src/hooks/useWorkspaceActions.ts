@@ -105,7 +105,7 @@ export function useWorkspaceActions() {
           images,
           onStatusUpdate: (status) => {
             if (status) {
-              dispatch({ type: 'SET_SHERPA_RESPONSE', payload: status });
+              dispatch({ type: 'SET_SHERPA_STATUS', payload: status });
             }
           },
         });

@@ -51,7 +51,7 @@ const TAB_CONFIG: { id: RailTab; label: string; adminOnly?: boolean }[] = [
 export function SherpaRail() {
   const { state, dispatch } = useWorkspace();
   const { processIntent, setDocumentIds } = useWorkspaceActions();
-  const { suggestions, observations, lastResponse, isProcessing } = useSherpa();
+  const { suggestions, observations, lastResponse, processingStatus, isProcessing } = useSherpa();
   const cognitiveMode = useCognitiveMode();
   const { play } = useAmbientAudio();
   const { user, signOut } = useAuth();
@@ -572,7 +572,7 @@ export function SherpaRail() {
                               <div key={j} className="h-1.5 w-1.5 rounded-full bg-workspace-accent/40 animate-pulse" style={{ animationDelay: `${j * 200}ms` }} />
                             ))}
                           </div>
-                          <span className="text-[10px] text-workspace-accent/60">Reasoning...</span>
+                          <span className="text-[10px] text-workspace-accent/60">{processingStatus || 'Reasoning...'}</span>
                         </div>
                       </div>
                     </div>

@@ -19,6 +19,7 @@ const initialState: WorkspaceState = {
   sherpa: {
     suggestions: [],
     lastResponse: null,
+    processingStatus: null,
     observations: [],
     dismissedObservations: [],
     isProcessing: false,
@@ -206,7 +207,10 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
       };
 
     case 'SET_SHERPA_PROCESSING':
-      return { ...state, sherpa: { ...state.sherpa, isProcessing: action.payload } };
+      return { ...state, sherpa: { ...state.sherpa, isProcessing: action.payload, processingStatus: action.payload ? state.sherpa.processingStatus : null } };
+
+    case 'SET_SHERPA_STATUS':
+      return { ...state, sherpa: { ...state.sherpa, processingStatus: action.payload } };
 
     case 'ADD_RECENT_INTENT':
       return {

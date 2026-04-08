@@ -30,7 +30,7 @@ import { toast } from 'sonner';
 export function MobileShell() {
   const { state, dispatch } = useWorkspace();
   const { processIntent, setDocumentIds } = useWorkspaceActions();
-  const { suggestions, lastResponse, isProcessing } = useSherpa();
+  const { suggestions, lastResponse, processingStatus, isProcessing } = useSherpa();
   const { play } = useAmbientAudio();
   const { user, signOut } = useAuth();
   const { documents } = useDocuments();
@@ -303,7 +303,7 @@ export function MobileShell() {
                       {i === promptHistory.length - 1 && !entry.response && isProcessing && (
                         <div className="flex justify-start">
                           <div className="rounded-2xl rounded-bl-md bg-white/60 border border-workspace-accent/20 px-3 py-1.5">
-                            <span className="text-[10px] text-workspace-accent/50">Working on it...</span>
+                            <span className="text-[10px] text-workspace-accent/50">{processingStatus || 'Working on it...'}</span>
                           </div>
                         </div>
                       )}

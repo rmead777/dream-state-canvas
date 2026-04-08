@@ -135,6 +135,8 @@ export interface Suggestion {
 export interface SherpaState {
   suggestions: Suggestion[];
   lastResponse: string | null;
+  /** Current tool/step status during processing (e.g. "Querying dataset..."). Separate from lastResponse. */
+  processingStatus: string | null;
   observations: string[];
   /** Observation strings the user has dismissed — prevents re-generation */
   dismissedObservations: string[];

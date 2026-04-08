@@ -18,6 +18,7 @@ interface SherpaContextValue {
   suggestions: Suggestion[];
   observations: string[];
   lastResponse: string | null;
+  processingStatus: string | null;
   isProcessing: boolean;
   triggerObservationScan: () => void;
 }
@@ -162,6 +163,7 @@ export function SherpaProvider({ children }: { children: React.ReactNode }) {
     suggestions: state.sherpa.suggestions,
     observations: state.sherpa.observations,
     lastResponse: state.sherpa.lastResponse,
+    processingStatus: state.sherpa.processingStatus,
     isProcessing: state.sherpa.isProcessing,
     triggerObservationScan,
   };
