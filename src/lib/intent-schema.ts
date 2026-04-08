@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CardSection } from './card-schema';
+import type { CardSectionType } from './card-schema';
 
 /**
  * Intent Schema — validates the STRUCTURE of AI output, not the CONTENT.
@@ -44,4 +44,4 @@ export const IntentLLMOutputSchema = z.object({
 export type IntentLLMOutput = z.infer<typeof IntentLLMOutputSchema>;
 
 // Re-export for backwards compat
-export { CardSection };
+export type { CardSectionType };

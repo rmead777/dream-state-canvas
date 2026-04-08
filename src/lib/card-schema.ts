@@ -1,279 +1,37 @@
 /**
- * Card Schema — Zod schemas for the analysis super-type.
+ * Card Schema — section types for AI-generated card content.
  *
- * Defines section types (summary, narrative, metric, table, callout, etc.)
- * and the DataQuery schema for AI-driven data selection.
+ * DESIGN PRINCIPLE: The AI is the intelligence layer. This file defines
+ * TypeScript types for the renderers and a minimal validateSections()
+ * that accepts anything with a `type` field. No Zod, no strict validation,
+ * no walls between AI output and the executor.
  *
- * All AI-generated card content is validated through these schemas
- * before reaching the renderer. Invalid sections are dropped, not crashed.
+ * The renderers handle missing/malformed fields gracefully with defaults
+ * and optional chaining. If the AI sends a field we don't expect, the
+ * renderer ignores it. If it's missing a field, the renderer shows a
+ * sensible default. This is the safety net — not a validator.
  */
-import { z } from 'zod';
 
-// ─── Section Types ───────────────────────────────────────────────────────────
+// ─── Section Types (TypeScript only — no runtime validation) ─────────────────
 
-export const SummarySection = z.object({
-  type: z.literal('summary'),
-  text: z.string(),
-}).passthrough();
-
-export const NarrativeSection = z.object({
-  type: z.literal('narrative'),
-  text: z.string(),
-}).passthrough();
-
-export const MetricSection = z.object({
-  type: z.literal('metric'),
-  label: z.string(),
-  value: z.union([z.string(), z.number()]),
-  unit: z.string().optional(),
-  trend: z.enum(['up', 'down', 'flat']).optional(),
-  trendLabel: z.string().optional(),
-}).passthrough();
-
-export const TableSection = z.object({
-  type: z.literal('table'),
-  columns: z.array(z.string()),
-  rows: z.array(z.array(z.union([z.string(), z.number(), z.null()]))),
-  highlights: z.array(z.object({
-    column: z.string(),
-    condition: z.string(),
-    style: z.enum(['warning', 'danger', 'success', 'info']),
-  })).optional(),
-  caption: z.string().optional(),
-}).passthrough();
-
-export const CalloutSection = z.object({
-  type: z.literal('callout'),
-  severity: z.enum(['info', 'warning', 'danger', 'success']),
-  text: z.string(),
-}).passthrough();
-
-export const MetricsRowSection = z.object({
-  type: z.literal('metrics-row'),
-  metrics: z.array(z.object({
-    label: z.string(),
-    value: z.union([z.string(), z.number()]),
-    unit: z.string().optional(),
-  }).passthrough()),
-}).passthrough();
-
-export const ChartSection = z.object({
-  type: z.literal('chart'),
-  chartType: z.enum(['bar', 'line', 'area', 'pie', 'donut', 'scatter', 'radialBar', 'radial', 'funnel', 'treemap', 'composed']),
-  xAxis: z.string().optional(),
-  yAxis: z.string().optional(),
-  data: z.array(z.record(z.union([z.string(), z.number()]))),
-  caption: z.string().optional(),
-  color: z.string().optional(),
-  colors: z.array(z.string()).optional(),
-  fillOpacity: z.number().optional(),
-  height: z.number().optional(),
-  theme: z.string().optional(),
-  // Scatter-specific
-  zAxis: z.string().optional(),
-  // Pie/donut specific
-  nameKey: z.string().optional(),
-  valueKey: z.string().optional(),
-  innerRadius: z.number().optional(),
-  outerRadius: z.number().optional(),
-  // Composed chart series definitions
-  series: z.array(z.object({
-    dataKey: z.string(),
-    name: z.string().optional(),
-    color: z.string().optional(),
-    type: z.enum(['bar', 'line', 'area']).optional(),
-  })).optional(),
-}).passthrough();
-
-export const VegaLiteSection = z.object({
-  type: z.literal('vegalite'),
-  spec: z.record(z.any()),
-  height: z.number().optional(),
-  caption: z.string().optional(),
-  theme: z.string().optional(),
-}).passthrough();
-
-export const ChartGridSection = z.object({
-  type: z.literal('chart-grid'),
-  columns: z.number().min(1).max(4).default(2),
-  charts: z.array(z.union([
-    z.object({ type: z.literal('chart') }).passthrough(),
-    z.object({ type: z.literal('vegalite') }).passthrough(),
-    z.object({ type: z.literal('embed') }).passthrough(),
-    z.object({ type: z.literal('3d') }).passthrough(),
-    z.object({ type: z.literal('animated-metrics') }).passthrough(),
-  ])),
-  caption: z.string().optional(),
-}).passthrough();
-
-export const EmbedSection = z.object({
-  type: z.literal('embed'),
-  html: z.string(),
-  height: z.number().optional(),
-  caption: z.string().optional(),
-}).passthrough();
-
-export const AnimatedMetricsSection = z.object({
-  type: z.literal('animated-metrics'),
-  metrics: z.array(z.object({
-    label: z.string(),
-    value: z.number(),
-    unit: z.string().optional(),
-    prefix: z.string().optional(),
-    trend: z.enum(['up', 'down', 'flat']).optional(),
-    trendValue: z.string().optional(),
-    color: z.string().optional(),
-  }).passthrough()),
-  columns: z.number().min(1).max(4).optional(),
-  caption: z.string().optional(),
-}).passthrough();
-
-export const ThreeDSection = z.object({
-  type: z.literal('3d'),
-  sceneType: z.string(),
-  data: z.array(z.record(z.union([z.string(), z.number()]))),
-  xAxis: z.string().optional(),
-  yAxis: z.string().optional(),
-  zAxis: z.string().optional(),
-  labelKey: z.string().optional(),
-  valueKey: z.string().optional(),
-  colorKey: z.string().optional(),
-  colors: z.array(z.string()).optional(),
-  height: z.number().optional(),
-  caption: z.string().optional(),
-  autoRotate: z.boolean().optional(),
-}).passthrough();
-
-export const CardSection = z.discriminatedUnion('type', [
-  SummarySection,
-  NarrativeSection,
-  MetricSection,
-  TableSection,
-  CalloutSection,
-  MetricsRowSection,
-  ChartSection,
-  VegaLiteSection,
-  ChartGridSection,
-  EmbedSection,
-  ThreeDSection,
-  AnimatedMetricsSection,
-]);
-
-export type CardSectionType = z.infer<typeof CardSection>;
+export interface CardSectionType {
+  type: string;
+  [key: string]: any;
+}
 
 // ─── DataQuery Schema ────────────────────────────────────────────────────────
-//
-// INTENTIONALLY PERMISSIVE. The AI is smart and will invent reasonable
-// operators/structures we haven't anticipated. The data-query executor
-// handles unknown operators gracefully (falls back to "contains").
-// Do NOT add strict enums here — they reject valid AI output.
-
-export const DataQuerySchema = z.record(z.any()).optional();
 
 export type DataQuery = Record<string, any> | undefined;
 
-// ─── Analysis Card Content ───────────────────────────────────────────────────
-
-export const AnalysisContentSchema = z.object({
-  sections: z.array(CardSection),
-  dataQuery: DataQuerySchema.optional(),
-});
-
-export type AnalysisContent = z.infer<typeof AnalysisContentSchema>;
-
-// ─── Validation Helpers ──────────────────────────────────────────────────────
+// ─── Validation ──────────────────────────────────────────────────────────────
 
 /**
- * Validate and filter sections — drops invalid ones instead of rejecting the whole card.
- * This is the "graceful degradation" approach for AI-generated content.
+ * Validate sections — accepts anything with a `type` field.
+ * The renderers are the safety net, not this function.
  */
 export function validateSections(raw: unknown[]): CardSectionType[] {
   if (!Array.isArray(raw)) return [];
-  const valid: CardSectionType[] = [];
-  for (const item of raw) {
-    // Normalize common AI type aliases before validation
-    const normalized = normalizeSection(item);
-    const result = CardSection.safeParse(normalized);
-    if (result.success) {
-      valid.push(result.data);
-    } else {
-      console.warn('[card-schema] Dropped invalid section:', item, result.error.issues);
-    }
-  }
-  return valid;
-}
-
-/** Map AI-generated type aliases to canonical section types */
-function normalizeSection(item: unknown): unknown {
-  if (typeof item !== 'object' || item === null) return item;
-  const s = item as Record<string, unknown>;
-  // 'text' and 'paragraph' → 'narrative'
-  if (s.type === 'text' || s.type === 'paragraph') {
-    return { ...s, type: 'narrative', text: s.content ?? s.text ?? '' };
-  }
-  // 'header' → 'summary'
-  if (s.type === 'header') {
-    return { ...s, type: 'summary', text: s.content ?? s.text ?? '' };
-  }
-  // vegalite aliases — AI commonly uses 'vega', 'vega-lite', 'vegaLite'
-  if (s.type === 'vega' || s.type === 'vega-lite' || s.type === 'vegaLite') {
-    return { ...s, type: 'vegalite' };
-  }
-  // chart.chartType aliases — normalize AI naming variations
-  if (s.type === 'chart') {
-    const typeMap: Record<string, string> = {
-      'doughnut': 'donut', 'ring': 'donut',
-      'bubble': 'scatter', 'point': 'scatter',
-      'radial-bar': 'radialBar', 'radial_bar': 'radialBar', 'gauge': 'radialBar',
-      'tree-map': 'treemap', 'tree_map': 'treemap',
-      'mixed': 'composed', 'combo': 'composed', 'combined': 'composed',
-      'stacked-bar': 'bar', 'stackedBar': 'bar', 'stacked_bar': 'bar',
-      'horizontal-bar': 'bar', 'horizontalBar': 'bar',
-    };
-    if (s.chartType && typeMap[s.chartType as string]) {
-      return { ...s, chartType: typeMap[s.chartType as string] };
-    }
-  }
-
-  // chart.chartType === 'heatmap' — recharts doesn't support heatmap.
-  // Remap to a vegalite rect spec using the data the AI already prepared.
-  if (s.type === 'chart' && s.chartType === 'heatmap') {
-    return {
-      type: 'vegalite',
-      caption: s.caption,
-      height: (s.height as number) || 320,
-      spec: {
-        $schema: 'https://vega.github.io/schema/vega-lite/v6.json',
-        mark: 'rect',
-        height: { step: 36 }, // auto-sizes: N rows × 36px — no fixed height clipping
-        encoding: {
-          x: { field: s.xAxis as string || 'x', type: 'ordinal' },
-          y: { field: s.yAxis as string || 'y', type: 'ordinal' },
-          color: {
-            field: (s.colorField as string) || (s.xAxis as string) || 'value',
-            type: 'quantitative',
-            scale: { scheme: 'orangered' },
-          },
-        },
-        data: { values: (s.data as unknown[]) || [] },
-      },
-    };
-  }
-  // animated-metrics aliases
-  if (s.type === 'counterDash' || s.type === 'counter-dash' || s.type === 'kpi-grid' || s.type === 'animated-kpi' || s.type === 'animatedMetrics') {
-    return { ...s, type: 'animated-metrics' };
-  }
-  // 3D aliases
-  if (s.type === 'three' || s.type === 'threejs' || s.type === 'three-d' || s.type === '3D') {
-    return { ...s, type: '3d' };
-  }
-  // embed aliases — AI may say 'svg', 'html', 'html-embed'
-  if (s.type === 'svg' || s.type === 'html' || s.type === 'html-embed') {
-    return { ...s, type: 'embed' };
-  }
-  // chart-grid aliases
-  if (s.type === 'grid' || s.type === 'chartgrid' || s.type === 'chart_grid') {
-    return { ...s, type: 'chart-grid' };
-  }
-  return item;
+  return raw.filter((s): s is CardSectionType =>
+    s != null && typeof s === 'object' && 'type' in s && typeof (s as any).type === 'string'
+  );
 }
