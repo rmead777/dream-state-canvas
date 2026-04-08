@@ -225,9 +225,13 @@ function TableRenderer({ section, highlightedEntity, onEntityClick }: {
   highlightedEntity?: string | null;
   onEntityClick?: (name: string) => void;
 }) {
+  const columns = Array.isArray(section.columns) ? section.columns : [];
+  const rows = Array.isArray(section.rows) ? section.rows : [];
+
   const highlightMap = new Map<string, { condition: string; style: string }[]>();
   if (section.highlights) {
     for (const h of section.highlights) {
+      if (!h?.column) continue;
       const existing = highlightMap.get(h.column) || [];
       existing.push(h);
       highlightMap.set(h.column, existing);
@@ -245,13 +249,15 @@ function TableRenderer({ section, highlightedEntity, onEntityClick }: {
     return null;
   }
 
+  if (columns.length === 0 && rows.length === 0) return null;
+
   return (
     <div className="space-y-1">
       <div className="overflow-x-auto rounded-lg border border-workspace-border/40">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-workspace-border bg-workspace-surface/30">
-              {section.columns.map((col) => (
+              {columns.map((col) => (
                 <th key={col} className="px-3 py-2 text-left font-medium uppercase tracking-wider text-workspace-text-secondary/60 whitespace-nowrap">
                   {col}
                 </th>
@@ -259,11 +265,11 @@ function TableRenderer({ section, highlightedEntity, onEntityClick }: {
             </tr>
           </thead>
           <tbody>
-            {section.rows.map((row, i) => (
+            {rows.map((row, i) => (
               <tr key={i} className="border-b border-workspace-border/20 hover:bg-workspace-surface/20 transition-colors">
-                {row.map((cell, j) => {
-                  const highlight = getCellHighlight(section.columns[j], cell);
-                  const colName = section.columns[j] || '';
+                {(Array.isArray(row) ? row : []).map((cell, j) => {
+                  const highlight = getCellHighlight(columns[j], cell);
+                  const colName = columns[j] || '';
                   const isEntityCol = ENTITY_COLUMN_PATTERNS.some((p) => p.test(colName));
                   const cellStr = cell != null ? String(cell) : null;
                   const isActiveEntity = highlightedEntity && cellStr?.toLowerCase() === highlightedEntity.toLowerCase();
@@ -300,6 +306,7 @@ const highlightStyles: Record<string, string> = {
 };
 
 function matchesCondition(value: string, condition: string): boolean {
+  if (!condition || typeof condition !== 'string') return false;
   if (condition.startsWith('>')) return parseFloat(value.replace(/[$,%,]/g, '')) > parseFloat(condition.slice(1));
   if (condition.startsWith('<')) return parseFloat(value.replace(/[$,%,]/g, '')) < parseFloat(condition.slice(1));
   if (condition.startsWith('contains:')) return value.toLowerCase().includes(condition.slice(9).toLowerCase());
