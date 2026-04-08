@@ -755,7 +755,7 @@ function ConnectionMapScene({ data, labelKey, valueKey, colors, nodeMin = 0.08, 
 // ─── Particle Flow Scene (Animated) ───────────────────────────────────────────
 
 const PARTICLE_COUNT_PER_FLOW = 30;
-const PARTICLE_GEO = new THREE.SphereGeometry(0.04, 6, 6);
+const PARTICLE_GEO = new THREE.SphereGeometry(0.08, 8, 8);
 
 function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity = 30, flowSpeed = 0.3 }: {
   data: Record<string, string | number>[];
@@ -842,7 +842,7 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity =
       const opacity = t < 0.1 ? t / 0.1 : t > 0.9 ? (1 - t) / 0.1 : 1;
 
       dummy.position.set(x, y, z);
-      dummy.scale.setScalar(0.5 + opacity * 0.5);
+      dummy.scale.setScalar(0.7 + opacity * 0.8);
       dummy.updateMatrix();
       meshRef.current.setMatrixAt(i, dummy.matrix);
     }
@@ -855,27 +855,32 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity =
         <meshStandardMaterial transparent opacity={0.6} roughness={0.3} />
       </instancedMesh>
 
-      {/* Source labels (left side) */}
+      {/* Source labels + markers (left side) */}
       {flows.map((f, i) => (
-        <Text
-          key={`src-${i}`}
-          position={[-5.8, f.sourceY, 0]}
-          fontSize={0.18}
-          color="#374151"
-          anchorX="right"
-          anchorY="middle"
-          maxWidth={2}
-        >
-          {f.label}
-        </Text>
+        <group key={`src-${i}`}>
+          <mesh position={[-5, f.sourceY, 0]}>
+            <sphereGeometry args={[0.12, 12, 12]} />
+            <meshStandardMaterial color={colors[i % colors.length]} transparent opacity={0.7} />
+          </mesh>
+          <Text
+            position={[-5.5, f.sourceY, 0]}
+            fontSize={0.18}
+            color="#374151"
+            anchorX="right"
+            anchorY="middle"
+            maxWidth={2.5}
+          >
+            {f.label}
+          </Text>
+        </group>
       ))}
 
       {/* Destination hub (right side) */}
       <mesh position={[5, 0, 0]}>
-        <sphereGeometry args={[0.3, 16, 16]} />
-        <meshStandardMaterial color="#6366f1" transparent opacity={0.3} />
+        <sphereGeometry args={[0.5, 16, 16]} />
+        <meshStandardMaterial color="#6366f1" transparent opacity={0.4} />
       </mesh>
-      <Text position={[5, -0.6, 0]} fontSize={0.2} color="#374151" anchorX="center">
+      <Text position={[5, -0.9, 0]} fontSize={0.2} color="#374151" anchorX="center">
         Total
       </Text>
     </group>
