@@ -14,7 +14,7 @@
 
 import { Suspense, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Text, RoundedBox, Float, Environment, ContactShadows } from '@react-three/drei';
+import { OrbitControls, Text, RoundedBox, Float, Environment, ContactShadows, Html } from '@react-three/drei';
 import { CHART_THEMES } from '@/lib/chart-themes';
 import { easeOutCubic, easeOutSpring, getStaggerDelay } from '@/hooks/useAnimationTimeline';
 import { mapped3D } from '@/lib/threed-settings';
@@ -1021,7 +1021,7 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity: 
         </instancedMesh>
       )}
 
-      {/* Source labels + markers (left side) — sized by value */}
+      {/* Source labels + markers + value annotations (left side) */}
       {flows.map((f, i) => (
         <group key={`src-${i}`}>
           <mesh position={[-5, f.sourceY, 0]}>
@@ -1038,6 +1038,14 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity: 
           >
             {f.label}
           </Text>
+          {/* Html value label — visible for top items by value */}
+          {f.ratio > 0.15 && (
+            <Html position={[-5, f.sourceY + 0.25, 0]} center style={{ pointerEvents: 'none' }}>
+              <span style={{ fontSize: '9px', fontFamily: 'monospace', color: 'rgba(255,255,255,0.45)', whiteSpace: 'nowrap' }}>
+                {fmtValue(f.val)}
+              </span>
+            </Html>
+          )}
         </group>
       ))}
 
@@ -1231,8 +1239,7 @@ function SceneEnvironment({ grounded }: { grounded: boolean }) {
             <planeGeometry args={[20, 20]} />
             <meshStandardMaterial color="#141420" transparent opacity={0.5} roughness={0.9} />
           </mesh>
-          {/* Subtle grid lines */}
-          <gridHelper args={[20, 20, '#1a1a2e', '#1a1a2e']} position={[0, -0.01, 0]} />
+          {/* Grid handled by per-scene GridFloor — no duplicate here (BB-004) */}
         </>
       )}
     </>
