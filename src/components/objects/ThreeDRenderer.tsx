@@ -155,7 +155,7 @@ function Tooltip3D({ position, label, value, total, color, visible }: {
 
 // ─── Bar3D Scene ──────────────────────────────────────────────────────────────
 
-function Bar3DScene({ data, labelKey, valueKey, colors, showGrid = true, showLabels = true, showValues = true, barWidth: bw, barGap: bg, maxHeight: mh, opacity: op }: {
+function Bar3DScene({ data, labelKey, valueKey, colors, showGrid = true, showLabels = true, showValues = true, barWidth: bw, barGap: bg, maxHeight: mh, opacity: op, isolatedIdx }: {
   data: Record<string, string | number>[];
   labelKey: string;
   valueKey: string;
@@ -167,6 +167,7 @@ function Bar3DScene({ data, labelKey, valueKey, colors, showGrid = true, showLab
   barGap?: number;
   maxHeight?: number;
   opacity?: number;
+  isolatedIdx?: number | null;
 }) {
   const maxVal = useMemo(() => Math.max(...data.map(d => Number(d[valueKey]) || 0), 1), [data, valueKey]);
   const totalVal = useMemo(() => data.reduce((s, d) => s + (Number(d[valueKey]) || 0), 0), [data, valueKey]);
@@ -177,6 +178,14 @@ function Bar3DScene({ data, labelKey, valueKey, colors, showGrid = true, showLab
   const totalWidth = data.length * (barWidth + gap) - gap;
   const [hovered, setHovered] = useState<number | null>(null);
 
+  // Pre-compute edge geometries to avoid per-render allocation (BB-005)
+  const edgeGeoms = useMemo(() =>
+    data.map(d => {
+      const val = Number(d[valueKey]) || 0;
+      const h = (val / maxVal) * heightScale;
+      return new THREE.EdgesGeometry(new THREE.BoxGeometry(barWidth, h, barWidth));
+    }), [data, valueKey, maxVal, heightScale, barWidth]);
+
   return (
     <group position={[-totalWidth / 2, 0, 0]}>
       {data.map((d, i) => {
@@ -185,7 +194,8 @@ function Bar3DScene({ data, labelKey, valueKey, colors, showGrid = true, showLab
         const color = colors[i % colors.length];
         const x = i * (barWidth + gap);
         const isHovered = hovered === i;
-        const dimmed = hovered !== null && !isHovered;
+        const isIsolated = isolatedIdx === i;
+        const dimmed = (hovered !== null && !isHovered) || (isolatedIdx !== null && !isIsolated);
 
         return (
           <group key={i} position={[x + barWidth / 2, 0, 0]}>
@@ -205,8 +215,7 @@ function Bar3DScene({ data, labelKey, valueKey, colors, showGrid = true, showLab
                 metalness={0.1}
               />
             </RoundedBox>
-            <lineSegments position={[0, height / 2, 0]}>
-              <edgesGeometry args={[new THREE.BoxGeometry(barWidth, height, barWidth)]} />
+            <lineSegments position={[0, height / 2, 0]} geometry={edgeGeoms[i]}>
               <lineBasicMaterial color={color} linewidth={1} transparent opacity={dimmed ? 0.15 : 1} />
             </lineSegments>
             {showValues && !isHovered && (
@@ -897,12 +906,13 @@ const flowFragmentShader = `
 `;
 
 /** A single animated tube for one flow */
-function FlowTube({ curve, color, radius, speed, entranceDelay = 0 }: {
+function FlowTube({ curve, color, radius, speed, entranceDelay = 0, dimmed = false }: {
   curve: FlowBezier;
   color: THREE.Color;
   radius: number;
   speed: number;
   entranceDelay?: number;
+  dimmed?: boolean;
 }) {
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const geom = useMemo(() => new THREE.TubeGeometry(curve, 64, radius, 12, false), [curve, radius]);
@@ -913,9 +923,10 @@ function FlowTube({ curve, color, radius, speed, entranceDelay = 0 }: {
     if (startRef.current === null) startRef.current = clock.getElapsedTime();
     const elapsed = clock.getElapsedTime() - startRef.current;
     matRef.current.uniforms.uTime.value = clock.getElapsedTime();
-    // Entrance fade: 0→0.7 over 0.8s after delay
+    // Entrance fade: 0→target over 0.8s after delay
+    const targetOpacity = dimmed ? 0.12 : 0.7;
     const entranceProgress = Math.min(1, Math.max(0, (elapsed - entranceDelay) / 0.8));
-    matRef.current.uniforms.uOpacity.value = easeOutCubic(entranceProgress) * 0.7;
+    matRef.current.uniforms.uOpacity.value = easeOutCubic(entranceProgress) * targetOpacity;
   });
 
   const uniforms = useMemo(() => ({
@@ -940,13 +951,14 @@ function FlowTube({ curve, color, radius, speed, entranceDelay = 0 }: {
   );
 }
 
-function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity: propDensity, flowSpeed: propSpeed }: {
+function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity: propDensity, flowSpeed: propSpeed, isolatedIdx }: {
   data: Record<string, string | number>[];
   labelKey: string;
   valueKey: string;
   colors: string[];
   particleDensity?: number;
   flowSpeed?: number;
+  isolatedIdx?: number | null;
 }) {
   const cfg = mapped3D();
   const density = propDensity ?? cfg.particleDensity;
@@ -985,6 +997,8 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity: 
         speedScale: cfg.speedMin + ratio * (cfg.speedMax - cfg.speedMin),
         // Staggered entrance: larger values enter first
         entranceDelay: (1 - ratio) * 1.2,
+        // Critical flag: AI may set priority/critical/risk fields
+        critical: d.critical === true || d.priority === 'high' || d.priority === 'critical' || d.risk === 'high' || d.risk === 'critical',
       };
     });
   }, [data, labelKey, valueKey, maxVal, colors, density]);
@@ -1069,16 +1083,31 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity: 
   return (
     <group>
       {/* Liquid flow tubes — staggered entrance, largest first */}
-      {flows.map((f, i) => (
-        <FlowTube
-          key={`tube-${i}`}
-          curve={f.curve}
-          color={f.color}
-          radius={f.tubeRadius}
-          speed={f.speedScale * baseSpeed * 3}
-          entranceDelay={f.entranceDelay}
-        />
-      ))}
+      {flows.map((f, i) => {
+        const isDimmed = isolatedIdx !== null && isolatedIdx !== i;
+        return (
+          <group key={`tube-${i}`}>
+            <FlowTube
+              curve={f.curve}
+              color={f.color}
+              radius={f.tubeRadius}
+              speed={f.speedScale * baseSpeed * 3}
+              entranceDelay={f.entranceDelay}
+              dimmed={isDimmed}
+            />
+            {/* Critical vendor pulse — outer glow tube */}
+            {f.critical && !isDimmed && (
+              <FlowTube
+                curve={f.curve}
+                color={f.color}
+                radius={f.tubeRadius * 1.6}
+                speed={f.speedScale * baseSpeed * 2}
+                entranceDelay={f.entranceDelay}
+              />
+            )}
+          </group>
+        );
+      })}
 
       {/* Sparkle highlight particles riding on tubes */}
       {totalHighlights > 0 && (
@@ -1357,17 +1386,20 @@ export function ThreeDRenderer({ section }: ThreeDRendererProps) {
   const minValue = values.length > 0 ? Math.min(...values) : 0;
   const maxValue = values.length > 0 ? Math.max(...values) : 0;
 
-  // Legend: top N items by value
+  // Legend: top N items by value (with original data index for interactive highlight)
   const legendItems = useMemo(() => {
     if (!LEGEND_SCENES.has(section.sceneType)) return [];
     const items = data
-      .map((d, i) => ({ label: String(d[labelKey] || ''), value: Number(d[valueKey]) || 0, color: colors[i % colors.length] }))
+      .map((d, i) => ({ label: String(d[labelKey] || ''), value: Number(d[valueKey]) || 0, color: colors[i % colors.length], dataIdx: i }))
       .sort((a, b) => b.value - a.value);
     const MAX_LEGEND = 6;
     const shown = items.slice(0, MAX_LEGEND);
     const remaining = items.length - MAX_LEGEND;
     return { shown, remaining: remaining > 0 ? remaining : 0 };
   }, [data, labelKey, valueKey, colors, section.sceneType]);
+
+  // Interactive legend: click to isolate one item
+  const [isolatedIdx, setIsolatedIdx] = useState<number | null>(null);
 
   const sceneLabel = SCENE_LABELS[section.sceneType] || '3D SCENE';
   const dataSummary = `${data.length} items` + (totalValue > 0 ? ` · ${fmtValue(totalValue)} total` : '');
@@ -1400,24 +1432,40 @@ export function ThreeDRenderer({ section }: ThreeDRendererProps) {
           </span>
         </div>
 
-        {/* ─── Legend Overlay (bottom-left) ──────────────────────────── */}
+        {/* ─── Interactive Legend (bottom-left) — click to isolate ───── */}
         {legendItems && 'shown' in legendItems && legendItems.shown.length > 0 && (
           <div className="absolute bottom-2 left-3 z-10 flex flex-col gap-0.5">
-            {legendItems.shown.map((item, i) => (
-              <div key={i} className="flex items-center gap-1.5">
-                <span
-                  className="inline-block h-1.5 w-1.5 rounded-full shrink-0"
-                  style={{ backgroundColor: item.color }}
-                />
-                <span className="text-[8px] text-white/50 leading-none truncate max-w-[100px]">
-                  {item.label}
-                </span>
-              </div>
-            ))}
+            {legendItems.shown.map((item, i) => {
+              const isIsolated = isolatedIdx === item.dataIdx;
+              const isDimmed = isolatedIdx !== null && !isIsolated;
+              return (
+                <button
+                  key={i}
+                  className="flex items-center gap-1.5 cursor-pointer group text-left"
+                  onClick={() => setIsolatedIdx(isIsolated ? null : item.dataIdx)}
+                >
+                  <span
+                    className="inline-block h-1.5 w-1.5 rounded-full shrink-0 transition-opacity"
+                    style={{ backgroundColor: item.color, opacity: isDimmed ? 0.3 : 1 }}
+                  />
+                  <span className={`text-[8px] leading-none truncate max-w-[100px] transition-colors ${isDimmed ? 'text-white/20' : isIsolated ? 'text-white/80' : 'text-white/50 group-hover:text-white/70'}`}>
+                    {item.label}
+                  </span>
+                </button>
+              );
+            })}
             {legendItems.remaining > 0 && (
               <span className="text-[8px] text-white/30 pl-3">
                 + {legendItems.remaining} more
               </span>
+            )}
+            {isolatedIdx !== null && (
+              <button
+                onClick={() => setIsolatedIdx(null)}
+                className="text-[7px] text-white/30 hover:text-white/50 pl-3 mt-0.5 transition-colors"
+              >
+                show all
+              </button>
             )}
           </div>
         )}
@@ -1460,7 +1508,7 @@ export function ThreeDRenderer({ section }: ThreeDRendererProps) {
             <SceneEnvironment grounded={isGrounded} />
 
             {section.sceneType === 'bar3d' && (
-              <Bar3DScene data={data} labelKey={labelKey} valueKey={valueKey} colors={colors} showGrid={showGrid} showLabels={showLabels} showValues={showValues} barWidth={section.barWidth} barGap={section.barGap} maxHeight={section.maxHeight} opacity={materialOpacity} />
+              <Bar3DScene data={data} labelKey={labelKey} valueKey={valueKey} colors={colors} showGrid={showGrid} showLabels={showLabels} showValues={showValues} barWidth={section.barWidth} barGap={section.barGap} maxHeight={section.maxHeight} opacity={materialOpacity} isolatedIdx={isolatedIdx} />
             )}
             {section.sceneType === 'scatter3d' && (
               <Scatter3DScene data={data} xAxis={section.xAxis || 'x'} yAxis={section.yAxis || 'y'} zAxis={section.zAxis || 'z'} colors={colors} />
@@ -1486,7 +1534,7 @@ export function ThreeDRenderer({ section }: ThreeDRendererProps) {
               <ConnectionMapScene data={data} labelKey={labelKey} valueKey={valueKey} colors={colors} nodeMin={nodeMin} nodeMax={nodeMax} radius={circleRadius} stagger={section.stagger} />
             )}
             {section.sceneType === 'particleFlow' && (
-              <ParticleFlowScene data={data} labelKey={labelKey} valueKey={valueKey} colors={colors} particleDensity={section.particleDensity} flowSpeed={section.flowSpeed} />
+              <ParticleFlowScene data={data} labelKey={labelKey} valueKey={valueKey} colors={colors} particleDensity={section.particleDensity} flowSpeed={section.flowSpeed} isolatedIdx={isolatedIdx} />
             )}
             {section.sceneType === 'timelineFlow' && (
               <TimelineFlowScene data={data} labelKey={labelKey} valueKey={valueKey} colors={colors} dollySpeed={section.dollySpeed} eventSpacing={section.eventSpacing} />
