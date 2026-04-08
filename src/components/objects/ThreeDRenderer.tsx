@@ -771,15 +771,21 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity =
   const dummy = useMemo(() => new THREE.Object3D(), []);
 
   // Pre-compute flow paths: source (left) → center → destination (right)
+  // Each flow's particle count, size, and speed scale with its value
   const flows = useMemo(() => {
     return data.map((d, i) => {
       const val = Number(d[valueKey]) || 1;
-      const count = Math.max(3, Math.round((val / maxVal) * particleDensity));
+      const ratio = val / maxVal; // 0..1 proportion of largest value
+      const count = Math.max(4, Math.round(ratio * particleDensity));
       const yOffset = ((i / (data.length - 1 || 1)) - 0.5) * 5;
       return {
         label: String(d[labelKey] || ''),
         val,
+        ratio,
         count,
+        // Larger values → bigger particles (0.4–1.5x) and faster flow (0.6–1.4x)
+        sizeScale: 0.4 + ratio * 1.1,
+        speedScale: 0.6 + ratio * 0.8,
         sourceY: yOffset,
         color: new THREE.Color(colors[i % colors.length]),
         // Bezier control points: source(-5, y, 0) → ctrl(-1, y*0.3, 0) → ctrl(1, -y*0.3, 0) → dest(5, 0, 0)
@@ -826,14 +832,14 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity =
       colorsApplied.current = true;
     }
 
-    const time = clock.getElapsedTime() * flowSpeed;
+    const elapsed = clock.getElapsedTime() * flowSpeed;
 
     for (let i = 0; i < particleMap.length; i++) {
       const { flowIdx, timeOffset } = particleMap[i];
       const f = flows[flowIdx];
 
-      // Parametric t along cubic bezier (looping)
-      const t = (time + timeOffset) % 1;
+      // Per-flow speed: larger values flow faster
+      const t = (elapsed * f.speedScale + timeOffset) % 1;
 
       // Cubic bezier interpolation
       const mt = 1 - t;
@@ -844,8 +850,9 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity =
       // Fade opacity at start/end of path
       const opacity = t < 0.1 ? t / 0.1 : t > 0.9 ? (1 - t) / 0.1 : 1;
 
+      // Per-flow size: larger values → bigger particles
       dummy.position.set(x, y, z);
-      dummy.scale.setScalar(0.7 + opacity * 0.8);
+      dummy.scale.setScalar((0.5 + opacity * 0.6) * f.sizeScale);
       dummy.updateMatrix();
       meshRef.current.setMatrixAt(i, dummy.matrix);
     }
@@ -858,11 +865,11 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity =
         <meshStandardMaterial transparent opacity={0.6} roughness={0.3} />
       </instancedMesh>
 
-      {/* Source labels + markers (left side) */}
+      {/* Source labels + markers (left side) — sized by value */}
       {flows.map((f, i) => (
         <group key={`src-${i}`}>
           <mesh position={[-5, f.sourceY, 0]}>
-            <sphereGeometry args={[0.12, 12, 12]} />
+            <sphereGeometry args={[0.06 + f.ratio * 0.14, 12, 12]} />
             <meshStandardMaterial color={colors[i % colors.length]} transparent opacity={0.7} />
           </mesh>
           <Text
