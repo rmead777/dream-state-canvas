@@ -290,6 +290,12 @@ chart-grid → { type: "chart-grid", columns: 2, charts: [
                     Great for composition/breakdown questions. "Show AP breakdown as a radial burst."
     connectionMap — Nodes appear sequentially, connections draw on one by one, pulse on connect. Same data as network.
                     Great for "show me vendor relationships" or "map the customer network."
+    particleFlow  — Streaming particles from sources to a central hub. Particle count proportional to value.
+                    data: [{ name: "Source", value: 50000 }, ...]. Particles flow along curved bezier paths.
+                    Great for "show me cash flow", "where is money going?", "visualize AP payments."
+    timelineFlow  — Camera dollies along a 3D timeline path. Events reveal as camera approaches them.
+                    data: [{ name: "Event", value: 50000 }, ...]. Order data chronologically.
+                    Great for "show delivery schedule", "payment timeline", "milestone roadmap."
 
   Options:
     labelKey: "name"        ← which field is the label (default: xAxis or "name")
@@ -619,7 +625,7 @@ When creating analysis or CFO cards, populate sections:
   embed        → { type: "embed", html: "<svg>...</svg>", height: 200, caption: "..." }
                  Custom SVG diagrams, flowcharts, org charts, gauges.
 
-  3d           → { type: "3d", sceneType: "bar3d|scatter3d|pie3d|network|surface|barRace|radialBurst|connectionMap",
+  3d           → { type: "3d", sceneType: "bar3d|scatter3d|pie3d|network|surface|barRace|radialBurst|connectionMap|particleFlow|timelineFlow",
                    data: [...], labelKey: "name", valueKey: "value", height: 320, caption: "..." }
                  Interactive 3D with orbit controls. PREFER animated types (barRace, radialBurst, connectionMap).
 

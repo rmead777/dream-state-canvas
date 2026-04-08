@@ -700,6 +700,255 @@ function ConnectionMapScene({ data, labelKey, valueKey, colors }: {
   );
 }
 
+// ─── Particle Flow Scene (Animated) ───────────────────────────────────────────
+
+const PARTICLE_COUNT_PER_FLOW = 30;
+const PARTICLE_GEO = new THREE.SphereGeometry(0.04, 6, 6);
+
+function ParticleFlowScene({ data, labelKey, valueKey, colors }: {
+  data: Record<string, string | number>[];
+  labelKey: string;
+  valueKey: string;
+  colors: string[];
+}) {
+  // Data items are flow sources; each gets particles proportional to value
+  const maxVal = useMemo(() => Math.max(...data.map(d => Number(d[valueKey]) || 1), 1), [data, valueKey]);
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+
+  // Pre-compute flow paths: source (left) → center → destination (right)
+  const flows = useMemo(() => {
+    return data.map((d, i) => {
+      const val = Number(d[valueKey]) || 1;
+      const count = Math.max(3, Math.round((val / maxVal) * PARTICLE_COUNT_PER_FLOW));
+      const yOffset = ((i / (data.length - 1 || 1)) - 0.5) * 5;
+      return {
+        label: String(d[labelKey] || ''),
+        val,
+        count,
+        sourceY: yOffset,
+        color: new THREE.Color(colors[i % colors.length]),
+        // Bezier control points: source(-5, y, 0) → ctrl(-1, y*0.3, 0) → ctrl(1, -y*0.3, 0) → dest(5, 0, 0)
+        p0: new THREE.Vector3(-5, yOffset, 0),
+        p1: new THREE.Vector3(-1.5, yOffset * 0.3, (Math.random() - 0.5) * 2),
+        p2: new THREE.Vector3(1.5, -yOffset * 0.3, (Math.random() - 0.5) * 2),
+        p3: new THREE.Vector3(5, 0, 0),
+      };
+    });
+  }, [data, labelKey, valueKey, maxVal, colors]);
+
+  const totalParticles = useMemo(() => flows.reduce((sum, f) => sum + f.count, 0), [flows]);
+
+  // Pre-compute particle offsets (which flow, which index within flow)
+  const particleMap = useMemo(() => {
+    const map: { flowIdx: number; timeOffset: number; color: THREE.Color }[] = [];
+    for (let fi = 0; fi < flows.length; fi++) {
+      const f = flows[fi];
+      for (let pi = 0; pi < f.count; pi++) {
+        map.push({
+          flowIdx: fi,
+          timeOffset: pi / f.count, // spread particles along path
+          color: f.color,
+        });
+      }
+    }
+    return map;
+  }, [flows]);
+
+  // Set initial colors
+  useMemo(() => {
+    if (!meshRef.current) return;
+    const colorArr = new Float32Array(totalParticles * 3);
+    particleMap.forEach((p, i) => {
+      colorArr[i * 3] = p.color.r;
+      colorArr[i * 3 + 1] = p.color.g;
+      colorArr[i * 3 + 2] = p.color.b;
+    });
+    meshRef.current.instanceColor = new THREE.InstancedBufferAttribute(colorArr, 3);
+  }, [particleMap, totalParticles]);
+
+  useFrame(({ clock }) => {
+    if (!meshRef.current) return;
+    const time = clock.getElapsedTime() * 0.3; // slow flow
+
+    for (let i = 0; i < particleMap.length; i++) {
+      const { flowIdx, timeOffset } = particleMap[i];
+      const f = flows[flowIdx];
+
+      // Parametric t along cubic bezier (looping)
+      const t = (time + timeOffset) % 1;
+
+      // Cubic bezier interpolation
+      const mt = 1 - t;
+      const x = mt * mt * mt * f.p0.x + 3 * mt * mt * t * f.p1.x + 3 * mt * t * t * f.p2.x + t * t * t * f.p3.x;
+      const y = mt * mt * mt * f.p0.y + 3 * mt * mt * t * f.p1.y + 3 * mt * t * t * f.p2.y + t * t * t * f.p3.y;
+      const z = mt * mt * mt * f.p0.z + 3 * mt * mt * t * f.p1.z + 3 * mt * t * t * f.p2.z + t * t * t * f.p3.z;
+
+      // Fade opacity at start/end of path
+      const opacity = t < 0.1 ? t / 0.1 : t > 0.9 ? (1 - t) / 0.1 : 1;
+
+      dummy.position.set(x, y, z);
+      dummy.scale.setScalar(0.5 + opacity * 0.5);
+      dummy.updateMatrix();
+      meshRef.current.setMatrixAt(i, dummy.matrix);
+    }
+    meshRef.current.instanceMatrix.needsUpdate = true;
+  });
+
+  return (
+    <group>
+      <instancedMesh ref={meshRef} args={[PARTICLE_GEO, undefined, totalParticles]}>
+        <meshStandardMaterial transparent opacity={0.6} roughness={0.3} />
+      </instancedMesh>
+
+      {/* Source labels (left side) */}
+      {flows.map((f, i) => (
+        <Text
+          key={`src-${i}`}
+          position={[-5.8, f.sourceY, 0]}
+          fontSize={0.18}
+          color="#374151"
+          anchorX="right"
+          anchorY="middle"
+          maxWidth={2}
+        >
+          {f.label}
+        </Text>
+      ))}
+
+      {/* Destination hub (right side) */}
+      <mesh position={[5, 0, 0]}>
+        <sphereGeometry args={[0.3, 16, 16]} />
+        <meshStandardMaterial color="#6366f1" transparent opacity={0.3} />
+      </mesh>
+      <Text position={[5, -0.6, 0]} fontSize={0.2} color="#374151" anchorX="center">
+        Total
+      </Text>
+    </group>
+  );
+}
+
+// ─── Timeline Flow Scene (Animated) ───────────────────────────────────────────
+
+function TimelineFlowScene({ data, labelKey, valueKey, colors }: {
+  data: Record<string, string | number>[];
+  labelKey: string;
+  valueKey: string;
+  colors: string[];
+}) {
+  const startRef = useRef<number | null>(null);
+  const groupRef = useRef<THREE.Group>(null);
+  const spacing = 2.0;
+  const totalLength = (data.length - 1) * spacing;
+
+  // Build the path as a set of points along the Z axis
+  const pathPoints = useMemo(() => {
+    return data.map((_, i) => new THREE.Vector3(0, 0, -i * spacing));
+  }, [data, spacing]);
+
+  // Path tube geometry
+  const tubeGeom = useMemo(() => {
+    if (pathPoints.length < 2) return null;
+    const curve = new THREE.CatmullRomCurve3(pathPoints);
+    return new THREE.TubeGeometry(curve, 64, 0.02, 8, false);
+  }, [pathPoints]);
+
+  useFrame(({ clock, camera }) => {
+    if (startRef.current === null) startRef.current = clock.getElapsedTime();
+    const elapsed = clock.getElapsedTime() - startRef.current;
+
+    // Camera dolly: move forward along the path over time
+    const dollySpeed = 0.8; // units per second
+    const dollyZ = Math.min(elapsed * dollySpeed, totalLength);
+    camera.position.set(3, 2.5, 2 - dollyZ);
+    camera.lookAt(0, 0.5, -dollyZ);
+
+    if (!groupRef.current) return;
+
+    // Reveal events as camera approaches
+    for (let i = 0; i < data.length; i++) {
+      const eventGroup = groupRef.current.children[i + 1] as THREE.Group; // +1 for tube mesh
+      if (!eventGroup) continue;
+
+      const eventZ = i * spacing;
+      const distFromCamera = eventZ - dollyZ;
+
+      // Event becomes visible when camera is within 2 units
+      if (distFromCamera < 2) {
+        const revealT = Math.min(1, Math.max(0, (2 - distFromCamera) / 1.5));
+        const scale = easeOutSpring(revealT);
+        eventGroup.scale.set(scale, scale, scale);
+        eventGroup.visible = true;
+      } else {
+        eventGroup.visible = false;
+      }
+    }
+  });
+
+  return (
+    <group ref={groupRef}>
+      {/* Path tube */}
+      {tubeGeom && (
+        <mesh geometry={tubeGeom}>
+          <meshStandardMaterial color="#d1d5db" transparent opacity={0.4} />
+        </mesh>
+      )}
+
+      {/* Event markers along path */}
+      {data.map((d, i) => {
+        const val = Number(d[valueKey]) || 0;
+        const color = colors[i % colors.length];
+        const z = -i * spacing;
+
+        return (
+          <group key={i} position={[0, 0, z]} visible={false}>
+            {/* Event node */}
+            <mesh position={[0, 0, 0]}>
+              <sphereGeometry args={[0.15, 16, 16]} />
+              <meshStandardMaterial color={color} transparent opacity={0.5} />
+            </mesh>
+            <mesh position={[0, 0, 0]}>
+              <sphereGeometry args={[0.16, 8, 8]} />
+              <meshBasicMaterial color={color} wireframe />
+            </mesh>
+
+            {/* Event card — frosted glass panel */}
+            <group position={[0.8, 0.5, 0]}>
+              <RoundedBox args={[2.2, 0.8, 0.05]} radius={0.05} smoothness={4}>
+                <meshStandardMaterial color="white" transparent opacity={0.7} roughness={0.1} />
+              </RoundedBox>
+              <Text
+                position={[0, 0.15, 0.03]}
+                fontSize={0.12}
+                color="#374151"
+                anchorX="center"
+                anchorY="middle"
+                maxWidth={2}
+                fontWeight="bold"
+              >
+                {String(d[labelKey] || '')}
+              </Text>
+              {val > 0 && (
+                <Text
+                  position={[0, -0.12, 0.03]}
+                  fontSize={0.1}
+                  color="#6b7280"
+                  anchorX="center"
+                  anchorY="middle"
+                >
+                  {val >= 1000000 ? `$${(val / 1000000).toFixed(1)}M` :
+                   val >= 1000 ? `$${(val / 1000).toFixed(0)}K` :
+                   val.toLocaleString()}
+                </Text>
+              )}
+            </group>
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
 // ─── Main Renderer ────────────────────────────────────────────────────────────
 
 export function ThreeDRenderer({ section }: ThreeDRendererProps) {
@@ -771,6 +1020,12 @@ export function ThreeDRenderer({ section }: ThreeDRendererProps) {
             )}
             {section.sceneType === 'connectionMap' && (
               <ConnectionMapScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} />
+            )}
+            {section.sceneType === 'particleFlow' && (
+              <ParticleFlowScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} />
+            )}
+            {section.sceneType === 'timelineFlow' && (
+              <TimelineFlowScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} />
             )}
 
             <OrbitControls
