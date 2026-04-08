@@ -716,7 +716,7 @@ function ConnectionMapScene({ data, labelKey, valueKey, colors, nodeMin = 0.08, 
         const color = colors[i % colors.length];
 
         // Line geometry from node to center
-        const points = [];
+        const points: THREE.Vector3[] = [];
         const segments = 10;
         for (let s = 0; s <= segments; s++) {
           const t = s / segments;
