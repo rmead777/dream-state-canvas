@@ -195,6 +195,6 @@ export function delete3DPreset(name: string): void {
 }
 
 export function load3DPreset(preset: ThreeDPreset): void {
-  _settings = { ...preset.settings };
+  _settings = { ...DEFAULT_3D_SETTINGS, ...preset.settings };
   persist();
 }
