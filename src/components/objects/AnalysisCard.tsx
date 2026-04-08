@@ -332,6 +332,10 @@ function ChartRenderer({ section }: { section: { chartType: string; xAxis: strin
   const chartHeight = section.height || 192;
   const defaultPalette = section.colors || resolvedTheme.colors;
 
+  // Frosted glass defaults: 25% fill, full-opacity borders
+  const defaultFillOpacity = section.fillOpacity ?? 0.25;
+  const defaultStrokeWidth = 2;
+
   const tooltipStyle = {
     background: 'white',
     border: '1px solid hsl(var(--workspace-border))',
@@ -365,11 +369,10 @@ function ChartRenderer({ section }: { section: { chartType: string; xAxis: strin
                 cx="50%" cy="50%"
                 innerRadius={innerRadius}
                 outerRadius={Math.min(chartHeight / 2 - 20, 120)}
-                strokeWidth={2}
-                stroke="hsl(var(--workspace-bg))"
+                strokeWidth={defaultStrokeWidth}
               >
                 {section.data.map((_, i) => (
-                  <Cell key={i} fill={colors[i % colors.length]} />
+                  <Cell key={i} fill={colors[i % colors.length]} fillOpacity={defaultFillOpacity} stroke={colors[i % colors.length]} strokeWidth={defaultStrokeWidth} />
                 ))}
                 <LabelList dataKey={nameKey} position="outside" style={{ fontSize: 10, fill: 'hsl(var(--workspace-text-secondary))' }} />
               </Pie>
@@ -396,7 +399,7 @@ function ChartRenderer({ section }: { section: { chartType: string; xAxis: strin
               <YAxis dataKey={section.yAxis} name={section.yAxis} tick={{ fontSize: 10 }} stroke="hsl(var(--workspace-text-secondary))" />
               {zKey && <ZAxis dataKey={zKey} range={[40, 400]} name={zKey} />}
               <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => formatValue(value)} />
-              <Scatter data={section.data} fill={primaryColor} fillOpacity={0.7} strokeWidth={1} stroke={primaryColor} />
+              <Scatter data={section.data} fill={primaryColor} fillOpacity={defaultFillOpacity} strokeWidth={defaultStrokeWidth} stroke={primaryColor} />
             </ScatterChart>
           </ResponsiveContainer>
         </div>
@@ -509,12 +512,11 @@ function ChartRenderer({ section }: { section: { chartType: string; xAxis: strin
                 const color = s.color || colorPalette[i % colorPalette.length];
                 switch (s.type || 'bar') {
                   case 'line': return <Line key={s.dataKey} type="monotone" dataKey={s.dataKey} name={s.name || s.dataKey} stroke={color} strokeWidth={2} dot={{ r: 3 }} />;
-                  case 'area': return <Area key={s.dataKey} type="monotone" dataKey={s.dataKey} name={s.name || s.dataKey} fill={color} stroke={color} fillOpacity={0.15} />;
-                  default: return <Bar key={s.dataKey} dataKey={s.dataKey} name={s.name || s.dataKey} fill={color} fillOpacity={0.85} radius={[3, 3, 0, 0]} />;
+                  case 'area': return <Area key={s.dataKey} type="monotone" dataKey={s.dataKey} name={s.name || s.dataKey} fill={color} stroke={color} strokeWidth={defaultStrokeWidth} fillOpacity={defaultFillOpacity} />;
+                  default: return <Bar key={s.dataKey} dataKey={s.dataKey} name={s.name || s.dataKey} fill={color} stroke={color} strokeWidth={defaultStrokeWidth} fillOpacity={defaultFillOpacity} radius={[3, 3, 0, 0]} />;
                 }
               })}
-              {/* Fallback: if no series defined, render yAxis as bar */}
-              {seriesDefs.length === 0 && <Bar dataKey={section.yAxis} fill={primaryColor} fillOpacity={0.85} radius={[3, 3, 0, 0]} />}
+              {seriesDefs.length === 0 && <Bar dataKey={section.yAxis} fill={primaryColor} stroke={primaryColor} strokeWidth={defaultStrokeWidth} fillOpacity={defaultFillOpacity} radius={[3, 3, 0, 0]} />}
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -559,9 +561,9 @@ function ChartRenderer({ section }: { section: { chartType: string; xAxis: strin
               <Legend formatter={(value) => <span style={{ fontSize: 10 }}>{value}</span>} />
             )}
             {usePerBarColoring && barColors ? (
-              <Bar dataKey={section.yAxis} fillOpacity={section.fillOpacity ?? 0.85} radius={[3, 3, 0, 0]}>
+              <Bar dataKey={section.yAxis} fillOpacity={defaultFillOpacity} radius={[3, 3, 0, 0]}>
                 {barColors.map((color, i) => (
-                  <Cell key={i} fill={color} stroke={color} />
+                  <Cell key={i} fill={color} fillOpacity={defaultFillOpacity} stroke={color} strokeWidth={defaultStrokeWidth} />
                 ))}
               </Bar>
             ) : (
@@ -571,9 +573,10 @@ function ChartRenderer({ section }: { section: { chartType: string; xAxis: strin
                   dataKey={key}
                   fill={colorPalette[i % colorPalette.length]}
                   stroke={colorPalette[i % colorPalette.length]}
-                  fillOpacity={section.fillOpacity ?? (section.chartType === 'bar' ? 0.85 : 0.15)}
+                  strokeWidth={defaultStrokeWidth}
+                  fillOpacity={section.chartType === 'line' ? 0 : defaultFillOpacity}
                   {...(section.chartType === 'bar' ? { radius: [3, 3, 0, 0] } : {})}
-                  {...(section.chartType === 'line' ? { type: 'monotone', strokeWidth: 2, dot: { r: 3 } } : {})}
+                  {...(section.chartType === 'line' ? { type: 'monotone', dot: { r: 3 } } : {})}
                 />
               ))
             )}

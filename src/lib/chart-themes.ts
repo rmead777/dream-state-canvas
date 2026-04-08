@@ -12,14 +12,28 @@ export interface ChartTheme {
 }
 
 /**
- * Default palette: muted, professional, high-contrast-on-white.
- * Desaturated tones that look like a Bloomberg terminal or McKinsey deck,
- * not a toy store. Every theme must clear the "would a CFO present this?" bar.
+ * Default palette: frosted glass translucence — soft pastel fills at 25% opacity
+ * with full-opacity borders/strokes in the same hue. Light canvas, no dark mode.
+ *
+ * The fill opacity is enforced in AnalysisCard.tsx ChartRenderer, not here.
+ * These colors are the BORDER/STROKE colors (full opacity). Fills use the same
+ * color at 0.25 opacity for the frosted glass effect.
  */
 export const CHART_THEMES: Record<string, ChartTheme> = {
-  // ─── DEFAULT — muted, professional, desaturated ──────────────────────────
+  // ─── DEFAULT — frosted glass: pastel fills + opaque borders ─────────────
   default: {
-    colors: ['#4f5d75', '#2b6777', '#7a6c5d', '#8b5a5a', '#5b6e8a', '#6b7f6b', '#826a82', '#5d7a8a', '#8a7a5d', '#6d5d7a'],
+    colors: [
+      '#2b3a67',  // Navy
+      '#4a7c8f',  // Steel Blue
+      '#7aafc4',  // Arctic
+      '#6b9e7a',  // Sage
+      '#e8b87a',  // Peach
+      '#d4868a',  // Rose
+      '#d4b896',  // Champagne
+      '#b04a4f',  // Crimson
+      '#d48a6a',  // Coral
+      '#5a8a9a',  // Steel Blue (lighter)
+    ],
     background: 'transparent',
     text: '#6b7280',
   },
