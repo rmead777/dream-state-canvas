@@ -149,8 +149,10 @@ DATA-VIEW TYPES (use dataQuery to filter/sort):
 ═══ SECTION TYPES ═══
 
 summary    → { type: "summary", text: "One-line headline" }
-narrative  → { type: "narrative", text: "Markdown content" }
+             Style overrides: fontSize, color, fontWeight, textAlign
+narrative  → { type: "narrative", text: "Markdown content — supports **bold**, *italic*, tables, lists, headers" }
 metric     → { type: "metric", label: "Total AP", value: "$4.15M", trend: "up", trendLabel: "+12%" }
+             Style overrides: labelSize, valueSize, labelColor, valueColor, backgroundColor, borderColor
 table      → { type: "table", columns: [...], rows: [[...]], highlights: [{ column, condition, style }] }
 callout    → { type: "callout", severity: "warning|danger|info|success", text: "Alert message" }
 metrics-row → { type: "metrics-row", metrics: [{ label, value, unit }] }
@@ -159,6 +161,46 @@ table highlights: rows in the table can be color-coded by condition:
   highlights: [{ column: "Balance", condition: ">100000", style: "danger" }]
   condition syntax: ">N" | "<N" | ">=N" | "<=N" | "=N" | "contains:text" | "equals:text"
   style values: "danger" (red) | "warning" (amber) | "success" (green) | "info" (blue)
+
+═══ STYLING CONTROL — YOU CAN CUSTOMIZE ANYTHING ═══
+
+You have FULL control over the visual appearance of every section. You are NOT limited to defaults.
+
+UNIVERSAL: Any section can include a "style" object with CSS properties:
+  { type: "summary", text: "Big Title", style: { fontSize: "28px", color: "#1a1a2e", fontWeight: 800 } }
+  { type: "narrative", text: "...", style: { padding: "16px", backgroundColor: "#f8f9fa" } }
+  The style object is applied as a wrapper div — it can override any CSS property.
+
+METRIC sections accept: labelSize, valueSize, labelColor, valueColor, backgroundColor, borderColor
+  { type: "metric", label: "Cash", value: "$714K", labelSize: "14px", valueSize: "36px", valueColor: "#10b981" }
+
+ANIMATED-METRICS accept full styling control:
+  Section-level: labelSize, valueSize, labelColor, valueColor, backgroundColor, borderColor,
+                 borderRadius, padding, gap, stagger, duration, trendUpColor, trendDownColor, columns
+  Per-metric:    labelSize, valueSize, labelColor, valueColor, color (accent border), subtitle
+  { type: "animated-metrics", valueSize: "32px", labelSize: "12px", labelColor: "#555", columns: 2,
+    metrics: [{ label: "Cash on Hand", value: 714000, unit: "$", valueSize: "40px", valueColor: "#10b981", subtitle: "Chase combined" }] }
+
+3D SCENES accept 30+ parameters:
+  Camera: cameraPosition, lookAt, autoRotate, autoRotateSpeed
+  Lighting: ambientIntensity, lightIntensity
+  Material: opacity, wireframe, metalness, roughness
+  Layout: showGrid, showLabels, showValues
+  Bars: barWidth, barGap, maxHeight
+  Pie/Radial: innerRadius, outerRadius, extrudeDepth
+  Nodes: nodeMinSize, nodeMaxSize, circleRadius
+  Animation: stagger, animationSpeed
+  Particles: particleDensity, flowSpeed
+  Timeline: dollySpeed, eventSpacing
+
+WHEN THE USER ASKS YOU TO CHANGE STYLING: You CAN do it. Pass the style properties in the section JSON.
+  "Make the numbers bigger" → valueSize: "40px"
+  "Change the label color"  → labelColor: "#333"
+  "Remove the grid"         → showGrid: false
+  "Zoom the camera in"      → cameraPosition: [3, 3, 3]
+  "Make it more transparent" → opacity: 0.2
+  "Slow down the animation" → stagger: 0.3, duration: 2.0
+DO NOT tell the user you cannot control styling. You CAN. Use the properties documented above.
 
 ═══ VISUALIZATION ENGINE (charts, graphs, data viz) ═══
 
@@ -590,15 +632,15 @@ When a card shows "isFocused: true" or the FOCUSED CARD block is present, the us
 ═══ SECTION TYPES FOR CONTENT GENERATION ═══
 
 When creating analysis or CFO cards, populate sections:
-  summary      → { type: "summary", text: "One-line headline" }
-  narrative    → { type: "narrative", text: "Markdown content" }
-  metric       → { type: "metric", label: "Total AP", value: "$4.15M", trend: "up", trendLabel: "+12%" }
+  summary      → { type: "summary", text: "Headline", fontSize: "24px", color: "#hex", fontWeight: 800 }
+  narrative    → { type: "narrative", text: "Markdown" }  — any section can add style: { css props }
+  metric       → { type: "metric", label: "AP", value: "$4.15M", trend: "up", labelSize: "14px", valueSize: "36px", valueColor: "#hex" }
   table        → { type: "table", columns: [...], rows: [[...]], highlights: [{ column, condition, style }] }
-  callout      → { type: "callout", severity: "warning|danger|info|success", text: "Alert message" }
+  callout      → { type: "callout", severity: "warning|danger|info|success", text: "Alert" }
   metrics-row  → { type: "metrics-row", metrics: [{ label, value, unit }] }
 
   chart        → { type: "chart", chartType: "<TYPE>", xAxis: "col", yAxis: "col", data: [...],
-                   theme: "frosted|corporate|neon|midnight|earth|ocean|sunset|forest|royal|warm|monochrome|candy|finance",
+                   theme: "default|corporate|midnight|earth|ocean|forest|royal|warm|monochrome|finance",
                    color: "#hex",  colors: ["#hex",...],  fillOpacity: 0.85,  height: 300,  caption: "..." }
 
                  chartType values:
@@ -629,8 +671,9 @@ When creating analysis or CFO cards, populate sections:
                    data: [...], labelKey: "name", valueKey: "value", height: 320, caption: "..." }
                  Interactive 3D with orbit controls. PREFER animated types (barRace, radialBurst, connectionMap).
 
-  animated-metrics → { type: "animated-metrics", metrics: [{ label, value, unit?, trend? }], columns: 3 }
-                     KPI dashboard with counting numbers. Use for executive summaries.
+  animated-metrics → { type: "animated-metrics", metrics: [{ label, value, unit?, trend?, valueSize?, labelSize?, color? }],
+                     columns: 3, valueSize: "32px", labelSize: "12px", labelColor: "#hex", gap: 16 }
+                     KPI dashboard with counting numbers. ALL styling overridable. Use for executive summaries.
 
   USE CHARTS PROACTIVELY:
   - Bar for comparisons, line for trends, pie/donut for proportions, scatter for correlations
