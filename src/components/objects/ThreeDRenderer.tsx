@@ -33,14 +33,55 @@ interface ThreeDSectionData {
   colors?: string[];
   height?: number;
   caption?: string;
-  autoRotate?: boolean;
-  showGrid?: boolean;
-  showLabels?: boolean;
-  showValues?: boolean;
-  cameraPosition?: [number, number, number];
-  barWidth?: number;
-  barGap?: number;
-  maxHeight?: number;
+
+  // ─── Scene controls (all optional, sensible defaults) ───────────────
+  autoRotate?: boolean;        // default true — slow orbit
+  autoRotateSpeed?: number;    // default 0.5
+  showGrid?: boolean;          // default true — floor grid
+  showLabels?: boolean;        // default true — name labels
+  showValues?: boolean;        // default true — value labels above bars
+  cameraPosition?: [number, number, number]; // default [5,4,5]
+  lookAt?: [number, number, number];         // default [0,0,0]
+
+  // ─── Bar controls (bar3d, barRace) ──────────────────────────────────
+  barWidth?: number;           // default 0.6
+  barGap?: number;             // default 0.3
+  maxHeight?: number;          // default 4
+
+  // ─── Material controls (all scenes) ─────────────────────────────────
+  opacity?: number;            // fill opacity, default 0.35
+  wireframe?: boolean;         // show wireframe borders, default true
+  metalness?: number;          // 0-1, default 0.1
+  roughness?: number;          // 0-1, default 0.2
+
+  // ─── Node controls (network, connectionMap) ─────────────────────────
+  nodeMinSize?: number;        // default 0.08
+  nodeMaxSize?: number;        // default 1.2
+  circleRadius?: number;       // layout radius, default 4
+
+  // ─── Animation controls (animated scenes) ───────────────────────────
+  animationSpeed?: number;     // multiplier, default 1.0
+  stagger?: number;            // delay between items, default varies by scene
+
+  // ─── Pie/radial controls ────────────────────────────────────────────
+  innerRadius?: number;        // donut hole size, default 1.0
+  outerRadius?: number;        // segment reach, default 2.0
+  extrudeDepth?: number;       // 3D depth, default 0.4
+
+  // ─── Particle controls (particleFlow) ───────────────────────────────
+  particleDensity?: number;    // max particles per flow, default 30
+  flowSpeed?: number;          // particle speed, default 0.3
+
+  // ─── Timeline controls (timelineFlow) ───────────────────────────────
+  dollySpeed?: number;         // camera speed, default 0.8
+  eventSpacing?: number;       // distance between events, default 2.0
+
+  // ─── Lighting ───────────────────────────────────────────────────────
+  ambientIntensity?: number;   // default 0.6
+  lightIntensity?: number;     // directional light, default 0.8
+
+  // ─── Catch-all for future props ─────────────────────────────────────
+  [key: string]: any;
 }
 
 interface ThreeDRendererProps {
@@ -81,7 +122,7 @@ function AxisLabel({ position, text }: { position: [number, number, number]; tex
 
 // ─── Bar3D Scene ──────────────────────────────────────────────────────────────
 
-function Bar3DScene({ data, labelKey, valueKey, colors, showGrid = true, showLabels = true, showValues = true, barWidth: bw, barGap: bg, maxHeight: mh }: {
+function Bar3DScene({ data, labelKey, valueKey, colors, showGrid = true, showLabels = true, showValues = true, barWidth: bw, barGap: bg, maxHeight: mh, opacity: op }: {
   data: Record<string, string | number>[];
   labelKey: string;
   valueKey: string;
@@ -92,11 +133,13 @@ function Bar3DScene({ data, labelKey, valueKey, colors, showGrid = true, showLab
   barWidth?: number;
   barGap?: number;
   maxHeight?: number;
+  opacity?: number;
 }) {
   const maxVal = useMemo(() => Math.max(...data.map(d => Number(d[valueKey]) || 0), 1), [data, valueKey]);
   const barWidth = bw ?? 0.6;
   const gap = bg ?? 0.3;
   const heightScale = mh ?? 4;
+  const opacity = op ?? 0.35;
   const totalWidth = data.length * (barWidth + gap) - gap;
 
   return (
@@ -118,7 +161,7 @@ function Bar3DScene({ data, labelKey, valueKey, colors, showGrid = true, showLab
               <meshStandardMaterial
                 color={color}
                 transparent
-                opacity={0.35}
+                opacity={opacity}
                 roughness={0.2}
                 metalness={0.1}
               />
@@ -220,11 +263,15 @@ function Scatter3DScene({ data, xAxis, yAxis, zAxis, colors }: {
 
 // ─── Pie3D Scene ──────────────────────────────────────────────────────────────
 
-function Pie3DScene({ data, labelKey, valueKey, colors }: {
+function Pie3DScene({ data, labelKey, valueKey, colors, opacity: op = 0.4, innerRadius: ir = 1, outerRadius: or = 2, extrudeDepth: ed = 0.4 }: {
   data: Record<string, string | number>[];
   labelKey: string;
   valueKey: string;
   colors: string[];
+  opacity?: number;
+  innerRadius?: number;
+  outerRadius?: number;
+  extrudeDepth?: number;
 }) {
   const total = useMemo(() => data.reduce((sum, d) => sum + (Number(d[valueKey]) || 0), 0), [data, valueKey]);
 
@@ -244,34 +291,30 @@ function Pie3DScene({ data, labelKey, valueKey, colors }: {
       {segments.map((seg, i) => {
         const midAngle = seg.startAngle + seg.angle / 2;
         const shape = new THREE.Shape();
-        const outerR = 2;
-        const innerR = 1;
         const steps = 32;
 
-        // Outer arc
         for (let s = 0; s <= steps; s++) {
           const a = seg.startAngle + (seg.angle * s) / steps;
-          if (s === 0) shape.moveTo(Math.cos(a) * outerR, Math.sin(a) * outerR);
-          else shape.lineTo(Math.cos(a) * outerR, Math.sin(a) * outerR);
+          if (s === 0) shape.moveTo(Math.cos(a) * or, Math.sin(a) * or);
+          else shape.lineTo(Math.cos(a) * or, Math.sin(a) * or);
         }
-        // Inner arc (reverse)
         for (let s = steps; s >= 0; s--) {
           const a = seg.startAngle + (seg.angle * s) / steps;
-          shape.lineTo(Math.cos(a) * innerR, Math.sin(a) * innerR);
+          shape.lineTo(Math.cos(a) * ir, Math.sin(a) * ir);
         }
         shape.closePath();
 
-        const labelX = Math.cos(midAngle) * 2.5;
-        const labelY = Math.sin(midAngle) * 2.5;
+        const labelX = Math.cos(midAngle) * (or + 0.5);
+        const labelY = Math.sin(midAngle) * (or + 0.5);
 
         return (
           <group key={i}>
             <mesh rotation={[-Math.PI / 2, 0, 0]}>
-              <extrudeGeometry args={[shape, { depth: 0.4, bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.03, bevelSegments: 2 }]} />
+              <extrudeGeometry args={[shape, { depth: ed, bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.03, bevelSegments: 2 }]} />
               <meshStandardMaterial
                 color={seg.color}
                 transparent
-                opacity={0.4}
+                opacity={op}
                 roughness={0.2}
                 metalness={0.1}
                 side={THREE.DoubleSide}
@@ -294,15 +337,17 @@ function Pie3DScene({ data, labelKey, valueKey, colors }: {
 
 // ─── Network Scene ────────────────────────────────────────────────────────────
 
-function NetworkScene({ data, labelKey, valueKey, colors }: {
+function NetworkScene({ data, labelKey, valueKey, colors, nodeMin = 0.08, nodeMax = 1.2, radius: r = 4 }: {
   data: Record<string, string | number>[];
   labelKey: string;
   valueKey: string;
   colors: string[];
+  nodeMin?: number;
+  nodeMax?: number;
+  radius?: number;
 }) {
-  // Position nodes in a circle, with size proportional to sqrt(value) for area-proportional perception
   const maxVal = useMemo(() => Math.max(...data.map(d => Number(d[valueKey]) || 1), 1), [data, valueKey]);
-  const radius = 4;
+  const radius = r;
 
   return (
     <group>
@@ -311,8 +356,7 @@ function NetworkScene({ data, labelKey, valueKey, colors }: {
         const x = Math.cos(angle) * radius;
         const z = Math.sin(angle) * radius;
         const val = Number(d[valueKey]) || 1;
-        // sqrt scale: 0.08 min → 1.2 max, so largest node is 15x smallest
-        const nodeSize = 0.08 + Math.sqrt(val / maxVal) * 1.12;
+        const nodeSize = nodeMin + Math.sqrt(val / maxVal) * (nodeMax - nodeMin);
         const color = colors[i % colors.length];
 
         return (
@@ -499,11 +543,15 @@ function BarRaceScene({ data, labelKey, valueKey, colors, showGrid = true }: {
 
 // ─── Radial Burst Scene (Animated) ────────────────────────────────────────────
 
-function RadialBurstScene({ data, labelKey, valueKey, colors }: {
+function RadialBurstScene({ data, labelKey, valueKey, colors, opacity: op = 0.4, stagger: sg = 0.1, innerRadius: ir = 1, outerRadius: or = 2 }: {
   data: Record<string, string | number>[];
   labelKey: string;
   valueKey: string;
   colors: string[];
+  opacity?: number;
+  stagger?: number;
+  innerRadius?: number;
+  outerRadius?: number;
 }) {
   const total = useMemo(() => data.reduce((sum, d) => sum + (Number(d[valueKey]) || 0), 0), [data, valueKey]);
   const startRef = useRef<number | null>(null);
@@ -530,7 +578,7 @@ function RadialBurstScene({ data, labelKey, valueKey, colors }: {
       const child = groupRef.current!.children[i] as THREE.Group;
       if (!child) return;
 
-      const delay = getStaggerDelay(i, 0.1);
+      const delay = getStaggerDelay(i, sg);
       const t = Math.min(1, Math.max(0, elapsed - delay) / 0.8);
       const scale = easeOutSpring(t);
 
@@ -599,14 +647,18 @@ function RadialBurstScene({ data, labelKey, valueKey, colors }: {
 
 // ─── Connection Map Scene (Animated) ──────────────────────────────────────────
 
-function ConnectionMapScene({ data, labelKey, valueKey, colors }: {
+function ConnectionMapScene({ data, labelKey, valueKey, colors, nodeMin = 0.08, nodeMax = 1.2, radius: r = 4, stagger: sg = 0.15 }: {
   data: Record<string, string | number>[];
   labelKey: string;
   valueKey: string;
   colors: string[];
+  nodeMin?: number;
+  nodeMax?: number;
+  radius?: number;
+  stagger?: number;
 }) {
   const maxVal = useMemo(() => Math.max(...data.map(d => Number(d[valueKey]) || 1), 1), [data, valueKey]);
-  const radius = 4;
+  const radius = r;
   const startRef = useRef<number | null>(null);
   const groupRef = useRef<THREE.Group>(null);
 
@@ -623,7 +675,7 @@ function ConnectionMapScene({ data, labelKey, valueKey, colors }: {
 
       if (!nodeGroup || !lineGroup) continue;
 
-      const delay = getStaggerDelay(i, 0.15);
+      const delay = getStaggerDelay(i, sg);
 
       // Node: scale in
       const nodeT = Math.min(1, Math.max(0, elapsed - delay) / 0.4);
@@ -660,7 +712,7 @@ function ConnectionMapScene({ data, labelKey, valueKey, colors }: {
         const x = Math.cos(angle) * radius;
         const z = Math.sin(angle) * radius;
         const val = Number(d[valueKey]) || 1;
-        const nodeSize = 0.08 + Math.sqrt(val / maxVal) * 1.12;
+        const nodeSize = nodeMin + Math.sqrt(val / maxVal) * (nodeMax - nodeMin);
         const color = colors[i % colors.length];
 
         // Line geometry from node to center
@@ -705,11 +757,13 @@ function ConnectionMapScene({ data, labelKey, valueKey, colors }: {
 const PARTICLE_COUNT_PER_FLOW = 30;
 const PARTICLE_GEO = new THREE.SphereGeometry(0.04, 6, 6);
 
-function ParticleFlowScene({ data, labelKey, valueKey, colors }: {
+function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity = 30, flowSpeed = 0.3 }: {
   data: Record<string, string | number>[];
   labelKey: string;
   valueKey: string;
   colors: string[];
+  particleDensity?: number;
+  flowSpeed?: number;
 }) {
   // Data items are flow sources; each gets particles proportional to value
   const maxVal = useMemo(() => Math.max(...data.map(d => Number(d[valueKey]) || 1), 1), [data, valueKey]);
@@ -720,7 +774,7 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors }: {
   const flows = useMemo(() => {
     return data.map((d, i) => {
       const val = Number(d[valueKey]) || 1;
-      const count = Math.max(3, Math.round((val / maxVal) * PARTICLE_COUNT_PER_FLOW));
+      const count = Math.max(3, Math.round((val / maxVal) * particleDensity));
       const yOffset = ((i / (data.length - 1 || 1)) - 0.5) * 5;
       return {
         label: String(d[labelKey] || ''),
@@ -769,7 +823,7 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors }: {
 
   useFrame(({ clock }) => {
     if (!meshRef.current) return;
-    const time = clock.getElapsedTime() * 0.3; // slow flow
+    const time = clock.getElapsedTime() * flowSpeed;
 
     for (let i = 0; i < particleMap.length; i++) {
       const { flowIdx, timeOffset } = particleMap[i];
@@ -830,15 +884,17 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors }: {
 
 // ─── Timeline Flow Scene (Animated) ───────────────────────────────────────────
 
-function TimelineFlowScene({ data, labelKey, valueKey, colors }: {
+function TimelineFlowScene({ data, labelKey, valueKey, colors, dollySpeed: ds = 0.8, eventSpacing: es = 2.0 }: {
   data: Record<string, string | number>[];
   labelKey: string;
   valueKey: string;
   colors: string[];
+  dollySpeed?: number;
+  eventSpacing?: number;
 }) {
   const startRef = useRef<number | null>(null);
   const groupRef = useRef<THREE.Group>(null);
-  const spacing = 2.0;
+  const spacing = es;
   const totalLength = (data.length - 1) * spacing;
 
   // Build the path as a set of points along the Z axis
@@ -857,9 +913,7 @@ function TimelineFlowScene({ data, labelKey, valueKey, colors }: {
     if (startRef.current === null) startRef.current = clock.getElapsedTime();
     const elapsed = clock.getElapsedTime() - startRef.current;
 
-    // Camera dolly: move forward along the path over time
-    const dollySpeed = 0.8; // units per second
-    const dollyZ = Math.min(elapsed * dollySpeed, totalLength);
+    const dollyZ = Math.min(elapsed * ds, totalLength);
     camera.position.set(3, 2.5, 2 - dollyZ);
     camera.lookAt(0, 0.5, -dollyZ);
 
@@ -956,11 +1010,18 @@ export function ThreeDRenderer({ section }: ThreeDRendererProps) {
   const chartHeight = section.height || 320;
   const labelKey = section.labelKey || section.xAxis || 'name';
   const valueKey = section.valueKey || section.yAxis || 'value';
-  const autoRotate = section.autoRotate !== false; // default true
-  const showGrid = section.showGrid !== false; // default true
-  const showLabels = section.showLabels !== false; // default true
-  const showValues = section.showValues !== false; // default true
+  const autoRotate = section.autoRotate !== false;
+  const autoRotateSpeed = section.autoRotateSpeed ?? 0.5;
+  const showGrid = section.showGrid !== false;
+  const showLabels = section.showLabels !== false;
+  const showValues = section.showValues !== false;
   const cameraPos = section.cameraPosition || [5, 4, 5];
+  const ambientIntensity = section.ambientIntensity ?? 0.6;
+  const lightIntensity = section.lightIntensity ?? 0.8;
+  const materialOpacity = section.opacity ?? 0.35;
+  const nodeMin = section.nodeMinSize ?? 0.08;
+  const nodeMax = section.nodeMaxSize ?? 1.2;
+  const circleRadius = section.circleRadius ?? 4;
 
   return (
     <div className="space-y-1">
@@ -979,36 +1040,24 @@ export function ThreeDRenderer({ section }: ThreeDRendererProps) {
             gl={{ antialias: true, alpha: true }}
             style={{ background: 'transparent' }}
           >
-            <ambientLight intensity={0.6} />
-            <directionalLight position={[5, 8, 5]} intensity={0.8} castShadow />
-            <directionalLight position={[-3, 4, -3]} intensity={0.3} />
+            <ambientLight intensity={ambientIntensity} />
+            <directionalLight position={[5, 8, 5]} intensity={lightIntensity} castShadow />
+            <directionalLight position={[-3, 4, -3]} intensity={lightIntensity * 0.375} />
 
             {section.sceneType === 'bar3d' && (
-              <Bar3DScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} showGrid={showGrid} showLabels={showLabels} showValues={showValues} barWidth={section.barWidth} barGap={section.barGap} maxHeight={section.maxHeight} />
+              <Bar3DScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} showGrid={showGrid} showLabels={showLabels} showValues={showValues} barWidth={section.barWidth} barGap={section.barGap} maxHeight={section.maxHeight} opacity={materialOpacity} />
             )}
             {section.sceneType === 'scatter3d' && (
-              <Scatter3DScene
-                data={section.data}
-                xAxis={section.xAxis || 'x'}
-                yAxis={section.yAxis || 'y'}
-                zAxis={section.zAxis || 'z'}
-                colors={colors}
-              />
+              <Scatter3DScene data={section.data} xAxis={section.xAxis || 'x'} yAxis={section.yAxis || 'y'} zAxis={section.zAxis || 'z'} colors={colors} />
             )}
             {section.sceneType === 'pie3d' && (
-              <Pie3DScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} />
+              <Pie3DScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} opacity={materialOpacity} innerRadius={section.innerRadius} outerRadius={section.outerRadius} extrudeDepth={section.extrudeDepth} />
             )}
             {section.sceneType === 'network' && (
-              <NetworkScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} />
+              <NetworkScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} nodeMin={nodeMin} nodeMax={nodeMax} radius={circleRadius} />
             )}
             {section.sceneType === 'surface' && (
-              <SurfaceScene
-                data={section.data}
-                xAxis={section.xAxis || 'x'}
-                yAxis={section.yAxis || 'y'}
-                zAxis={section.zAxis || 'z'}
-                colors={colors}
-              />
+              <SurfaceScene data={section.data} xAxis={section.xAxis || 'x'} yAxis={section.yAxis || 'y'} zAxis={section.zAxis || 'z'} colors={colors} />
             )}
 
             {/* Animated scene types */}
@@ -1016,16 +1065,16 @@ export function ThreeDRenderer({ section }: ThreeDRendererProps) {
               <BarRaceScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} showGrid={showGrid} />
             )}
             {section.sceneType === 'radialBurst' && (
-              <RadialBurstScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} />
+              <RadialBurstScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} opacity={materialOpacity} stagger={section.stagger} innerRadius={section.innerRadius} outerRadius={section.outerRadius} />
             )}
             {section.sceneType === 'connectionMap' && (
-              <ConnectionMapScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} />
+              <ConnectionMapScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} nodeMin={nodeMin} nodeMax={nodeMax} radius={circleRadius} stagger={section.stagger} />
             )}
             {section.sceneType === 'particleFlow' && (
-              <ParticleFlowScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} />
+              <ParticleFlowScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} particleDensity={section.particleDensity} flowSpeed={section.flowSpeed} />
             )}
             {section.sceneType === 'timelineFlow' && (
-              <TimelineFlowScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} />
+              <TimelineFlowScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} dollySpeed={section.dollySpeed} eventSpacing={section.eventSpacing} />
             )}
 
             <OrbitControls
@@ -1033,7 +1082,7 @@ export function ThreeDRenderer({ section }: ThreeDRendererProps) {
               enableZoom
               enableRotate
               autoRotate={autoRotate}
-              autoRotateSpeed={0.5}
+              autoRotateSpeed={autoRotateSpeed}
               maxPolarAngle={Math.PI / 2}
               minDistance={3}
               maxDistance={15}
