@@ -119,7 +119,6 @@ export function SherpaRail() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pendingImages, setPendingImages] = useState<string[]>([]);
-  const [expandedSteps, setExpandedSteps] = useState<Record<number, boolean>>({});
   const { addDocument, documents } = useDocuments();
 
   const contextScopeLabel = contextMode === 'auto'

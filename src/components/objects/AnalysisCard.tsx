@@ -326,7 +326,7 @@ function MetricsRowRenderer({ section }: { section: { metrics: { label: string; 
 }
 
 function ChartRenderer({ section }: { section: { chartType: string; xAxis: string; yAxis: string; data: Record<string, string | number>[]; caption?: string; color?: string; colors?: string[]; fillOpacity?: number; height?: number; theme?: string; zAxis?: string; innerRadius?: number; outerRadius?: number; nameKey?: string; valueKey?: string; series?: { dataKey: string; name?: string; color?: string; type?: string }[] } }) {
-  // Resolve named color theme if provided, default to frosted, then fall back to explicit colors
+  // Resolve named color theme, fall back to default palette
   const resolvedTheme = CHART_THEMES[section.theme || 'default'] || CHART_THEMES['default'];
   const primaryColor = section.color || resolvedTheme.colors[0] || 'hsl(var(--workspace-accent))';
   const chartHeight = section.height || 192;

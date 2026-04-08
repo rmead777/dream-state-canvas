@@ -38,7 +38,6 @@ export function MobileShell() {
   const [activeTab, setActiveTab] = useState<MobileTab>('chat');
   const [input, setInput] = useState('');
   const [promptHistory, setPromptHistory] = useState<Array<{ query: string; response: string | null; timestamp: number; steps?: string[] }>>([]);
-  const [expandedSteps, setExpandedSteps] = useState<Record<number, boolean>>({});
   const [pendingImages, setPendingImages] = useState<string[]>([]);
   const [contextMode, setContextMode] = useState<ContextMode>('auto');
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
