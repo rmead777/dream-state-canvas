@@ -538,22 +538,14 @@ export function SherpaRail() {
                       <p className="text-sm text-workspace-text leading-relaxed">{entry.query}</p>
                     </div>
                   </div>
-                  {/* Reasoning steps — shown inline before final response */}
-                  {entry.steps && entry.steps.length > 1 && (
-                    <div className="flex flex-col items-start gap-1.5 max-w-[90%]">
-                      {entry.steps.map((step, si) => (
-                        <div key={si} className="flex items-start gap-2 w-full">
-                          <div className="mt-1 flex-shrink-0 h-4 w-4 rounded-full bg-workspace-accent/10 flex items-center justify-center">
-                            <span className="text-[8px] font-mono text-workspace-accent/60">{si + 1}</span>
-                          </div>
-                          <div className="rounded-xl bg-workspace-surface/30 border border-workspace-border/25 px-3 py-2 flex-1">
-                            <p className="text-[11px] text-workspace-text-secondary/70 leading-relaxed whitespace-pre-wrap">{step}</p>
-                          </div>
-                        </div>
-                      ))}
+                  {/* Reasoning steps + final response — all rendered identically */}
+                  {entry.steps && entry.steps.length > 1 && entry.steps.map((step, si) => (
+                    <div key={si} className="flex flex-col items-start gap-1">
+                      <div className="max-w-[90%] rounded-2xl rounded-bl-md bg-white border border-workspace-border/40 px-3.5 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
+                        <MarkdownRenderer content={step} />
+                      </div>
                     </div>
-                  )}
-                  {/* Sherpa response — left-aligned */}
+                  ))}
                   {entry.response && (
                     <div className="flex flex-col items-start gap-1">
                       <div className="max-w-[90%] rounded-2xl rounded-bl-md bg-white border border-workspace-border/40 px-3.5 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
