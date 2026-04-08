@@ -350,6 +350,15 @@ function NetworkScene({ data, labelKey, valueKey, colors, nodeMin = 0.08, nodeMa
   const maxVal = useMemo(() => Math.max(...data.map(d => Number(d[valueKey]) || 1), 1), [data, valueKey]);
   const radius = r;
 
+  // Memoize connection line geometries (BB-002 fix)
+  const lineGeometries = useMemo(() =>
+    data.map((_, i) => {
+      const angle = (i / data.length) * Math.PI * 2;
+      const x = Math.cos(angle) * radius;
+      const z = Math.sin(angle) * radius;
+      return new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(x, 0, z)]);
+    }), [data, radius]);
+
   return (
     <group>
       {data.map((d, i) => {
@@ -384,18 +393,11 @@ function NetworkScene({ data, labelKey, valueKey, colors, nodeMin = 0.08, nodeMa
         );
       })}
       {/* Connection lines to center */}
-      {data.map((_, i) => {
-        const angle = (i / data.length) * Math.PI * 2;
-        const x = Math.cos(angle) * radius;
-        const z = Math.sin(angle) * radius;
-        const points = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(x, 0, z)];
-        const geometry = new THREE.BufferGeometry().setFromPoints(points);
-        return (
-          <lineSegments key={`line-${i}`} geometry={geometry}>
-            <lineBasicMaterial color="#4a4a6a" transparent opacity={0.4} />
-          </lineSegments>
-        );
-      })}
+      {lineGeometries.map((geom, i) => (
+        <lineSegments key={`line-${i}`} geometry={geom}>
+          <lineBasicMaterial color="#4a4a6a" transparent opacity={0.4} />
+        </lineSegments>
+      ))}
       {/* Center hub */}
       <mesh>
         <sphereGeometry args={[0.2, 16, 16]} />
@@ -449,9 +451,10 @@ function BarRaceScene({ data, labelKey, valueKey, colors, showGrid = true }: {
   showGrid?: boolean;
 }) {
   const maxVal = useMemo(() => Math.max(...data.map(d => Number(d[valueKey]) || 0), 1), [data, valueKey]);
+  const indexedData = useMemo(() => data.map((d, i) => ({ d, origIdx: i })), [data]);
   const sorted = useMemo(() =>
-    [...data].sort((a, b) => (Number(b[valueKey]) || 0) - (Number(a[valueKey]) || 0)),
-    [data, valueKey]
+    [...indexedData].sort((a, b) => (Number(b.d[valueKey]) || 0) - (Number(a.d[valueKey]) || 0)),
+    [indexedData, valueKey]
   );
 
   const barWidth = 0.6;
@@ -463,12 +466,11 @@ function BarRaceScene({ data, labelKey, valueKey, colors, showGrid = true }: {
   // Compute sorted positions for phase 2
   const sortedPositions = useMemo(() => {
     const map = new Map<number, number>();
-    sorted.forEach((d, sortIdx) => {
-      const origIdx = data.indexOf(d);
-      map.set(origIdx, sortIdx * (barWidth + gap));
+    sorted.forEach((item, sortIdx) => {
+      map.set(item.origIdx, sortIdx * (barWidth + gap));
     });
     return map;
-  }, [data, sorted, barWidth, gap]);
+  }, [sorted, barWidth, gap]);
 
   useFrame(({ clock }) => {
     if (startRef.current === null) startRef.current = clock.getElapsedTime();
@@ -603,8 +605,8 @@ function RadialBurstScene({ data, labelKey, valueKey, colors, opacity: op = 0.4,
       {segments.map((seg, i) => {
         const midAngle = seg.startAngle + seg.angle / 2;
         const shape = new THREE.Shape();
-        const outerR = 2;
-        const innerR = 1;
+        const outerR = or;
+        const innerR = ir;
         const steps = 32;
 
         for (let s = 0; s <= steps; s++) {
@@ -663,6 +665,21 @@ function ConnectionMapScene({ data, labelKey, valueKey, colors, nodeMin = 0.08, 
   const startRef = useRef<number | null>(null);
   const groupRef = useRef<THREE.Group>(null);
 
+  // Memoize connection line geometries (BB-002 fix)
+  const connLineGeoms = useMemo(() =>
+    data.map((_, i) => {
+      const angle = (i / data.length) * Math.PI * 2;
+      const x = Math.cos(angle) * radius;
+      const z = Math.sin(angle) * radius;
+      const pts: THREE.Vector3[] = [];
+      const segs = 10;
+      for (let s = 0; s <= segs; s++) {
+        const t = s / segs;
+        pts.push(new THREE.Vector3(x * (1 - t), 0, z * (1 - t)));
+      }
+      return new THREE.BufferGeometry().setFromPoints(pts);
+    }), [data, radius]);
+
   useFrame(({ clock }) => {
     if (startRef.current === null) startRef.current = clock.getElapsedTime();
     const elapsed = clock.getElapsedTime() - startRef.current;
@@ -716,15 +733,6 @@ function ConnectionMapScene({ data, labelKey, valueKey, colors, nodeMin = 0.08, 
         const nodeSize = nodeMin + Math.sqrt(val / maxVal) * (nodeMax - nodeMin);
         const color = colors[i % colors.length];
 
-        // Line geometry from node to center
-        const points: THREE.Vector3[] = [];
-        const segments = 10;
-        for (let s = 0; s <= segments; s++) {
-          const t = s / segments;
-          points.push(new THREE.Vector3(x * (1 - t), 0, z * (1 - t)));
-        }
-        const lineGeom = new THREE.BufferGeometry().setFromPoints(points);
-
         return [
           <group key={`node-${i}`} position={[x, 0, z]}>
             <mesh>
@@ -739,7 +747,7 @@ function ConnectionMapScene({ data, labelKey, valueKey, colors, nodeMin = 0.08, 
               {String(d[labelKey] || '')}
             </Text>
           </group>,
-          <lineSegments key={`line-${i}`} geometry={lineGeom}>
+          <lineSegments key={`line-${i}`} geometry={connLineGeoms[i]}>
             <lineBasicMaterial color={color} transparent opacity={0.5} />
           </lineSegments>,
         ];
