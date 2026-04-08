@@ -521,11 +521,25 @@ export function SherpaRail() {
             {/* ═══ Chat Thread ═══ */}
             <div className="space-y-3">
               {promptHistory.length === 0 && !lastResponse && !isProcessing && (
-                <div className="rounded-2xl border border-workspace-border/30 bg-workspace-surface/20 px-4 py-4 text-center">
-                  <p className="text-sm text-workspace-text/80">Good morning. What would you like to focus on?</p>
-                  <p className="mt-1.5 text-[11px] text-workspace-text-secondary/50">
-                    Ask anything — I'll materialize the right views for you.
-                  </p>
+                <div className="space-y-3">
+                  <div className="rounded-2xl border border-workspace-border/30 bg-workspace-surface/20 px-4 py-4 text-center">
+                    <p className="text-sm text-workspace-text/80">Good morning. What would you like to focus on?</p>
+                    <p className="mt-1.5 text-[11px] text-workspace-text-secondary/50">
+                      Ask anything — I'll materialize the right views for you.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => trackAndProcess('Run my morning brief.')}
+                    className="w-full rounded-xl border border-workspace-accent/20 bg-gradient-to-r from-workspace-accent/5 to-workspace-accent/10 px-4 py-3 text-left transition-all hover:border-workspace-accent/40 hover:shadow-[0_4px_16px_rgba(99,102,241,0.1)] group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg">☀️</span>
+                      <div>
+                        <p className="text-[12px] font-semibold text-workspace-text group-hover:text-workspace-accent transition-colors">Morning Brief</p>
+                        <p className="text-[10px] text-workspace-text-secondary/50">Grade yesterday, surface what matters today, load the day</p>
+                      </div>
+                    </div>
+                  </button>
                 </div>
               )}
 

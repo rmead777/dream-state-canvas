@@ -19,6 +19,7 @@ export interface PromptDef {
 export const PROMPT_REGISTRY: PromptDef[] = [
   // Core
   { id: 'intent', label: 'Intent Parser', description: 'Main query interpreter — decides what action to take', category: 'core' },
+  { id: 'morning-brief', label: 'Morning Brief Mode', description: 'The recipe Sherpa runs when the user taps Morning Brief — surveys state, grades predictions, surfaces what matters today', category: 'core' },
   { id: 'update-plan', label: 'Update Planner', description: 'Translates update instructions into structured changes', category: 'core' },
   { id: 'fusion', label: 'Fusion Synthesizer', description: 'Cross-object analysis when two cards are fused', category: 'core' },
 

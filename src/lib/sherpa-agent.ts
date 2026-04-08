@@ -75,7 +75,9 @@ export interface AgentLoopResult {
 export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResult> {
   const { query, workspaceState, activeContext, documentIds, memories, onStatusUpdate } = params;
   const { contextWindow } = getAdminSettings();
-  const maxIterations = getAdminSettings().agentMaxIterations || 5;
+  const isMorningBriefQuery = /morning\s*brief/i.test(query);
+  // Morning brief needs more iterations to survey scratchpads, pull data, write state, and render
+  const maxIterations = isMorningBriefQuery ? 12 : (getAdminSettings().agentMaxIterations || 5);
 
   // Build conversation history
   const history = getConversationMessages(contextWindow);
@@ -613,9 +615,13 @@ async function callAIWithTools(
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
+  // Detect special modes from the query
+  const isMorningBrief = /morning\s*brief/i.test(params.query);
+  const aiMode = isMorningBrief ? 'morning-brief' : 'agent';
+
   const body: Record<string, unknown> = {
     messages,
-    mode: 'agent',
+    mode: aiMode,
     stream: false, // Non-streaming for tool calling
     tools: SHERPA_TOOLS,
   };
