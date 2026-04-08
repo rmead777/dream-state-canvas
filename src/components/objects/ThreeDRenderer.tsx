@@ -809,20 +809,23 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity =
     return map;
   }, [flows]);
 
-  // Set initial colors
-  useMemo(() => {
-    if (!meshRef.current) return;
-    const colorArr = new Float32Array(totalParticles * 3);
-    particleMap.forEach((p, i) => {
-      colorArr[i * 3] = p.color.r;
-      colorArr[i * 3 + 1] = p.color.g;
-      colorArr[i * 3 + 2] = p.color.b;
-    });
-    meshRef.current.instanceColor = new THREE.InstancedBufferAttribute(colorArr, 3);
-  }, [particleMap, totalParticles]);
+  const colorsApplied = useRef(false);
 
   useFrame(({ clock }) => {
     if (!meshRef.current) return;
+
+    // Apply instance colors once after mesh is mounted
+    if (!colorsApplied.current) {
+      const colorArr = new Float32Array(totalParticles * 3);
+      particleMap.forEach((p, i) => {
+        colorArr[i * 3] = p.color.r;
+        colorArr[i * 3 + 1] = p.color.g;
+        colorArr[i * 3 + 2] = p.color.b;
+      });
+      meshRef.current.instanceColor = new THREE.InstancedBufferAttribute(colorArr, 3);
+      colorsApplied.current = true;
+    }
+
     const time = clock.getElapsedTime() * flowSpeed;
 
     for (let i = 0; i < particleMap.length; i++) {
