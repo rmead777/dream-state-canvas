@@ -34,6 +34,13 @@ interface ThreeDSectionData {
   height?: number;
   caption?: string;
   autoRotate?: boolean;
+  showGrid?: boolean;
+  showLabels?: boolean;
+  showValues?: boolean;
+  cameraPosition?: [number, number, number];
+  barWidth?: number;
+  barGap?: number;
+  maxHeight?: number;
 }
 
 interface ThreeDRendererProps {
@@ -74,28 +81,34 @@ function AxisLabel({ position, text }: { position: [number, number, number]; tex
 
 // ─── Bar3D Scene ──────────────────────────────────────────────────────────────
 
-function Bar3DScene({ data, labelKey, valueKey, colors }: {
+function Bar3DScene({ data, labelKey, valueKey, colors, showGrid = true, showLabels = true, showValues = true, barWidth: bw, barGap: bg, maxHeight: mh }: {
   data: Record<string, string | number>[];
   labelKey: string;
   valueKey: string;
   colors: string[];
+  showGrid?: boolean;
+  showLabels?: boolean;
+  showValues?: boolean;
+  barWidth?: number;
+  barGap?: number;
+  maxHeight?: number;
 }) {
   const maxVal = useMemo(() => Math.max(...data.map(d => Number(d[valueKey]) || 0), 1), [data, valueKey]);
-  const barWidth = 0.6;
-  const gap = 0.3;
+  const barWidth = bw ?? 0.6;
+  const gap = bg ?? 0.3;
+  const heightScale = mh ?? 4;
   const totalWidth = data.length * (barWidth + gap) - gap;
 
   return (
     <group position={[-totalWidth / 2, 0, 0]}>
       {data.map((d, i) => {
         const val = Number(d[valueKey]) || 0;
-        const height = (val / maxVal) * 4;
+        const height = (val / maxVal) * heightScale;
         const color = colors[i % colors.length];
         const x = i * (barWidth + gap);
 
         return (
           <group key={i} position={[x + barWidth / 2, 0, 0]}>
-            {/* Bar body — frosted glass effect */}
             <RoundedBox
               args={[barWidth, height, barWidth]}
               position={[0, height / 2, 0]}
@@ -110,38 +123,39 @@ function Bar3DScene({ data, labelKey, valueKey, colors }: {
                 metalness={0.1}
               />
             </RoundedBox>
-            {/* Bar edge wireframe — full opacity border */}
             <lineSegments position={[0, height / 2, 0]}>
               <edgesGeometry args={[new THREE.BoxGeometry(barWidth, height, barWidth)]} />
               <lineBasicMaterial color={color} linewidth={1} />
             </lineSegments>
-            {/* Value label */}
-            <Text
-              position={[0, height + 0.3, 0]}
-              fontSize={0.2}
-              color="#374151"
-              anchorX="center"
-              anchorY="bottom"
-            >
-              {val >= 1000000 ? `${(val / 1000000).toFixed(1)}M` :
-               val >= 1000 ? `${(val / 1000).toFixed(0)}K` :
-               val.toLocaleString()}
-            </Text>
-            {/* Name label */}
-            <Text
-              position={[0, -0.15, barWidth / 2 + 0.3]}
-              fontSize={0.16}
-              color="#6b7280"
-              anchorX="center"
-              anchorY="top"
-              maxWidth={1.2}
-            >
-              {String(d[labelKey] || '')}
-            </Text>
+            {showValues && (
+              <Text
+                position={[0, height + 0.3, 0]}
+                fontSize={0.2}
+                color="#374151"
+                anchorX="center"
+                anchorY="bottom"
+              >
+                {val >= 1000000 ? `${(val / 1000000).toFixed(1)}M` :
+                 val >= 1000 ? `${(val / 1000).toFixed(0)}K` :
+                 val.toLocaleString()}
+              </Text>
+            )}
+            {showLabels && (
+              <Text
+                position={[0, -0.15, barWidth / 2 + 0.3]}
+                fontSize={0.16}
+                color="#6b7280"
+                anchorX="center"
+                anchorY="top"
+                maxWidth={1.2}
+              >
+                {String(d[labelKey] || '')}
+              </Text>
+            )}
           </group>
         );
       })}
-      <GridFloor size={Math.max(totalWidth + 2, 6)} />
+      {showGrid && <GridFloor size={Math.max(totalWidth + 2, 6)} />}
     </group>
   );
 }
@@ -381,11 +395,12 @@ function SurfaceScene({ data, xAxis, yAxis, zAxis, colors }: {
 
 // ─── Bar Race Scene (Animated) ────────────────────────────────────────────────
 
-function BarRaceScene({ data, labelKey, valueKey, colors }: {
+function BarRaceScene({ data, labelKey, valueKey, colors, showGrid = true }: {
   data: Record<string, string | number>[];
   labelKey: string;
   valueKey: string;
   colors: string[];
+  showGrid?: boolean;
 }) {
   const maxVal = useMemo(() => Math.max(...data.map(d => Number(d[valueKey]) || 0), 1), [data, valueKey]);
   const sorted = useMemo(() =>
@@ -476,7 +491,7 @@ function BarRaceScene({ data, labelKey, valueKey, colors }: {
           </group>
         );
       })}
-      <GridFloor size={Math.max(totalWidth + 2, 6)} />
+      {showGrid && <GridFloor size={Math.max(totalWidth + 2, 6)} />}
     </group>
   );
 }
@@ -692,6 +707,10 @@ export function ThreeDRenderer({ section }: ThreeDRendererProps) {
   const labelKey = section.labelKey || section.xAxis || 'name';
   const valueKey = section.valueKey || section.yAxis || 'value';
   const autoRotate = section.autoRotate !== false; // default true
+  const showGrid = section.showGrid !== false; // default true
+  const showLabels = section.showLabels !== false; // default true
+  const showValues = section.showValues !== false; // default true
+  const cameraPos = section.cameraPosition || [5, 4, 5];
 
   return (
     <div className="space-y-1">
@@ -705,7 +724,7 @@ export function ThreeDRenderer({ section }: ThreeDRendererProps) {
           </div>
         }>
           <Canvas
-            camera={{ position: [5, 4, 5], fov: 45 }}
+            camera={{ position: cameraPos, fov: 45 }}
             dpr={[1, 1.5]}
             gl={{ antialias: true, alpha: true }}
             style={{ background: 'transparent' }}
@@ -715,7 +734,7 @@ export function ThreeDRenderer({ section }: ThreeDRendererProps) {
             <directionalLight position={[-3, 4, -3]} intensity={0.3} />
 
             {section.sceneType === 'bar3d' && (
-              <Bar3DScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} />
+              <Bar3DScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} showGrid={showGrid} showLabels={showLabels} showValues={showValues} barWidth={section.barWidth} barGap={section.barGap} maxHeight={section.maxHeight} />
             )}
             {section.sceneType === 'scatter3d' && (
               <Scatter3DScene
@@ -744,7 +763,7 @@ export function ThreeDRenderer({ section }: ThreeDRendererProps) {
 
             {/* Animated scene types */}
             {section.sceneType === 'barRace' && (
-              <BarRaceScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} />
+              <BarRaceScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} showGrid={showGrid} />
             )}
             {section.sceneType === 'radialBurst' && (
               <RadialBurstScene data={section.data} labelKey={labelKey} valueKey={valueKey} colors={colors} />
