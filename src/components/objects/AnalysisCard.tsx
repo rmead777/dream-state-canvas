@@ -103,25 +103,32 @@ function SectionRenderer({ section, highlightedEntity, onEntityClick }: {
   highlightedEntity?: string | null;
   onEntityClick?: (name: string) => void;
 }) {
+  // AI can pass a `style` object on any section — applied as a wrapper
+  const aiStyle = (section as any).style as React.CSSProperties | undefined;
+
+  let content: React.ReactNode = null;
   switch (section.type) {
-    case 'summary': return <SummaryRenderer text={section.text} />;
-    case 'narrative': return <NarrativeRenderer text={section.text} />;
-    case 'metric': return <MetricRenderer section={section} />;
-    case 'table': return <TableRenderer section={section} highlightedEntity={highlightedEntity} onEntityClick={onEntityClick} />;
-    case 'callout': return <CalloutRenderer section={section} />;
-    case 'metrics-row': return <MetricsRowRenderer section={section} />;
-    case 'chart': return <ChartRenderer section={section as any} />;
-    case 'vegalite': return <VegaLiteRenderer section={section as any} />;
-    case 'chart-grid': return <ChartGridRenderer section={section as any} />;
-    case 'embed': return <EmbedRenderer section={section as any} />;
-    case 'animated-metrics': return <AnimatedMetricsRenderer section={section as any} />;
-    case '3d': return (
+    case 'summary': content = <SummaryRenderer text={section.text} section={section as any} />; break;
+    case 'narrative': content = <NarrativeRenderer text={section.text} />; break;
+    case 'metric': content = <MetricRenderer section={section as any} />; break;
+    case 'table': content = <TableRenderer section={section} highlightedEntity={highlightedEntity} onEntityClick={onEntityClick} />; break;
+    case 'callout': content = <CalloutRenderer section={section} />; break;
+    case 'metrics-row': content = <MetricsRowRenderer section={section} />; break;
+    case 'chart': content = <ChartRenderer section={section as any} />; break;
+    case 'vegalite': content = <VegaLiteRenderer section={section as any} />; break;
+    case 'chart-grid': content = <ChartGridRenderer section={section as any} />; break;
+    case 'embed': content = <EmbedRenderer section={section as any} />; break;
+    case 'animated-metrics': content = <AnimatedMetricsRenderer section={section as any} />; break;
+    case '3d': content = (
       <Suspense fallback={<div className="flex items-center justify-center h-48 text-[11px] text-workspace-text-secondary/50">Loading 3D...</div>}>
         <ThreeDRenderer section={section as any} />
       </Suspense>
-    );
+    ); break;
     default: return null;
   }
+
+  // Wrap with AI style overrides if provided
+  return aiStyle ? <div style={aiStyle}>{content}</div> : <>{content}</>;
 }
 
 // ─── Calendar Download Button ────────────────────────────────────────────────
@@ -157,9 +164,16 @@ function CalendarDownloadButton({ icsContent, filename }: { icsContent: string; 
 
 // ─── Section Renderers ───────────────────────────────────────────────────────
 
-function SummaryRenderer({ text }: { text: string }) {
+function SummaryRenderer({ text, section }: { text: string; section?: any }) {
+  const customStyle: React.CSSProperties = section?.fontSize || section?.color || section?.fontWeight ? {
+    fontSize: section.fontSize,
+    color: section.color,
+    fontWeight: section.fontWeight,
+    textAlign: section.textAlign,
+  } : {};
+
   return (
-    <p className="text-base font-medium text-workspace-text leading-relaxed">
+    <p className="text-base font-medium text-workspace-text leading-relaxed" style={customStyle}>
       {text}
     </p>
   );
@@ -169,17 +183,29 @@ function NarrativeRenderer({ text }: { text: string }) {
   return <MarkdownRenderer content={text} />;
 }
 
-function MetricRenderer({ section }: { section: { label: string; value: string | number; unit?: string; trend?: string; trendLabel?: string } }) {
+function MetricRenderer({ section }: { section: { label: string; value: string | number; unit?: string; trend?: string; trendLabel?: string; labelSize?: string; valueSize?: string; labelColor?: string; valueColor?: string; backgroundColor?: string; borderColor?: string; [key: string]: any } }) {
   const trendIcon = section.trend === 'up' ? '↑' : section.trend === 'down' ? '↓' : section.trend === 'flat' ? '→' : null;
   const trendColor = section.trend === 'up' ? 'text-emerald-500' : section.trend === 'down' ? 'text-red-500' : 'text-workspace-text-secondary';
 
   return (
-    <div className="rounded-xl border border-workspace-border/30 bg-workspace-surface/20 px-4 py-3">
-      <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-workspace-text-secondary/60 mb-1">
+    <div
+      className="rounded-xl border border-workspace-border/30 bg-workspace-surface/20 px-4 py-3"
+      style={{
+        backgroundColor: section.backgroundColor,
+        borderColor: section.borderColor,
+      }}
+    >
+      <p
+        className="text-[10px] font-medium uppercase tracking-[0.2em] text-workspace-text-secondary/60 mb-1"
+        style={{ fontSize: section.labelSize, color: section.labelColor }}
+      >
         {section.label}
       </p>
       <div className="flex items-baseline gap-2">
-        <span className="text-2xl font-bold text-workspace-text tabular-nums">
+        <span
+          className="text-2xl font-bold text-workspace-text tabular-nums"
+          style={{ fontSize: section.valueSize, color: section.valueColor }}
+        >
           {section.unit && section.unit !== '%' ? section.unit : ''}{section.value}{section.unit === '%' ? '%' : ''}
         </span>
         {trendIcon && (

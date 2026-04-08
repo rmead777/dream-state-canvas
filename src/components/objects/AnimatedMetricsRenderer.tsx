@@ -4,6 +4,8 @@
  * Grid of big metrics that count up from 0 → target with staggered timing.
  * Uses RAF with cubic-out easing. Frosted glass card style.
  * No Three.js — pure CSS + requestAnimationFrame.
+ *
+ * ALL styling is overridable by the AI via section props.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -17,6 +19,11 @@ interface AnimatedMetric {
   trend?: 'up' | 'down' | 'flat';
   trendValue?: string;
   color?: string;
+  labelColor?: string;
+  valueColor?: string;
+  labelSize?: string;
+  valueSize?: string;
+  subtitle?: string;
 }
 
 interface AnimatedMetricsProps {
@@ -24,6 +31,21 @@ interface AnimatedMetricsProps {
     metrics: AnimatedMetric[];
     columns?: number;
     caption?: string;
+    // AI-controllable styling
+    gap?: number;
+    padding?: string;
+    labelSize?: string;
+    valueSize?: string;
+    labelColor?: string;
+    valueColor?: string;
+    trendUpColor?: string;
+    trendDownColor?: string;
+    backgroundColor?: string;
+    borderColor?: string;
+    borderRadius?: string;
+    stagger?: number;
+    duration?: number;
+    [key: string]: any;
   };
 }
 
@@ -56,13 +78,11 @@ function CountingNumber({ target, duration, delay, unit, prefix }: {
 }) {
   const [current, setCurrent] = useState(REDUCED_MOTION ? target : 0);
   const rafRef = useRef(0);
-  const startRef = useRef(0);
 
   useEffect(() => {
     if (REDUCED_MOTION) { setCurrent(target); return; }
 
     const start = performance.now() + delay * 1000;
-    startRef.current = start;
 
     const tick = (now: number) => {
       if (now < start) {
@@ -71,8 +91,7 @@ function CountingNumber({ target, duration, delay, unit, prefix }: {
       }
       const elapsed = (now - start) / 1000;
       const t = Math.min(elapsed / duration, 1);
-      const eased = easeOutCubic(t);
-      setCurrent(target * eased);
+      setCurrent(target * easeOutCubic(t));
       if (t < 1) rafRef.current = requestAnimationFrame(tick);
     };
 
@@ -83,40 +102,76 @@ function CountingNumber({ target, duration, delay, unit, prefix }: {
   return <>{formatValue(Math.round(current), unit, prefix)}</>;
 }
 
-const TREND_ICONS = {
-  up: { arrow: '↑', color: 'text-emerald-500' },
-  down: { arrow: '↓', color: 'text-red-400' },
-  flat: { arrow: '→', color: 'text-workspace-text-secondary/50' },
-};
-
 export function AnimatedMetricsRenderer({ section }: AnimatedMetricsProps) {
   const cols = section.columns || Math.min(section.metrics.length, 3);
-  const stagger = 0.15;
-  const duration = 1.2;
+  const stagger = section.stagger ?? 0.15;
+  const duration = section.duration ?? 1.2;
+  const gapPx = section.gap ?? 12;
+
+  // Section-level defaults (AI can override per-metric too)
+  const defaultLabelSize = section.labelSize || '9px';
+  const defaultValueSize = section.valueSize || '24px';
+  const defaultLabelColor = section.labelColor || 'hsl(var(--workspace-text-secondary) / 0.5)';
+  const defaultValueColor = section.valueColor || 'hsl(var(--workspace-text))';
+  const bgColor = section.backgroundColor || 'rgba(255,255,255,0.6)';
+  const borderCol = section.borderColor || 'hsl(var(--workspace-border) / 0.3)';
+  const borderRad = section.borderRadius || '12px';
+  const padStr = section.padding || '14px 16px';
+  const trendUpColor = section.trendUpColor || '#10b981';
+  const trendDownColor = section.trendDownColor || '#f87171';
 
   return (
-    <div className="space-y-2">
+    <div>
       <div
-        className="grid gap-3"
-        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+          gap: `${gapPx}px`,
+        }}
       >
         {section.metrics.map((m, i) => {
           const delay = getStaggerDelay(i, stagger);
-          const trend = m.trend ? TREND_ICONS[m.trend] : null;
+          const mLabelSize = m.labelSize || defaultLabelSize;
+          const mValueSize = m.valueSize || defaultValueSize;
+          const mLabelColor = m.labelColor || defaultLabelColor;
+          const mValueColor = m.valueColor || defaultValueColor;
+
+          const trendColor = m.trend === 'up' ? trendUpColor
+            : m.trend === 'down' ? trendDownColor
+            : 'hsl(var(--workspace-text-secondary) / 0.5)';
+          const trendArrow = m.trend === 'up' ? '↑' : m.trend === 'down' ? '↓' : m.trend === 'flat' ? '→' : null;
 
           return (
             <div
               key={i}
-              className="rounded-xl border border-workspace-border/30 bg-white/60 backdrop-blur-sm px-4 py-3.5 animate-[counter-enter_0.5s_cubic-bezier(0.16,1,0.3,1)_forwards] opacity-0"
+              className="animate-[counter-enter_0.5s_cubic-bezier(0.16,1,0.3,1)_forwards] opacity-0"
               style={{
                 animationDelay: `${delay}s`,
-                borderLeft: m.color ? `3px solid ${m.color}` : undefined,
+                borderRadius: borderRad,
+                border: `1px solid ${borderCol}`,
+                borderLeft: m.color ? `3px solid ${m.color}` : `1px solid ${borderCol}`,
+                background: bgColor,
+                backdropFilter: 'blur(8px)',
+                padding: padStr,
               }}
             >
-              <p className="text-[9px] font-medium uppercase tracking-[0.2em] text-workspace-text-secondary/50 mb-1">
+              <p style={{
+                fontSize: mLabelSize,
+                fontWeight: 500,
+                textTransform: 'uppercase',
+                letterSpacing: '0.2em',
+                color: mLabelColor,
+                marginBottom: '4px',
+              }}>
                 {m.label}
               </p>
-              <p className="text-2xl font-bold text-workspace-text tabular-nums leading-tight">
+              <p style={{
+                fontSize: mValueSize,
+                fontWeight: 700,
+                color: mValueColor,
+                lineHeight: 1.1,
+                fontVariantNumeric: 'tabular-nums',
+              }}>
                 <CountingNumber
                   target={m.value}
                   duration={duration}
@@ -125,15 +180,20 @@ export function AnimatedMetricsRenderer({ section }: AnimatedMetricsProps) {
                   prefix={m.prefix}
                 />
               </p>
-              {(trend || m.trendValue) && (
-                <div className="flex items-center gap-1 mt-1">
-                  {trend && (
-                    <span className={`text-[11px] font-semibold ${trend.color}`}>
-                      {trend.arrow}
+              {m.subtitle && (
+                <p style={{ fontSize: '10px', color: mLabelColor, marginTop: '2px' }}>
+                  {m.subtitle}
+                </p>
+              )}
+              {(trendArrow || m.trendValue) && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                  {trendArrow && (
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: trendColor }}>
+                      {trendArrow}
                     </span>
                   )}
                   {m.trendValue && (
-                    <span className={`text-[10px] ${trend?.color || 'text-workspace-text-secondary/50'}`}>
+                    <span style={{ fontSize: '10px', color: trendColor }}>
                       {m.trendValue}
                     </span>
                   )}
@@ -144,7 +204,9 @@ export function AnimatedMetricsRenderer({ section }: AnimatedMetricsProps) {
         })}
       </div>
       {section.caption && (
-        <p className="text-[10px] text-workspace-text-secondary/50 px-1">{section.caption}</p>
+        <p style={{ fontSize: '10px', color: 'hsl(var(--workspace-text-secondary) / 0.5)', padding: '4px 4px 0', marginTop: '4px' }}>
+          {section.caption}
+        </p>
       )}
     </div>
   );
