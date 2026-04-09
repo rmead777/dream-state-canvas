@@ -250,8 +250,12 @@ async function makeOpenAIRequest(
 /**
  * Convert OpenAI-style content (string or ContentPart[]) to Anthropic's native format.
  * - text parts → { type: 'text', text }
- * - image_url parts with data URI → { type: 'image', source: { type: 'base64', media_type, data } }
+ * - image_url parts with PDF data URI → { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data } }
+ * - image_url parts with image data URI → { type: 'image', source: { type: 'base64', media_type, data } }
  * - image_url parts with https URL → { type: 'image', source: { type: 'url', url } }
+ *
+ * PDFs are routed to Anthropic's native document type, which preserves layout and
+ * extracts text, tables, and figures with higher fidelity than vision-based image reading.
  */
 function toAnthropicContent(content: string | null | ContentPart[]): string | any[] {
   if (content === null || content === undefined) return '';
@@ -264,12 +268,33 @@ function toAnthropicContent(content: string | null | ContentPart[]): string | an
         const commaIdx = url.indexOf(',');
         const header = url.slice(5, commaIdx).replace(';base64', '');
         const data = url.slice(commaIdx + 1);
-        return { type: 'image', source: { type: 'base64', media_type: header || 'image/jpeg', data } };
+        const mediaType = header || 'image/jpeg';
+        // PDFs use Anthropic's native document type for layout-aware extraction
+        if (mediaType === 'application/pdf') {
+          return { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data } };
+        }
+        return { type: 'image', source: { type: 'base64', media_type: mediaType, data } };
       }
       return { type: 'image', source: { type: 'url', url } };
     }
     return { type: 'text', text: '' };
   });
+}
+
+/**
+ * Detect whether a messages array contains any PDF documents.
+ * Used to attach the PDF beta header for the Messages API.
+ */
+function containsPdfContent(messages: Message[]): boolean {
+  for (const m of messages) {
+    if (!Array.isArray(m.content)) continue;
+    for (const part of m.content) {
+      if (part.type === 'image_url' && part.image_url?.url?.startsWith('data:application/pdf')) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 /**
@@ -338,6 +363,9 @@ async function makeAnthropicRequest(
     }));
   }
 
+  // Detect PDF content — triggers the PDF beta header for native document support
+  const hasPdf = containsPdfContent(messages);
+
   // OAuth uses Bearer auth + required headers; legacy uses x-api-key
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -346,12 +374,20 @@ async function makeAnthropicRequest(
 
   if (useOAuth) {
     headers['Authorization'] = `Bearer ${apiKey}`;
-    headers['anthropic-beta'] = 'claude-code-20250219,oauth-2025-04-20,fine-grained-tool-streaming-2025-05-14,interleaved-thinking-2025-05-14';
+    const betaFeatures = [
+      'claude-code-20250219',
+      'oauth-2025-04-20',
+      'fine-grained-tool-streaming-2025-05-14',
+      'interleaved-thinking-2025-05-14',
+    ];
+    if (hasPdf) betaFeatures.push('pdfs-2024-09-25');
+    headers['anthropic-beta'] = betaFeatures.join(',');
     headers['user-agent'] = 'claude-cli/2.1.88 (external, cli)';
     headers['anthropic-dangerous-direct-browser-access'] = 'true';
     headers['x-app'] = 'cli';
   } else {
     headers['x-api-key'] = apiKey;
+    if (hasPdf) headers['anthropic-beta'] = 'pdfs-2024-09-25';
   }
 
   const response = await fetch(endpoint, {
