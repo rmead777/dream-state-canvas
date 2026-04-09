@@ -1,6 +1,8 @@
 import { useState, useCallback } from 'react';
 import { useDocuments } from '@/contexts/DocumentContext';
-import { X } from 'lucide-react';
+import { X, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
+import { getIngestSettings, MODEL_OPTIONS } from '@/lib/ingest-settings';
 
 export type ContextMode = 'auto' | 'manual';
 
@@ -29,10 +31,11 @@ export function DocumentContextSelector({
   onModeChange,
   onOpenDocument,
 }: DocumentContextSelectorProps) {
-  const { documents, removeDocument } = useDocuments();
+  const { documents, removeDocument, reingestDocument } = useDocuments();
   const [isExpanded, setIsExpanded] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [reingestingId, setReingestingId] = useState<string | null>(null);
 
   const toggleDoc = useCallback(
     (docId: string) => {
@@ -66,6 +69,26 @@ export function DocumentContextSelector({
     setDeletingId(null);
     setConfirmId(null);
   }, [removeDocument, selectedDocIds, onSelectionChange]);
+
+  const handleReingest = useCallback(async (docId: string, filename: string) => {
+    const settings = getIngestSettings();
+    const modelOption = MODEL_OPTIONS.find((m) => m.id === settings.model);
+    const modelLabel = modelOption?.label || settings.model;
+
+    setReingestingId(docId);
+    toast.info(`Re-ingesting "${filename}" with ${modelLabel}...`);
+
+    const ok = await reingestDocument(docId);
+    setReingestingId(null);
+
+    if (ok) {
+      // The doc ID changed — drop the old one from selection
+      onSelectionChange(selectedDocIds.filter((id) => id !== docId));
+      toast.success(`"${filename}" re-ingested with ${modelLabel}`);
+    } else {
+      toast.error(`Failed to re-ingest "${filename}"`);
+    }
+  }, [reingestDocument, selectedDocIds, onSelectionChange]);
 
   if (documents.length === 0) return null;
 
@@ -187,13 +210,27 @@ export function DocumentContextSelector({
                       {isDeleting ? '...' : 'confirm?'}
                     </button>
                   ) : (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setConfirmId(doc.id); }}
-                      className="opacity-0 group-hover:opacity-100 text-workspace-text-secondary/30 hover:text-red-400 shrink-0 transition-all"
-                      title="Remove document"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (reingestingId) return;
+                          handleReingest(doc.id, doc.filename);
+                        }}
+                        disabled={reingestingId === doc.id}
+                        className="opacity-0 group-hover:opacity-100 text-workspace-text-secondary/30 hover:text-workspace-accent transition-all disabled:opacity-100 disabled:text-workspace-accent"
+                        title="Re-ingest with current model"
+                      >
+                        <RefreshCw className={`h-3 w-3 ${reingestingId === doc.id ? 'animate-spin' : ''}`} />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setConfirmId(doc.id); }}
+                        className="opacity-0 group-hover:opacity-100 text-workspace-text-secondary/30 hover:text-red-400 transition-all"
+                        title="Remove document"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
                   )}
                 </div>
               );

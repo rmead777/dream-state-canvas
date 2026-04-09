@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { DocumentRecord, listDocuments, getDocument, extractDataset, updateDocumentData, deleteDocument } from '@/lib/document-store';
+import { DocumentRecord, listDocuments, getDocument, extractDataset, updateDocumentData, deleteDocument, reIngestDocument } from '@/lib/document-store';
 import { CANONICAL_DATASET } from '@/lib/seed-data';
 import { clearProfileCache, analyzeDataset } from '@/lib/data-analyzer';
 import { invalidateProfileCache } from '@/lib/intent-engine';
@@ -18,6 +18,7 @@ interface DocumentContextValue {
   setActiveDocumentAsDataset: (docId: string) => Promise<boolean>;
   addDocument: (doc: DocumentRecord) => void;
   removeDocument: (docId: string) => Promise<boolean>;
+  reingestDocument: (docId: string) => Promise<boolean>;
   updateActiveDataset: (columns: string[], rows: string[][]) => Promise<boolean>;
 }
 
@@ -35,6 +36,7 @@ const DocumentContext = createContext<DocumentContextValue>({
   setActiveDocumentAsDataset: async () => false,
   addDocument: () => {},
   removeDocument: async () => false,
+  reingestDocument: async () => false,
   updateActiveDataset: async () => false,
 });
 
@@ -125,6 +127,35 @@ export function DocumentProvider({ children }: { children: React.ReactNode }) {
     return true;
   }, [activeDataset.sourceDocId]);
 
+  const reingestDocument = useCallback(async (docId: string) => {
+    const oldDoc = documents.find((d) => d.id === docId);
+    const oldFilename = oldDoc?.filename || 'document';
+
+    const fresh = await reIngestDocument(docId);
+    if (!fresh) return false;
+
+    // Replace the old doc in state (old ID is gone, new ID is fresh.id)
+    setDocuments((prev) => [fresh, ...prev.filter((d) => d.id !== docId && d.id !== fresh.id)]);
+
+    // If the re-ingested doc was the active dataset, refresh the dataset too
+    if (activeDataset.sourceDocId === docId) {
+      const dataset = extractDataset(fresh);
+      if (dataset && dataset.rows.length > 0) {
+        setActiveDataset({
+          columns: dataset.columns,
+          rows: dataset.rows,
+          sourceDocId: fresh.id,
+          sourceLabel: fresh.filename,
+        });
+        clearProfileCache();
+        invalidateProfileCache();
+        analyzeDataset(dataset.columns, dataset.rows).catch(() => {});
+      }
+    }
+    console.log(`[reIngest] "${oldFilename}" re-processed → new id ${fresh.id}`);
+    return true;
+  }, [documents, activeDataset.sourceDocId]);
+
   const updateActiveDataset = useCallback(async (columns: string[], rows: string[][]) => {
     // Update local state
     setActiveDataset(prev => ({ ...prev, columns, rows }));
@@ -139,7 +170,7 @@ export function DocumentProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <DocumentContext.Provider
-      value={{ documents, activeDataset, refreshDocuments, setActiveDocumentAsDataset, addDocument, removeDocument, updateActiveDataset }}
+      value={{ documents, activeDataset, refreshDocuments, setActiveDocumentAsDataset, addDocument, removeDocument, reingestDocument, updateActiveDataset }}
     >
       {children}
     </DocumentContext.Provider>

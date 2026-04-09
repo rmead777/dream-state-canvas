@@ -3,6 +3,7 @@
  * edge function, and loading documents from the database.
  */
 import { supabase } from '@/integrations/supabase/client';
+import { getIngestSettings } from './ingest-settings';
 
 export interface DocumentRecord {
   id: string;
@@ -341,11 +342,17 @@ export async function uploadDocument(
     // 2. Prepare content for ingestion
     onProgress?.({ stage: 'analyzing', filename: file.name, message: 'AI is reading and analyzing...' });
 
+    // Resolve ingest settings from admin panel (model + output budget + text bypass)
+    const ingest = getIngestSettings();
+
     const payload: Record<string, unknown> = {
       filename: file.name,
       mimeType: file.type,
       fileType,
       storagePath,
+      ingestModel: ingest.model,
+      ingestMaxTokens: ingest.maxTokens,
+      bypassAiForText: ingest.bypassAiForText,
     };
 
     if (fileType === 'xlsx') {
@@ -406,6 +413,56 @@ export async function uploadDocument(
     onProgress?.({ stage: 'error', filename: file.name, message: String(e) });
     return null;
   }
+}
+
+/**
+ * Re-ingest an existing document using the CURRENT admin ingest settings.
+ * Useful for re-processing old documents that were extracted with an outdated
+ * model or hit an output cap (e.g., transcripts truncated under old Gemini limits).
+ *
+ * Flow: download original file from storage → delete old DB record → re-upload
+ * through the normal ingestion pipeline. The original storage file is left in
+ * place (uploadDocument writes to a fresh timestamped path).
+ */
+export async function reIngestDocument(
+  docId: string,
+  onProgress?: (p: UploadProgress) => void,
+): Promise<DocumentRecord | null> {
+  const existing = await getDocument(docId);
+  if (!existing) {
+    onProgress?.({ stage: 'error', filename: 'unknown', message: 'Document not found' });
+    return null;
+  }
+
+  const filename = existing.filename;
+  onProgress?.({ stage: 'uploading', filename, message: 'Fetching original file...' });
+
+  // 1. Download the original file from storage
+  const { data: blob, error: dlError } = await supabase.storage
+    .from('documents')
+    .download(existing.storage_path);
+
+  if (dlError || !blob) {
+    console.error('[reIngest] Download error:', dlError);
+    onProgress?.({ stage: 'error', filename, message: 'Failed to download original file' });
+    return null;
+  }
+
+  // 2. Convert Blob → File so we can feed it back through uploadDocument
+  const file = new File([blob], filename, { type: existing.mime_type || 'application/octet-stream' });
+
+  // 3. Delete the old DB record so the duplicate-check fingerprint doesn't short-circuit
+  const { error: delError } = await supabase.from('documents').delete().eq('id', docId);
+  if (delError) {
+    console.error('[reIngest] Delete old record error:', delError);
+    onProgress?.({ stage: 'error', filename, message: 'Failed to clear old record' });
+    return null;
+  }
+
+  onProgress?.({ stage: 'analyzing', filename, message: 'Re-analyzing with current model...' });
+
+  // 4. Run the normal upload flow — this uses current admin ingest settings
+  return await uploadDocument(file, onProgress);
 }
 
 /**
