@@ -1,5 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { routeToProvider } from "../_shared/provider-router.ts";
+
+// ─── Ingest model config (overridable per-request via body) ───────────────────
+const DEFAULT_INGEST_MODEL = "anthropic/claude-sonnet-4-6";
+const DEFAULT_INGEST_MAX_TOKENS = 64000;
+// Lightweight summary uses a cheaper model + smaller budget
+const SUMMARY_MODEL = "anthropic/claude-haiku-4-5-20251001";
+const SUMMARY_MAX_TOKENS = 2048;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -147,24 +155,25 @@ Return ONLY JSON, no markdown.`,
 
 /**
  * AI-powered document understanding for PDFs, images, and text docs.
- * Uses multimodal capabilities to READ the document natively.
+ * Routes through provider-router so any supported model (Claude, Gemini, etc.) can be used.
+ *
+ * For Anthropic models with PDFs: the router translates image_url data URIs to native
+ * document content blocks, which gives layout-aware extraction with up to 64K output tokens.
  */
 async function aiUnderstandDocument(
   content: string,
   filename: string,
   fileType: string,
   mimeType: string,
-  apiKey: string
+  modelId: string = DEFAULT_INGEST_MODEL,
+  maxTokens: number = DEFAULT_INGEST_MAX_TOKENS,
 ): Promise<{ summary: string; keywords: string[]; extractedText: string; structuredInsights: Record<string, unknown> }> {
   const isImage = fileType === "image";
   const isPdf = fileType === "pdf";
 
-  const messages: Array<{ role: string; content: unknown }> = [
-    {
-      role: "system",
-      content: `You are an expert document analyst. You receive a document and must:
+  const systemPrompt = `You are an expert document analyst. You receive a document and must:
 1. Understand its full content, structure, and purpose
-2. Extract ALL text content faithfully
+2. Extract ALL text content faithfully — do not summarize or skip sections
 3. Identify key entities, numbers, dates, and relationships
 4. Provide a concise summary
 5. Generate search keywords
@@ -182,18 +191,18 @@ Return JSON:
     "sections": ["section1", "section2"]
   }
 }
-Return ONLY JSON, no markdown fences.`,
-    },
-  ];
+Return ONLY JSON, no markdown fences.`;
+
+  const messages: Array<{ role: string; content: any }> = [];
 
   if (isImage || isPdf) {
-    // Use vision: send as base64 image
+    // Vision/document input: base64 data URI is translated per-provider in provider-router
     messages.push({
       role: "user",
       content: [
         {
           type: "text",
-          text: `Analyze this ${fileType} document: "${filename}". Extract ALL text and understand the full content. Be thorough — capture every detail.`,
+          text: `Analyze this ${fileType} document: "${filename}". Extract ALL text and understand the full content. Be thorough — capture every detail from the first page to the last.`,
         },
         {
           type: "image_url",
@@ -202,27 +211,28 @@ Return ONLY JSON, no markdown fences.`,
       ],
     });
   } else {
-    // Text-based document
+    // Plain text document
     messages.push({
       role: "user",
       content: `Analyze this ${fileType} document: "${filename}"\n\nFull content:\n${content}`,
     });
   }
 
-  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: isImage || isPdf ? "google/gemini-3-flash-preview" : "google/gemini-2.5-flash-lite",
-      messages,
-      max_tokens: 8192,
-    }),
-  });
+  const { response: resp, meta } = await routeToProvider(
+    modelId,
+    systemPrompt,
+    messages,
+    maxTokens,
+    false, // no streaming for ingestion
+  );
+
+  console.log(
+    `[ingest] aiUnderstandDocument filename="${filename}" fileType=${fileType} model=${meta.model} auth=${meta.authMode}${meta.fallback ? " (fallback)" : ""}`,
+  );
 
   if (!resp.ok) {
+    const errBody = await resp.text().catch(() => "");
+    console.warn(`[ingest] ${meta.provider} returned ${resp.status}: ${errBody.slice(0, 200)}`);
     return {
       summary: `Uploaded ${fileType}: ${filename}`,
       keywords: [filename],
@@ -232,7 +242,20 @@ Return ONLY JSON, no markdown fences.`,
   }
 
   const result = await resp.json();
-  const text = result.choices?.[0]?.message?.content || "";
+
+  // Handle both OpenAI-format (google/openai) and Anthropic-format responses
+  let text = "";
+  if (result.choices?.[0]?.message?.content) {
+    // OpenAI format
+    text = result.choices[0].message.content;
+  } else if (result.content && Array.isArray(result.content)) {
+    // Anthropic format: content is an array of blocks
+    text = result.content
+      .filter((b: any) => b.type === "text")
+      .map((b: any) => b.text)
+      .join("");
+  }
+
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) return JSON.parse(jsonMatch[0]);
@@ -243,6 +266,86 @@ Return ONLY JSON, no markdown fences.`,
     keywords: [filename],
     extractedText: text,
     structuredInsights: {},
+  };
+}
+
+/**
+ * Lightweight summary-only AI call. Used when we already have the full raw text
+ * and only need metadata (summary + keywords + structured insights).
+ *
+ * Samples the first ~8K chars of the document since the opening usually characterizes
+ * the whole doc, and avoids sending 500K chars through an AI call for a 2-sentence summary.
+ */
+async function aiLightweightSummary(
+  rawText: string,
+  filename: string,
+  fileType: string,
+): Promise<{ summary: string; keywords: string[]; structuredInsights: Record<string, unknown> }> {
+  const sample = rawText.slice(0, 8000);
+  const systemPrompt = `You are a document analyst. You receive the opening portion of a document.
+Generate metadata WITHOUT extracting the full text (the caller already has it).
+
+Return JSON:
+{
+  "summary": "concise 2-3 sentence summary of what this document is about",
+  "keywords": ["keyword1", "keyword2", ...],
+  "structuredInsights": {
+    "documentType": "contract/report/invoice/memo/transcript/etc",
+    "keyEntities": ["entity1", "entity2"],
+    "sections": ["section1", "section2"]
+  }
+}
+Return ONLY JSON, no markdown fences.`;
+
+  const messages = [
+    {
+      role: "user",
+      content: `Document: "${filename}" (${fileType})\n\nOpening content:\n${sample}${
+        rawText.length > 8000 ? `\n\n[... ${rawText.length - 8000} additional characters follow ...]` : ""
+      }`,
+    },
+  ];
+
+  const { response: resp, meta } = await routeToProvider(
+    SUMMARY_MODEL,
+    systemPrompt,
+    messages,
+    SUMMARY_MAX_TOKENS,
+    false,
+  );
+
+  console.log(
+    `[ingest] aiLightweightSummary filename="${filename}" model=${meta.model} auth=${meta.authMode}`,
+  );
+
+  if (!resp.ok) {
+    return {
+      summary: `${fileType.toUpperCase()}: ${filename} (${rawText.length.toLocaleString()} chars)`,
+      keywords: [filename, fileType],
+      structuredInsights: { documentType: fileType },
+    };
+  }
+
+  const result = await resp.json();
+  let text = "";
+  if (result.choices?.[0]?.message?.content) {
+    text = result.choices[0].message.content;
+  } else if (result.content && Array.isArray(result.content)) {
+    text = result.content
+      .filter((b: any) => b.type === "text")
+      .map((b: any) => b.text)
+      .join("");
+  }
+
+  try {
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) return JSON.parse(jsonMatch[0]);
+  } catch { /* fallback */ }
+
+  return {
+    summary: `${fileType.toUpperCase()}: ${filename}`,
+    keywords: [filename, fileType],
+    structuredInsights: { documentType: fileType },
   };
 }
 
@@ -346,7 +449,18 @@ serve(async (req) => {
       textContent,
       // For PDF/images: base64 content
       base64Content,
+      // Admin-configurable ingestion settings (optional)
+      ingestModel,
+      ingestMaxTokens,
+      bypassAiForText,
     } = body;
+
+    // Resolve ingest settings with fallbacks
+    const resolvedModel: string = typeof ingestModel === "string" && ingestModel ? ingestModel : DEFAULT_INGEST_MODEL;
+    const resolvedMaxTokens: number = typeof ingestMaxTokens === "number" && ingestMaxTokens > 0
+      ? Math.max(1000, Math.min(64000, ingestMaxTokens))
+      : DEFAULT_INGEST_MAX_TOKENS;
+    const resolvedBypassText: boolean = bypassAiForText !== false; // default true
 
     if (!filename || !fileType || !storagePath) {
       return jsonResp({ error: "filename, fileType, and storagePath are required" }, 400);
@@ -493,36 +607,33 @@ Return ONLY JSON.`,
       extractedText = textContent;
       fingerprint = "csv-" + simpleHash(textContent.slice(0, 2000));
 
-      // Quick AI analysis for domain/summary
-      const aiResult = await aiUnderstandDocument(
-        textContent.slice(0, 4000),
-        filename,
-        "csv",
-        "text/csv",
-        LOVABLE_API_KEY
-      );
+      // Quick AI analysis for domain/summary (lightweight — uses Haiku, 2K output)
+      const aiResult = await aiLightweightSummary(textContent, filename, "csv");
       metadata.summary = aiResult.summary;
       metadata.keywords = aiResult.keywords;
-      metadata.domain = aiResult.structuredInsights?.documentType || "data";
+      metadata.domain = (aiResult.structuredInsights?.documentType as string) || "data";
     }
 
-    // ─── PDF — Native AI Vision Reading ──────────────────────────────────────
+    // ─── PDF — Native document reading via provider-router ──────────────────
     else if (fileType === "pdf" && base64Content) {
-      // "Let AI Be AI" — send PDF pages as images to vision model
-      // The AI can READ the PDF natively, understanding layout, tables, charts
+      // For Anthropic models: provider-router translates to native document type
+      // with layout-aware extraction and up to 64K output tokens.
+      // For other models: falls back to image_url vision.
       const aiResult = await aiUnderstandDocument(
         base64Content,
         filename,
         "pdf",
         "application/pdf",
-        LOVABLE_API_KEY
+        resolvedModel,
+        resolvedMaxTokens,
       );
       extractedText = aiResult.extractedText;
       metadata = {
         summary: aiResult.summary,
         keywords: aiResult.keywords,
         structuredInsights: aiResult.structuredInsights,
-        domain: aiResult.structuredInsights?.documentType || "document",
+        domain: (aiResult.structuredInsights?.documentType as string) || "document",
+        ingestModel: resolvedModel,
       };
       fingerprint = "pdf-" + simpleHash(base64Content.slice(0, 2000));
     }
@@ -534,7 +645,8 @@ Return ONLY JSON.`,
         filename,
         "image",
         mimeType || "image/png",
-        LOVABLE_API_KEY
+        resolvedModel,
+        resolvedMaxTokens,
       );
       extractedText = aiResult.extractedText;
 
@@ -575,21 +687,43 @@ Return ONLY JSON.`,
 
     // ─── Text / Markdown / DOCX ──────────────────────────────────────────────
     else if ((fileType === "txt" || fileType === "md" || fileType === "docx") && textContent) {
-      const aiResult = await aiUnderstandDocument(
-        textContent,
-        filename,
-        fileType,
-        mimeType || "text/plain",
-        LOVABLE_API_KEY
-      );
+      // Raw text is ALWAYS preserved verbatim — we never truncate via AI output caps.
       extractedText = textContent;
-      metadata = {
-        summary: aiResult.summary,
-        keywords: aiResult.keywords,
-        structuredInsights: aiResult.structuredInsights,
-        domain: aiResult.structuredInsights?.documentType || "document",
-      };
       fingerprint = "txt-" + simpleHash(textContent.slice(0, 2000));
+
+      if (resolvedBypassText) {
+        // Fast path: lightweight summary only (uses opening sample, Haiku, 2K output).
+        // The full raw text is still saved — this call only generates metadata.
+        const aiResult = await aiLightweightSummary(textContent, filename, fileType);
+        metadata = {
+          summary: aiResult.summary,
+          keywords: aiResult.keywords,
+          structuredInsights: aiResult.structuredInsights,
+          domain: (aiResult.structuredInsights?.documentType as string) || "document",
+          rawChars: textContent.length,
+          extractionMode: "bypass",
+        };
+      } else {
+        // Full-fat path: send entire text to the main ingest model for deep analysis.
+        // Use this when you need rich entity/number/date extraction from long docs.
+        const aiResult = await aiUnderstandDocument(
+          textContent,
+          filename,
+          fileType,
+          mimeType || "text/plain",
+          resolvedModel,
+          resolvedMaxTokens,
+        );
+        metadata = {
+          summary: aiResult.summary,
+          keywords: aiResult.keywords,
+          structuredInsights: aiResult.structuredInsights,
+          domain: (aiResult.structuredInsights?.documentType as string) || "document",
+          rawChars: textContent.length,
+          extractionMode: "full",
+          ingestModel: resolvedModel,
+        };
+      }
     }
 
     // ─── Check for duplicate by fingerprint ──────────────────────────────────
@@ -625,7 +759,7 @@ Return ONLY JSON.`,
         mime_type: mimeType || "application/octet-stream",
         file_type: fileType,
         storage_path: storagePath,
-        extracted_text: extractedText.slice(0, 500000), // 500KB limit
+        extracted_text: extractedText.slice(0, 5_000_000), // 5MB limit — fits ~800K words / full meeting transcripts
         structured_data: structuredData,
         metadata,
         fingerprint,
