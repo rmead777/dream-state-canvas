@@ -27,6 +27,7 @@ import { RulesEditor } from './RulesEditor';
 import { AITelemetryPanel } from './AITelemetryPanel';
 import { ShaderControlPanel } from './ShaderControlPanel';
 import { ThreeDControlPanel } from './ThreeDControlPanel';
+import { IngestControlPanel } from './IngestControlPanel';
 import MarkdownRenderer from '../objects/MarkdownRenderer';
 import { compressImage } from '@/lib/image-utils';
 import { extractDataset } from '@/lib/document-store';
@@ -962,6 +963,11 @@ export function SherpaRail() {
               {/* 3D Scene Controls */}
               <div className="pt-4 border-t border-workspace-border/30">
                 <ThreeDControlPanel />
+              </div>
+
+              {/* Document Ingestion Controls */}
+              <div className="pt-4 border-t border-workspace-border/30">
+                <IngestControlPanel />
               </div>
             </div>
           )}
