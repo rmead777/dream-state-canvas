@@ -1,0 +1,34 @@
+{
+  "name": "Sherpa AI",
+  "short_name": "Sherpa",
+  "description": "Intent Manifestation Engine",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#fbfaf6",
+  "theme_color": "#6366f1",
+  "categories": ["productivity", "business", "utilities"],
+  "icons": [
+    {
+      "src": "/sherpa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/sherpa-icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "New Query",
+      "short_name": "Query",
+      "description": "Ask Sherpa anything",
+      "url": "/"
+    }
+  ]
+}
