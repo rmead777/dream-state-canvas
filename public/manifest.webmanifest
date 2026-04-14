@@ -6,20 +6,20 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#fbfaf6",
+  "background_color": "#1a1033",
   "theme_color": "#6366f1",
   "categories": ["productivity", "business", "utilities"],
   "icons": [
     {
-      "src": "/sherpa-icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/sherpa-icon.jpg",
+      "sizes": "960x960",
+      "type": "image/jpeg",
       "purpose": "any"
     },
     {
-      "src": "/sherpa-icon-maskable.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/sherpa-icon.jpg",
+      "sizes": "960x960",
+      "type": "image/jpeg",
       "purpose": "maskable"
     }
   ],
