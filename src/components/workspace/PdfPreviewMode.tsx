@@ -65,8 +65,11 @@ export function PdfPreviewMode({ contentRef, title, onClose }: PdfPreviewModePro
     const handleMouseMove = (e: MouseEvent) => {
       if (!contentRef.current) return;
       const rect = contentRef.current.getBoundingClientRect();
-      const scrollTop = contentRef.current.parentElement?.scrollTop || 0;
-      const y = e.clientY - rect.top + scrollTop;
+      // rect.top is viewport-relative and already reflects parent scroll,
+      // so clientY - rect.top is the Y inside the content element. Do NOT
+      // add parentElement.scrollTop — that double-counts the scroll and
+      // makes the divider jump down by the scroll offset on drag start.
+      const y = e.clientY - rect.top;
 
       // Clamp between previous and next dividers (or content bounds)
       const minY = dragging > 0 ? dividers[dragging - 1] + 60 : 60;
@@ -94,8 +97,8 @@ export function PdfPreviewMode({ contentRef, title, onClose }: PdfPreviewModePro
   const handleAddDivider = useCallback((e: React.MouseEvent) => {
     if (!contentRef.current || dragging !== null) return;
     const rect = contentRef.current.getBoundingClientRect();
-    const scrollTop = contentRef.current.parentElement?.scrollTop || 0;
-    const y = e.clientY - rect.top + scrollTop;
+    // See handleMouseMove: no scrollTop addition.
+    const y = e.clientY - rect.top;
 
     // Don't add too close to existing dividers
     const tooClose = dividers.some(d => Math.abs(d - y) < 60);
@@ -145,6 +148,28 @@ export function PdfPreviewMode({ contentRef, title, onClose }: PdfPreviewModePro
           scale: 2, // High quality
           backgroundColor: '#ffffff',
           logging: false,
+          // html2canvas clones the DOM and captures it synchronously.
+          // CSS animations restart from frame 0 in the clone and don't
+          // progress before capture — so elements that use an intro
+          // animation starting at opacity:0 (e.g. AnimatedMetricsRenderer's
+          // counter-enter) get rasterized invisible. Neutralize animations
+          // and force opacity:1 on animated metric cards in the clone.
+          onclone: (doc) => {
+            const style = doc.createElement('style');
+            style.textContent = `
+              *, *::before, *::after {
+                animation-duration: 0s !important;
+                animation-delay: 0s !important;
+                transition: none !important;
+              }
+            `;
+            doc.head.appendChild(style);
+            // Force opacity:1 on any element whose class references the
+            // counter-enter intro animation.
+            doc.querySelectorAll('[class*="counter-enter"]').forEach((el) => {
+              (el as HTMLElement).style.opacity = '1';
+            });
+          },
         });
 
         // Scale to fit A4 landscape
