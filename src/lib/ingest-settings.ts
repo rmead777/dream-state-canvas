@@ -32,8 +32,8 @@ export const MODEL_OPTIONS: ModelOption[] = [
     supportsPdf: true,
   },
   {
-    id: 'anthropic/claude-opus-4-6',
-    label: 'Claude Opus 4.6',
+    id: 'anthropic/claude-opus-4-7',
+    label: 'Claude Opus 4.7',
     description: 'Maximum accuracy for critical docs — slower, worth it for IC memos',
     supportsPdf: true,
   },

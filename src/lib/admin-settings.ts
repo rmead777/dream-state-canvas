@@ -33,7 +33,7 @@ const AVAILABLE_MODELS: ModelDef[] = [
 
   // Anthropic
   { id: 'anthropic/claude-sonnet-4-6', label: 'Claude Sonnet 4.6', description: 'Balanced speed & intelligence', provider: 'anthropic' },
-  { id: 'anthropic/claude-opus-4-6', label: 'Claude Opus 4.6', description: 'Maximum reasoning depth', provider: 'anthropic' },
+  { id: 'anthropic/claude-opus-4-7', label: 'Claude Opus 4.7', description: 'Maximum reasoning depth', provider: 'anthropic' },
   { id: 'anthropic/claude-haiku-4-5', label: 'Claude Haiku 4.5', description: 'Fastest Anthropic model', provider: 'anthropic' },
 
   // xAI (Grok)
