@@ -27,6 +27,13 @@ export function PdfPreviewMode({ contentRef, title, onClose }: PdfPreviewModePro
   const overlayRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState(0);
   const [contentWidth, setContentWidth] = useState(0);
+  // contentRef's offset from the top of its positioned ancestor — which is
+  // also the overlay's containing block. The overlay is drawn at this top
+  // so that a divider at y in contentRef-space renders at the same visual
+  // position as contentRef's y. Without this, padding + sticky toolbar push
+  // contentRef ~60px below the overlay origin, and dividers appear ~60px
+  // above the cut line, clipping the bottom of sections into the next page.
+  const [contentOffsetTop, setContentOffsetTop] = useState(0);
 
   // Calculate initial page breaks based on content dimensions
   useEffect(() => {
@@ -35,6 +42,7 @@ export function PdfPreviewMode({ contentRef, title, onClose }: PdfPreviewModePro
     const rect = contentRef.current.getBoundingClientRect();
     setContentWidth(rect.width);
     setContentHeight(contentRef.current.scrollHeight);
+    setContentOffsetTop(contentRef.current.offsetTop);
 
     const pageHeight = rect.width * A4_LANDSCAPE_RATIO;
     const totalHeight = contentRef.current.scrollHeight;
@@ -236,10 +244,14 @@ export function PdfPreviewMode({ contentRef, title, onClose }: PdfPreviewModePro
         </div>
       </div>
 
-      {/* Page break overlay — positioned over the content */}
+      {/* Page break overlay — positioned over the content.
+          top: contentOffsetTop aligns the overlay's coordinate origin
+          with contentRef's top edge, so divider y values (computed from
+          contentRef.getBoundingClientRect) render where the cuts actually
+          happen. */}
       <div
-        className="absolute inset-0 z-40 pointer-events-none"
-        style={{ height: contentHeight }}
+        className="absolute left-0 right-0 z-40 pointer-events-none"
+        style={{ top: contentOffsetTop, height: contentHeight }}
       >
         {/* Clickable layer for adding dividers */}
         <div
