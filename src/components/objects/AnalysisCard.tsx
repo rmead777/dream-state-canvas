@@ -574,6 +574,24 @@ function ChartRenderer({ section }: { section: { chartType: string; xAxis: strin
   const ChartComponent = section.chartType === 'line' ? LineChart : section.chartType === 'area' ? AreaChart : BarChart;
   const DataComponent: React.ElementType = section.chartType === 'line' ? Line : section.chartType === 'area' ? Area : Bar;
 
+  // Auto-detect xAxis/yAxis keys when the AI-provided field names don't
+  // match the actual data object keys. The AI frequently sends
+  // xAxis:"scenario" while the data uses "name" — Recharts silently
+  // renders empty axis ticks instead of failing visibly.
+  const firstRow = section.data?.[0];
+  const resolvedXAxis = (() => {
+    if (!firstRow) return section.xAxis;
+    if (section.xAxis && section.xAxis in firstRow) return section.xAxis;
+    const stringKey = Object.keys(firstRow).find(k => typeof firstRow[k] === 'string' && k !== '__color');
+    return stringKey || section.xAxis;
+  })();
+  const resolvedYAxis = (() => {
+    if (!firstRow) return section.yAxis;
+    if (section.yAxis && section.yAxis in firstRow) return section.yAxis;
+    const numKey = Object.keys(firstRow).find(k => typeof firstRow[k] === 'number' && k !== resolvedXAxis);
+    return numKey || section.yAxis;
+  })();
+
   // Detect per-bar coloring: data items have a __color field, OR colors array matches data length
   const hasPerBarColors = section.data.some(d => '__color' in d);
   const colorsMatchDataLength = section.colors && section.colors.length === section.data.length;
@@ -582,8 +600,8 @@ function ChartRenderer({ section }: { section: { chartType: string; xAxis: strin
   // Multi-series: multiple y-axis columns with colors array (not matching data length = multi-series palette)
   const isMultiSeries = section.colors && !colorsMatchDataLength;
   const yAxisKeys = isMultiSeries
-    ? Object.keys(section.data[0] || {}).filter(k => k !== section.xAxis && k !== '__color')
-    : [section.yAxis];
+    ? Object.keys(section.data[0] || {}).filter(k => k !== resolvedXAxis && k !== '__color')
+    : [resolvedYAxis];
   const colorPalette = resolvedTheme?.colors || (isMultiSeries && section.colors) || defaultPalette;
 
   // Build per-bar color array
@@ -599,14 +617,14 @@ function ChartRenderer({ section }: { section: { chartType: string; xAxis: strin
         <ResponsiveContainer width="100%" height="100%">
           <ChartComponent data={section.data}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--workspace-border))" opacity={0.3} />
-            <XAxis dataKey={section.xAxis} tick={{ fontSize: 10 }} stroke="hsl(var(--workspace-text-secondary))" />
+            <XAxis dataKey={resolvedXAxis} tick={{ fontSize: 10 }} stroke="hsl(var(--workspace-text-secondary))" />
             <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--workspace-text-secondary))" />
             <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => formatValue(value)} />
             {yAxisKeys.length > 1 && (
               <Legend formatter={(value) => <span style={{ fontSize: 10 }}>{value}</span>} />
             )}
             {usePerBarColoring && barColors ? (
-              <Bar key="per-bar" dataKey={section.yAxis} fillOpacity={defaultFillOpacity} radius={[3, 3, 0, 0]}>
+              <Bar key="per-bar" dataKey={resolvedYAxis} fillOpacity={defaultFillOpacity} radius={[3, 3, 0, 0]}>
                 {barColors.map((color, i) => (
                   <Cell key={i} fill={color} fillOpacity={defaultFillOpacity} stroke={color} strokeWidth={defaultStrokeWidth} />
                 ))}

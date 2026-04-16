@@ -4,6 +4,12 @@
  * Shows the immersive content with draggable page boundary lines.
  * User positions dividers to control where pages break, then clicks
  * Export to capture each region via html2canvas + jsPDF.
+ *
+ * Features:
+ * - Snap-to-gap: dividers magnetically snap to DOM element boundaries
+ *   so cuts land in natural whitespace, not through headings or content.
+ * - Page-region shading: alternating faint tints show which content
+ *   belongs to which page.
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -11,13 +17,53 @@ import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { toast } from 'sonner';
 
-// A4 landscape aspect ratio (297mm x 210mm)
-const A4_LANDSCAPE_RATIO = 210 / 297; // height / width ≈ 0.707
+// A4 landscape: usable area after 10mm margin on all sides
+const PDF_MARGIN = 10; // mm
+const USABLE_W = 297 - PDF_MARGIN * 2; // 277mm
+const USABLE_H = 210 - PDF_MARGIN * 2; // 190mm
+const USABLE_RATIO = USABLE_H / USABLE_W; // ≈ 0.686
+
+const SNAP_THRESHOLD = 30; // px — max distance to snap to a gap
 
 interface PdfPreviewModeProps {
   contentRef: React.RefObject<HTMLDivElement>;
   title: string;
   onClose: () => void;
+}
+
+/** Walk contentRef's children (2 levels deep) and collect their
+ *  top/bottom pixel offsets relative to contentRef. These become
+ *  snap targets — natural gaps between rendered blocks. */
+function collectSnapPositions(contentEl: HTMLElement): number[] {
+  const base = contentEl.getBoundingClientRect().top;
+  const positions = new Set<number>();
+  const walk = (el: Element, depth: number) => {
+    if (depth > 2) return;
+    for (let i = 0; i < el.children.length; i++) {
+      const child = el.children[i] as HTMLElement;
+      const r = child.getBoundingClientRect();
+      positions.add(Math.round(r.top - base));
+      positions.add(Math.round(r.bottom - base));
+      walk(child, depth + 1);
+    }
+  };
+  walk(contentEl, 0);
+  return [...positions].sort((a, b) => a - b);
+}
+
+/** Find the nearest snap position within threshold, or return y unchanged. */
+function snapToGap(y: number, snapPositions: number[]): number {
+  let best = y;
+  let bestDist = SNAP_THRESHOLD;
+  for (const pos of snapPositions) {
+    const dist = Math.abs(y - pos);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = pos;
+    }
+    if (pos > y + SNAP_THRESHOLD) break; // sorted, no point continuing
+  }
+  return best;
 }
 
 export function PdfPreviewMode({ contentRef, title, onClose }: PdfPreviewModeProps) {
@@ -27,13 +73,11 @@ export function PdfPreviewMode({ contentRef, title, onClose }: PdfPreviewModePro
   const overlayRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState(0);
   const [contentWidth, setContentWidth] = useState(0);
-  // contentRef's offset from the top of its positioned ancestor — which is
-  // also the overlay's containing block. The overlay is drawn at this top
-  // so that a divider at y in contentRef-space renders at the same visual
-  // position as contentRef's y. Without this, padding + sticky toolbar push
-  // contentRef ~60px below the overlay origin, and dividers appear ~60px
-  // above the cut line, clipping the bottom of sections into the next page.
   const [contentOffsetTop, setContentOffsetTop] = useState(0);
+
+  // Cached snap positions — refreshed on drag start to avoid
+  // expensive DOM traversal on every mousemove.
+  const snapPositionsRef = useRef<number[]>([]);
 
   // Calculate initial page breaks based on content dimensions
   useEffect(() => {
@@ -44,28 +88,36 @@ export function PdfPreviewMode({ contentRef, title, onClose }: PdfPreviewModePro
     setContentHeight(contentRef.current.scrollHeight);
     setContentOffsetTop(contentRef.current.offsetTop);
 
-    const pageHeight = rect.width * A4_LANDSCAPE_RATIO;
+    // Use the actual PDF usable aspect ratio (after margins) so
+    // auto-dividers match what will actually fit on each page.
+    const pageHeight = rect.width * USABLE_RATIO;
     const totalHeight = contentRef.current.scrollHeight;
 
-    // Generate automatic page breaks
+    // Collect snap positions and place auto-dividers at the nearest
+    // gap to each pageHeight increment.
+    const snaps = collectSnapPositions(contentRef.current);
+
     const autoDividers: number[] = [];
-    let y = pageHeight;
-    while (y < totalHeight - 50) { // Don't add a divider too close to the end
-      autoDividers.push(y);
-      y += pageHeight;
+    let target = pageHeight;
+    while (target < totalHeight - 50) {
+      autoDividers.push(snapToGap(target, snaps));
+      target += pageHeight;
     }
 
     setDividers(autoDividers);
   }, [contentRef]);
 
-  const pageHeight = contentWidth * A4_LANDSCAPE_RATIO;
   const pageCount = dividers.length + 1;
 
   // Drag handling
   const handleMouseDown = useCallback((index: number, e: React.MouseEvent) => {
     e.preventDefault();
+    // Cache snap positions at drag start
+    if (contentRef.current) {
+      snapPositionsRef.current = collectSnapPositions(contentRef.current);
+    }
     setDragging(index);
-  }, []);
+  }, [contentRef]);
 
   useEffect(() => {
     if (dragging === null) return;
@@ -73,10 +125,6 @@ export function PdfPreviewMode({ contentRef, title, onClose }: PdfPreviewModePro
     const handleMouseMove = (e: MouseEvent) => {
       if (!contentRef.current) return;
       const rect = contentRef.current.getBoundingClientRect();
-      // rect.top is viewport-relative and already reflects parent scroll,
-      // so clientY - rect.top is the Y inside the content element. Do NOT
-      // add parentElement.scrollTop — that double-counts the scroll and
-      // makes the divider jump down by the scroll offset on drag start.
       const y = e.clientY - rect.top;
 
       // Clamp between previous and next dividers (or content bounds)
@@ -84,9 +132,14 @@ export function PdfPreviewMode({ contentRef, title, onClose }: PdfPreviewModePro
       const maxY = dragging < dividers.length - 1 ? dividers[dragging + 1] - 60 : contentHeight - 60;
       const clampedY = Math.max(minY, Math.min(maxY, y));
 
+      // Snap to nearest DOM element boundary
+      const snappedY = snapToGap(clampedY, snapPositionsRef.current);
+      // Re-clamp after snap (snap could push past neighbors)
+      const finalY = Math.max(minY, Math.min(maxY, snappedY));
+
       setDividers(prev => {
         const next = [...prev];
-        next[dragging] = clampedY;
+        next[dragging] = finalY;
         return next;
       });
     };
@@ -101,14 +154,15 @@ export function PdfPreviewMode({ contentRef, title, onClose }: PdfPreviewModePro
     };
   }, [dragging, dividers, contentHeight, contentRef]);
 
-  // Add a new divider at click position
+  // Add a new divider at click position (snapped)
   const handleAddDivider = useCallback((e: React.MouseEvent) => {
     if (!contentRef.current || dragging !== null) return;
     const rect = contentRef.current.getBoundingClientRect();
-    // See handleMouseMove: no scrollTop addition.
-    const y = e.clientY - rect.top;
+    const rawY = e.clientY - rect.top;
 
-    // Don't add too close to existing dividers
+    const snaps = collectSnapPositions(contentRef.current);
+    const y = snapToGap(rawY, snaps);
+
     const tooClose = dividers.some(d => Math.abs(d - y) < 60);
     if (tooClose) return;
 
@@ -131,37 +185,24 @@ export function PdfPreviewMode({ contentRef, title, onClose }: PdfPreviewModePro
       const content = contentRef.current;
       const allBreaks = [0, ...dividers, contentHeight];
 
-      // A4 landscape in mm
       const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-      const pdfWidth = 297;
-      const pdfHeight = 210;
-      const margin = 10;
-      const usableWidth = pdfWidth - margin * 2;
-      const usableHeight = pdfHeight - margin * 2;
 
       for (let i = 0; i < allBreaks.length - 1; i++) {
         const startY = allBreaks[i];
         const endY = allBreaks[i + 1];
         const regionHeight = endY - startY;
 
-        if (regionHeight < 10) continue; // Skip tiny regions
+        if (regionHeight < 10) continue;
 
-        // Capture the region
         const canvas = await html2canvas(content, {
           y: startY,
           height: regionHeight,
           width: content.scrollWidth,
           windowHeight: regionHeight,
           useCORS: true,
-          scale: 2, // High quality
+          scale: 2,
           backgroundColor: '#ffffff',
           logging: false,
-          // html2canvas clones the DOM and captures it synchronously.
-          // CSS animations restart from frame 0 in the clone and don't
-          // progress before capture — so elements that use an intro
-          // animation starting at opacity:0 (e.g. AnimatedMetricsRenderer's
-          // counter-enter) get rasterized invisible. Neutralize animations
-          // and force opacity:1 on animated metric cards in the clone.
           onclone: (doc) => {
             const style = doc.createElement('style');
             style.textContent = `
@@ -172,37 +213,32 @@ export function PdfPreviewMode({ contentRef, title, onClose }: PdfPreviewModePro
               }
             `;
             doc.head.appendChild(style);
-            // Force opacity:1 on any element whose class references the
-            // counter-enter intro animation.
             doc.querySelectorAll('[class*="counter-enter"]').forEach((el) => {
               (el as HTMLElement).style.opacity = '1';
             });
           },
         });
 
-        // Scale to fit A4 landscape
         const imgRatio = canvas.height / canvas.width;
-        let imgWidth = usableWidth;
-        let imgHeight = usableWidth * imgRatio;
+        let imgWidth = USABLE_W;
+        let imgHeight = USABLE_W * imgRatio;
 
-        // If too tall, scale down
-        if (imgHeight > usableHeight) {
-          imgHeight = usableHeight;
-          imgWidth = usableHeight / imgRatio;
+        if (imgHeight > USABLE_H) {
+          imgHeight = USABLE_H;
+          imgWidth = USABLE_H / imgRatio;
         }
 
         if (i > 0) pdf.addPage();
         pdf.addImage(
           canvas.toDataURL('image/png'),
           'PNG',
-          margin + (usableWidth - imgWidth) / 2, // Center horizontally
-          margin,
+          PDF_MARGIN + (USABLE_W - imgWidth) / 2,
+          PDF_MARGIN,
           imgWidth,
           imgHeight,
         );
       }
 
-      // Save
       const filename = `${title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.pdf`;
       pdf.save(filename);
       toast.success(`PDF saved: ${filename}`);
@@ -214,6 +250,13 @@ export function PdfPreviewMode({ contentRef, title, onClose }: PdfPreviewModePro
     }
   }, [contentRef, dividers, contentHeight, title]);
 
+  // Precompute page regions for shading
+  const allBreaks = [0, ...dividers, contentHeight];
+  const PAGE_TINTS = [
+    'rgba(147, 51, 234, 0.035)',  // purple
+    'rgba(59, 130, 246, 0.035)',  // blue
+  ];
+
   return (
     <div ref={overlayRef}>
       {/* Toolbar */}
@@ -224,7 +267,7 @@ export function PdfPreviewMode({ contentRef, title, onClose }: PdfPreviewModePro
             {pageCount} page{pageCount !== 1 ? 's' : ''}
           </span>
           <span className="text-[9px] text-workspace-text-secondary/50">
-            Click between pages to add breaks · Drag lines to adjust · Right-click to remove
+            Click to add breaks · Drag to adjust · Right-click to remove
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -244,11 +287,7 @@ export function PdfPreviewMode({ contentRef, title, onClose }: PdfPreviewModePro
         </div>
       </div>
 
-      {/* Page break overlay — positioned over the content.
-          top: contentOffsetTop aligns the overlay's coordinate origin
-          with contentRef's top edge, so divider y values (computed from
-          contentRef.getBoundingClientRect) render where the cuts actually
-          happen. */}
+      {/* Page break overlay — aligned with contentRef */}
       <div
         className="absolute left-0 right-0 z-40 pointer-events-none"
         style={{ top: contentOffsetTop, height: contentHeight }}
@@ -260,25 +299,39 @@ export function PdfPreviewMode({ contentRef, title, onClose }: PdfPreviewModePro
           style={{ height: contentHeight }}
         />
 
+        {/* Page region shading — alternating tints so user can see
+            which content belongs to which page */}
+        {allBreaks.slice(0, -1).map((startY, i) => {
+          const endY = allBreaks[i + 1];
+          return (
+            <div
+              key={`shade-${i}`}
+              className="absolute left-0 right-0 pointer-events-none"
+              style={{
+                top: startY,
+                height: endY - startY,
+                backgroundColor: PAGE_TINTS[i % PAGE_TINTS.length],
+              }}
+            />
+          );
+        })}
+
         {/* Page number labels */}
-        {(() => {
-          const allBreaks = [0, ...dividers, contentHeight];
-          return allBreaks.slice(0, -1).map((startY, i) => {
-            const endY = allBreaks[i + 1];
-            const midY = startY + (endY - startY) / 2;
-            return (
-              <div
-                key={`page-${i}`}
-                className="absolute right-4 pointer-events-none"
-                style={{ top: midY - 12 }}
-              >
-                <span className="rounded-full bg-purple-100 px-2.5 py-1 text-[10px] font-medium text-purple-600 shadow-sm">
-                  Page {i + 1}
-                </span>
-              </div>
-            );
-          });
-        })()}
+        {allBreaks.slice(0, -1).map((startY, i) => {
+          const endY = allBreaks[i + 1];
+          const midY = startY + (endY - startY) / 2;
+          return (
+            <div
+              key={`page-${i}`}
+              className="absolute right-4 pointer-events-none"
+              style={{ top: midY - 12 }}
+            >
+              <span className="rounded-full bg-purple-100 px-2.5 py-1 text-[10px] font-medium text-purple-600 shadow-sm">
+                Page {i + 1}
+              </span>
+            </div>
+          );
+        })}
 
         {/* Draggable divider lines */}
         {dividers.map((y, i) => (
@@ -295,18 +348,13 @@ export function PdfPreviewMode({ contentRef, title, onClose }: PdfPreviewModePro
               onMouseDown={(e) => handleMouseDown(i, e)}
               onContextMenu={(e) => { e.preventDefault(); handleRemoveDivider(i, e); }}
             >
-              {/* Dashed line */}
               <div className="flex-1 border-t-2 border-dashed border-purple-400" />
-
-              {/* Drag handle */}
               <div className="shrink-0 mx-2 flex items-center gap-1 rounded-full bg-purple-500 px-2 py-0.5 shadow-md cursor-ns-resize">
                 <span className="text-[8px] text-white/90">⋮⋮</span>
                 <span className="text-[9px] text-white font-medium">
                   ✂
                 </span>
               </div>
-
-              {/* Dashed line continued */}
               <div className="flex-1 border-t-2 border-dashed border-purple-400" />
             </div>
 
