@@ -109,13 +109,15 @@ export function AnimatedMetricsRenderer({ section }: AnimatedMetricsProps) {
   const duration = section.duration ?? 1.2;
   const gapPx = section.gap ?? 12;
 
-  // Section-level defaults (AI can override per-metric too)
-  const defaultLabelSize = section.labelSize || '9px';
+  // Section-level defaults (AI can override per-metric too).
+  // Defaults must be legible on light cards without AI intervention —
+  // 9px / 50% opacity secondary text was invisible on white/gray cards.
+  const defaultLabelSize = section.labelSize || '11px';
   const defaultValueSize = section.valueSize || '24px';
-  const defaultLabelColor = section.labelColor || 'hsl(var(--workspace-text-secondary) / 0.5)';
+  const defaultLabelColor = section.labelColor || 'hsl(var(--workspace-text-secondary))';
   const defaultValueColor = section.valueColor || 'hsl(var(--workspace-text))';
   const bgColor = section.backgroundColor || 'rgba(255,255,255,0.6)';
-  const borderCol = section.borderColor || 'hsl(var(--workspace-border) / 0.3)';
+  const borderCol = section.borderColor || 'hsl(var(--workspace-border) / 0.5)';
   const borderRad = section.borderRadius || '12px';
   const padStr = section.padding || '14px 16px';
   const trendUpColor = section.trendUpColor || '#10b981';

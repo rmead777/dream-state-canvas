@@ -356,8 +356,8 @@ function MetricsRowRenderer({ section }: { section: { metrics: { label: string; 
       {section.metrics.map((m, i) => {
         const { display } = cleanMetricValue(m.value, m.label);
         return (
-          <div key={i} className="rounded-lg border border-workspace-border/30 bg-workspace-surface/15 px-3 py-2.5">
-            <p className="text-[9px] font-medium uppercase tracking-[0.2em] text-workspace-text-secondary/50 mb-0.5">
+          <div key={i} className="rounded-lg border border-workspace-border/50 bg-workspace-surface/15 px-3 py-2.5">
+            <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-workspace-text-secondary mb-0.5">
               {m.label}
             </p>
             <p className="text-lg font-bold text-workspace-text tabular-nums">
