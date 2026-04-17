@@ -225,7 +225,12 @@ function TableRenderer({ section, highlightedEntity, onEntityClick }: {
   highlightedEntity?: string | null;
   onEntityClick?: (name: string) => void;
 }) {
-  const columns = Array.isArray(section.columns) ? section.columns : [];
+  // Normalize columns: AI sometimes sends [{key, label}] objects instead of strings.
+  const columns = Array.isArray(section.columns)
+    ? section.columns.map((col: any) =>
+        typeof col === 'object' && col !== null ? (col.label || col.key || String(col)) : String(col ?? '')
+      )
+    : [];
   const rows = Array.isArray(section.rows) ? section.rows : [];
 
   const highlightMap = new Map<string, { condition: string; style: string }[]>();
