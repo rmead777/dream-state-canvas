@@ -103,6 +103,7 @@ function CountingNumber({ target, duration, delay, unit, prefix }: {
 }
 
 export function AnimatedMetricsRenderer({ section }: AnimatedMetricsProps) {
+  if (!section.metrics?.length) return null;
   const cols = section.columns || Math.min(section.metrics.length, 3);
   const stagger = section.stagger ?? 0.15;
   const duration = section.duration ?? 1.2;
