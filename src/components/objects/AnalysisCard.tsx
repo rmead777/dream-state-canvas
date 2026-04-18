@@ -111,9 +111,9 @@ function SectionRenderer({ section, highlightedEntity, onEntityClick }: {
     case 'summary': content = <SummaryRenderer text={section.text} section={section as any} />; break;
     case 'narrative': content = <NarrativeRenderer text={section.text} />; break;
     case 'metric': content = <MetricRenderer section={section as any} />; break;
-    case 'table': content = <TableRenderer section={section} highlightedEntity={highlightedEntity} onEntityClick={onEntityClick} />; break;
-    case 'callout': content = <CalloutRenderer section={section} />; break;
-    case 'metrics-row': content = <MetricsRowRenderer section={section} />; break;
+    case 'table': content = <TableRenderer section={section as any} highlightedEntity={highlightedEntity} onEntityClick={onEntityClick} />; break;
+    case 'callout': content = <CalloutRenderer section={section as any} />; break;
+    case 'metrics-row': content = <MetricsRowRenderer section={section as any} />; break;
     case 'chart': content = <ChartRenderer section={section as any} />; break;
     case 'vegalite': content = <VegaLiteRenderer section={section as any} />; break;
     case 'chart-grid': content = <ChartGridRenderer section={section as any} />; break;
