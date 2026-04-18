@@ -42,8 +42,13 @@ function getWCWClient() {
 /**
  * Get a live QB access token from WCW's Supabase.
  * Refreshes automatically if expiring within 5 minutes (same logic as WCW).
+ *
+ * Pass `{ force: true }` to always refresh, regardless of expiry. Used by the
+ * DSC "Sync QuickBooks" button to replicate WCW's sync behavior from DSC.
  */
-export async function getQBOToken(): Promise<{ token: string; connection: QBOConnection }> {
+export async function getQBOToken(
+  options?: { force?: boolean },
+): Promise<{ token: string; connection: QBOConnection }> {
   const wcw = getWCWClient();
 
   // Read active connection from WCW
@@ -57,13 +62,15 @@ export async function getQBOToken(): Promise<{ token: string; connection: QBOCon
     throw new Error('No active QuickBooks connection found in WCW');
   }
 
-  // Check if token needs refresh (5-minute buffer — same as WCW's qbo-utils.ts)
-  const expiresAt = new Date(connection.token_expires_at);
-  const now = new Date();
-  const fiveMinutes = 5 * 60 * 1000;
+  // Skip expiry check when force-refreshing — always hit Intuit's refresh endpoint.
+  if (!options?.force) {
+    const expiresAt = new Date(connection.token_expires_at);
+    const now = new Date();
+    const fiveMinutes = 5 * 60 * 1000;
 
-  if (expiresAt.getTime() - now.getTime() > fiveMinutes) {
-    return { token: connection.access_token, connection };
+    if (expiresAt.getTime() - now.getTime() > fiveMinutes) {
+      return { token: connection.access_token, connection };
+    }
   }
 
   // Token needs refresh

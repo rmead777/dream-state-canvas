@@ -46,6 +46,8 @@ export function QBOStatusPanel() {
   const [status, setStatus] = useState<QBOStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [isExpanded, setIsExpanded] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -77,6 +79,43 @@ export function QBOStatusPanel() {
       setLoading(false);
     }
   }, []);
+
+  /**
+   * Force a QuickBooks token refresh — mirrors WCW's "Sync" button.
+   * Calls qbo-refresh (which hits Intuit's refresh endpoint unconditionally),
+   * clears DSC's data cache, and re-fetches status so the panel updates.
+   */
+  const handleSync = useCallback(async () => {
+    setSyncing(true);
+    setSyncError(null);
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
+      const token = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/qbo-refresh`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+      const result = await resp.json();
+      if (!resp.ok) {
+        setSyncError(result.error || `Sync failed (HTTP ${resp.status})`);
+        return;
+      }
+      clearQBOCache();
+      await fetchStatus();
+      warmQBOCache();
+    } catch (err) {
+      setSyncError((err as Error).message);
+    } finally {
+      setSyncing(false);
+    }
+  }, [fetchStatus]);
 
   // Track whether we've already triggered the warm fetch this session
   const [warmed, setWarmed] = useState(false);
@@ -165,11 +204,31 @@ export function QBOStatusPanel() {
               <span className="text-[10px] text-workspace-text-secondary/50">Checking QuickBooks...</span>
             </div>
           ) : !status?.connected ? (
-            <div className="px-2 py-1.5 rounded-md bg-workspace-surface/30 border border-workspace-border/20">
-              <p className="text-[10px] text-workspace-text-secondary/60">Not configured</p>
-              <p className="text-[8px] text-workspace-text-secondary/30 mt-0.5">
-                Set WCW env vars in Supabase to enable live QuickBooks data.
-              </p>
+            <div className="space-y-1.5">
+              <div className="px-2 py-1.5 rounded-md bg-workspace-surface/30 border border-workspace-border/20">
+                <p className="text-[10px] text-workspace-text-secondary/60">Not connected</p>
+                {status?.error ? (
+                  <p className="text-[8px] text-workspace-text-secondary/40 mt-1 break-words leading-relaxed">
+                    {status.error}
+                  </p>
+                ) : (
+                  <p className="text-[8px] text-workspace-text-secondary/30 mt-0.5">
+                    Click Sync to refresh the QuickBooks token.
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={handleSync}
+                disabled={syncing}
+                className="w-full rounded px-2 py-1.5 text-[10px] text-workspace-accent border border-workspace-accent/30 hover:bg-workspace-accent/5 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {syncing ? 'Syncing…' : 'Sync QuickBooks'}
+              </button>
+              {syncError && (
+                <p className="text-[9px] text-red-400/70 px-1 break-words leading-relaxed">
+                  {syncError}
+                </p>
+              )}
             </div>
           ) : (
             <div className="space-y-0.5">
@@ -221,22 +280,22 @@ export function QBOStatusPanel() {
                 );
               })}
 
-              {/* Refresh button — clears session cache AND re-checks connection */}
+              {/* Sync button — force-refresh OAuth token + clear data cache (mirrors WCW's Sync) */}
               <button
-                onClick={() => {
-                  clearQBOCache();
-                  setLoading(true);
-                  fetchStatus();
-                  // Re-warm the cache with fresh data in the background
-                  warmQBOCache();
-                }}
-                className="w-full mt-2 rounded px-2 py-1 text-[9px] text-workspace-text-secondary/50 hover:text-workspace-accent border border-workspace-border/20 hover:border-workspace-accent/20 transition-colors"
+                onClick={handleSync}
+                disabled={syncing}
+                className="w-full mt-2 rounded px-2 py-1 text-[9px] text-workspace-text-secondary/50 hover:text-workspace-accent border border-workspace-border/20 hover:border-workspace-accent/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                Pull Fresh Data
+                {syncing ? 'Syncing…' : 'Sync QuickBooks'}
               </button>
+              {syncError && (
+                <p className="text-[9px] text-red-400/70 px-1 mt-1 break-words leading-relaxed">
+                  {syncError}
+                </p>
+              )}
 
               <p className="text-[8px] text-workspace-text-secondary/30 mt-1 px-1">
-                Token auto-refreshes every 5 min. Data cache expires after 45 min.
+                Sync refreshes the token + reloads data. Auto-refreshes every 5 min.
               </p>
             </div>
           )}

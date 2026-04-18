@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.qbo-status]
 verify_jwt = false
+
+[functions.qbo-refresh]
+verify_jwt = false
