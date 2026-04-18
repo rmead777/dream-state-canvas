@@ -998,7 +998,7 @@ function ParticleFlowScene({ data, labelKey, valueKey, colors, particleDensity: 
         // Staggered entrance: larger values enter first
         entranceDelay: (1 - ratio) * cfg.entranceMaxDelay,
         // Critical flag: AI may set priority/critical/risk fields
-        critical: d.critical === true || d.priority === 'high' || d.priority === 'critical' || d.risk === 'high' || d.risk === 'critical',
+        critical: (d as any).critical === true || (d as any).priority === 'high' || (d as any).priority === 'critical' || (d as any).risk === 'high' || (d as any).risk === 'critical',
       };
     });
   }, [data, labelKey, valueKey, maxVal, colors, density]);
