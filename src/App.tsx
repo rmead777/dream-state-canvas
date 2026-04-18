@@ -13,6 +13,7 @@ import { setMsalInstance } from "@/lib/email-store";
 import Index from "./pages/Index.tsx";
 import Auth from "./pages/Auth.tsx";
 import NotFound from "./pages/NotFound.tsx";
+import QbCallback from "./pages/QbCallback.tsx";
 
 const queryClient = new QueryClient();
 const msalInstance = new PublicClientApplication(msalConfig);
@@ -78,6 +79,7 @@ const App = () => (
             <BrowserRouter>
               <Routes>
                 <Route path="/auth" element={<Auth />} />
+                <Route path="/qb-callback" element={<ProtectedRoute><QbCallback /></ProtectedRoute>} />
                 <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
