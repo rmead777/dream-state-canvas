@@ -8,7 +8,7 @@
 import { WorkspaceObject, WorkspaceState } from './workspace-types';
 import { executeDataQuery } from './data-query';
 import { getDataset } from './active-dataset';
-import { getDocument, createScratchpad, listDocuments, extractDataset } from './document-store';
+import { getDocument, createScratchpad, listDocuments, extractDataset, deleteDocument } from './document-store';
 import { createMemory, deleteMemory, getMemories } from './memory-store';
 import { retrieveRelevantMemories, formatMemoriesForPrompt, determineWorkspaceState } from './memory-retriever';
 import { supabase } from '@/integrations/supabase/client';
@@ -546,7 +546,22 @@ export const SHERPA_TOOLS = [
     },
   },
 
-  // SCRATCHPAD tool
+  // SCRATCHPAD tools
+  {
+    type: 'function' as const,
+    function: {
+      name: 'deleteScratchpad',
+      description: 'Delete a scratchpad permanently. Use freely when a scratchpad is no longer needed, the user says "delete the X scratchpad", or you want to replace a stale scratchpad with a fresh one. Scratchpads are Sherpa\'s working memory — full autonomy to create and delete without user approval. REFUSES to delete non-scratchpad documents (uploaded files, structured data) — those are protected. To find scratchpads, check UPLOADED DOCUMENTS for entries where metadata.isScratchpad is true.',
+      parameters: {
+        type: 'object',
+        properties: {
+          documentId: { type: 'string', description: 'ID of the scratchpad to delete. Must be a scratchpad (metadata.isScratchpad === true); uploaded files cannot be deleted through this tool.' },
+        },
+        required: ['documentId'],
+      },
+    },
+  },
+
   {
     type: 'function' as const,
     function: {
@@ -768,6 +783,7 @@ const TOOL_STATUS: Record<string, string> = {
   queryRagicCustomers: 'Looking up Ragic customers...',
   syncRagic: 'Syncing from Ragic...',
   computeStats: 'Analyzing data...',
+  deleteScratchpad: 'Deleting scratchpad...',
   suggestNextMoves: '',
 };
 
@@ -1393,6 +1409,34 @@ export async function executeTool(
           },
           documentId: doc.id,
           hint: `Scratchpad "${args.name}" created with ${scratchpadRows.length} rows. Use queryDataset(documentId: "${doc.id}") to read and editDataset(documentId: "${doc.id}") to write.`,
+        });
+      }
+
+      case 'deleteScratchpad': {
+        const docId = args.documentId as string;
+        if (!docId) return JSON.stringify({ error: 'documentId is required' });
+        const doc = await getDocument(docId);
+        if (!doc) return JSON.stringify({ error: `Document "${docId}" not found` });
+
+        // Hard refusal for anything that isn't a scratchpad.
+        // Scratchpads are Sherpa's kingdom; uploaded files and structured data
+        // are protected at the executor level regardless of what the AI asked.
+        const isScratchpad = !!(doc.metadata as any)?.isScratchpad;
+        if (!isScratchpad) {
+          return JSON.stringify({
+            error: 'REFUSED: This tool only deletes scratchpads. The target document is an uploaded file or structured dataset and cannot be deleted through Sherpa. Ask the user to delete it manually if they really want it gone.',
+            documentName: doc.file_name,
+          });
+        }
+
+        const ok = await deleteDocument(docId);
+        if (!ok) return JSON.stringify({ error: 'Failed to delete scratchpad' });
+
+        return JSON.stringify({
+          deleted: true,
+          documentId: docId,
+          name: doc.file_name,
+          hint: `Scratchpad "${doc.file_name}" deleted. Any workspace cards referencing it should be dissolved.`,
         });
       }
 
