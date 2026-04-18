@@ -65,6 +65,15 @@ serve(async (req) => {
     }
 
     // ─── Step 1: Exchange auth code for tokens ─────────────────────────────
+    console.log('[qbo-callback] Token exchange starting', {
+      clientIdPrefix: clientId.slice(0, 10),
+      clientIdLength: clientId.length,
+      clientSecretLength: clientSecret.length,
+      redirectUri,
+      codePrefix: code.slice(0, 12),
+      codeLength: code.length,
+      realmId,
+    });
     const tokenResponse = await fetch(TOKEN_URL, {
       method: 'POST',
       headers: {
@@ -81,7 +90,12 @@ serve(async (req) => {
 
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text();
-      console.error('[qbo-callback] Token exchange failed:', errorText);
+      console.error('[qbo-callback] Token exchange failed:', {
+        status: tokenResponse.status,
+        body: errorText,
+        clientIdPrefix: clientId.slice(0, 10),
+        redirectUri,
+      });
       return new Response(
         JSON.stringify({ error: `Token exchange failed: ${errorText}` }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },

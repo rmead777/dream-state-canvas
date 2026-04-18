@@ -17,7 +17,7 @@
  * the OAuth redirect round-trip.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { clearQBOCache } from '@/lib/quickbooks-store';
@@ -30,8 +30,15 @@ export default function QbCallback() {
   const [status, setStatus] = useState<Status>('working');
   const [message, setMessage] = useState('Completing QuickBooks connection...');
   const navigate = useNavigate();
+  const hasRun = useRef(false);
 
   useEffect(() => {
+    // Auth codes are single-use. If this effect fires twice (React StrictMode,
+    // router quirks, browser retry after a 404), the second run would send the
+    // already-burned code to Intuit and get `invalid_grant`. Guard against that.
+    if (hasRun.current) return;
+    hasRun.current = true;
+
     async function handleCallback() {
       const params = new URLSearchParams(window.location.search);
       const code = params.get('code');
