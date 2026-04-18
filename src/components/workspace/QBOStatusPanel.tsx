@@ -12,7 +12,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { clearQBOCache, warmQBOCache, getQBOFetchedAt } from '@/lib/quickbooks-store';
-import { initiateQBOConnect } from '@/lib/qbo-oauth';
 
 interface SourceStatus {
   label: string;
@@ -47,21 +46,6 @@ export function QBOStatusPanel() {
   const [status, setStatus] = useState<QBOStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [isExpanded, setIsExpanded] = useState(true);
-  const [connecting, setConnecting] = useState(false);
-  const [connectError, setConnectError] = useState<string | null>(null);
-
-  const handleConnect = useCallback(async () => {
-    setConnecting(true);
-    setConnectError(null);
-    try {
-      await initiateQBOConnect();
-      // initiateQBOConnect navigates the browser away; we never reach here
-      // on success. If we do, it means navigation didn't happen.
-    } catch (err) {
-      setConnectError((err as Error).message);
-      setConnecting(false);
-    }
-  }, []);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -181,36 +165,10 @@ export function QBOStatusPanel() {
               <span className="text-[10px] text-workspace-text-secondary/50">Checking QuickBooks...</span>
             </div>
           ) : !status?.connected ? (
-            <div className="space-y-1.5">
-              <div className="px-2 py-1.5 rounded-md bg-workspace-surface/30 border border-workspace-border/20">
-                <p className="text-[10px] text-workspace-text-secondary/70">Not connected</p>
-                {status?.error ? (
-                  <p className="text-[8px] text-workspace-text-secondary/50 mt-1 break-words leading-relaxed">
-                    {status.error}
-                  </p>
-                ) : (
-                  <p className="text-[8px] text-workspace-text-secondary/30 mt-0.5">
-                    Click below to authorize Sherpa to read QuickBooks data.
-                  </p>
-                )}
-              </div>
-
-              <button
-                onClick={handleConnect}
-                disabled={connecting}
-                className="w-full rounded px-2 py-1.5 text-[10px] text-workspace-accent border border-workspace-accent/30 hover:bg-workspace-accent/5 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {connecting ? 'Opening QuickBooks…' : 'Connect to QuickBooks'}
-              </button>
-
-              {connectError && (
-                <p className="text-[9px] text-red-400/70 px-1 break-words leading-relaxed">
-                  {connectError}
-                </p>
-              )}
-
-              <p className="text-[8px] text-workspace-text-secondary/30 mt-1 px-1">
-                Uses shared WCW connection. Same QB company only.
+            <div className="px-2 py-1.5 rounded-md bg-workspace-surface/30 border border-workspace-border/20">
+              <p className="text-[10px] text-workspace-text-secondary/60">Not configured</p>
+              <p className="text-[8px] text-workspace-text-secondary/30 mt-0.5">
+                Set WCW env vars in Supabase to enable live QuickBooks data.
               </p>
             </div>
           ) : (

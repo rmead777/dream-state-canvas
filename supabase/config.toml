@@ -17,9 +17,3 @@ verify_jwt = false
 
 [functions.qbo-status]
 verify_jwt = false
-
-[functions.qbo-connect]
-verify_jwt = false
-
-[functions.qbo-callback]
-verify_jwt = false
