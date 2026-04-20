@@ -141,11 +141,34 @@ export const SHERPA_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'getDocumentContent',
-      description: 'Get the extracted text and structured data from an uploaded document.',
+      description: 'Get the extracted text, structural profile, and metadata from an uploaded document. The response includes a `structuralProfile` (header rows, sheet type wide/long, entity/measure/date columns, subtotal rows, query hints) when the document was scanned at upload. Use this BEFORE querying a document to understand its layout — especially for spreadsheets with multi-tier headers, pivot layouts, or subtotal rows mixed in with data.',
       parameters: {
         type: 'object',
         properties: {
           documentId: { type: 'string' },
+          maxChars: { type: 'number', description: 'Max extracted-text characters to return (default 50000, hard cap 500000).' },
+        },
+        required: ['documentId'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'getCells',
+      description: 'Read specific cell ranges from an uploaded spreadsheet. Use when you need SURGICAL access to verify a hunch, inspect a header row, read a specific section, or when the structural profile suggests non-standard layout (multi-tier headers, pivot format, subtotals). Only works for documents that have `metadata.rawCells` populated (spreadsheets within the 2MB cap). For docs without raw cells, fall back to queryDataset.',
+      parameters: {
+        type: 'object',
+        properties: {
+          documentId: { type: 'string' },
+          sheet: { type: 'string', description: 'Sheet name. Omit to use the first sheet.' },
+          startRow: { type: 'number', description: '0-based row index (inclusive). Headers are row 0. Defaults to 0.' },
+          endRow: { type: 'number', description: '0-based row index (exclusive). Defaults to startRow + 20.' },
+          columns: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional: return only these columns. Case-insensitive match. Omit for all columns.',
+          },
         },
         required: ['documentId'],
       },
@@ -757,6 +780,7 @@ const TOOL_STATUS: Record<string, string> = {
   getWorkspaceState: 'Checking workspace...',
   searchData: 'Searching data...',
   getDocumentContent: 'Reading document...',
+  getCells: 'Reading cells...',
   updateCard: 'Updating card...',
   createCard: 'Creating card...',
   dissolveCard: 'Removing card...',
@@ -882,12 +906,96 @@ export async function executeTool(
       case 'getDocumentContent': {
         const doc = await getDocument(args.documentId);
         if (!doc) return JSON.stringify({ error: `Document "${args.documentId}" not found` });
+
+        // Previous slice was 3000 chars — too small when the structural profile
+        // isn't enough and Sherpa needs raw text to reason. Default to 50K, hard-cap at 500K.
+        const requested = typeof args.maxChars === 'number' ? args.maxChars : 50_000;
+        const cap = Math.max(1_000, Math.min(500_000, requested));
+        const rawText = doc.extracted_text || '';
+        const extractedText = rawText.slice(0, cap);
+
+        // Surface the structural profile prominently so the AI sees it first.
+        const meta = (doc.metadata || {}) as Record<string, unknown>;
+        const structuralProfile = meta.structuralProfile || null;
+        const hasRawCells = !!meta.rawCells;
+        const sheetNames = meta.sheetNames as string[] | undefined;
+
         return JSON.stringify({
           id: doc.id,
           filename: doc.filename,
           fileType: doc.file_type,
-          extractedText: doc.extracted_text?.slice(0, 3000) || '',
-          metadata: doc.metadata,
+          structuralProfile,
+          hasRawCells,
+          sheetNames,
+          summary: meta.summary,
+          extractedText,
+          extractedTextBytes: rawText.length,
+          extractedTextTruncated: rawText.length > cap,
+          metadata: meta,
+        });
+      }
+
+      case 'getCells': {
+        const doc = await getDocument(args.documentId);
+        if (!doc) return JSON.stringify({ error: `Document "${args.documentId}" not found` });
+
+        const meta = (doc.metadata || {}) as Record<string, unknown>;
+        const rawCells = meta.rawCells as Record<string, { headers?: string[]; rows?: string[][] }> | undefined;
+        if (!rawCells) {
+          return JSON.stringify({
+            error: 'This document has no rawCells stored (either not a spreadsheet, or exceeded the 2MB metadata cap at ingest). Fall back to queryDataset for this documentId.',
+            hint: 'Use queryDataset({ documentId }) to read via the standard structured_data path.',
+          });
+        }
+
+        const requestedSheet = typeof args.sheet === 'string' && args.sheet ? args.sheet : null;
+        const sheetNames = Object.keys(rawCells);
+        const sheetName = requestedSheet && rawCells[requestedSheet] ? requestedSheet : sheetNames[0];
+        if (!sheetName) return JSON.stringify({ error: 'Document has no sheets in rawCells.' });
+
+        const sheet = rawCells[sheetName];
+        const allHeaders = sheet.headers || [];
+        const allRows = sheet.rows || [];
+
+        const startRow = typeof args.startRow === 'number' ? Math.max(0, args.startRow) : 0;
+        const defaultWindow = 20;
+        const endRow = typeof args.endRow === 'number'
+          ? Math.min(allRows.length, Math.max(startRow, args.endRow))
+          : Math.min(allRows.length, startRow + defaultWindow);
+
+        // Optional column filter — case-insensitive match
+        let headers = allHeaders;
+        let colIndexes: number[] | null = null;
+        if (Array.isArray(args.columns) && args.columns.length > 0) {
+          const wanted = (args.columns as string[]).map(c => c.toLowerCase());
+          colIndexes = [];
+          headers = [];
+          for (let i = 0; i < allHeaders.length; i++) {
+            if (wanted.includes(String(allHeaders[i] ?? '').toLowerCase())) {
+              colIndexes.push(i);
+              headers.push(allHeaders[i]);
+            }
+          }
+          if (colIndexes.length === 0) {
+            return JSON.stringify({
+              error: `None of the requested columns found. Available: ${allHeaders.join(', ')}`,
+            });
+          }
+        }
+
+        const windowRows = allRows.slice(startRow, endRow).map(row =>
+          colIndexes ? colIndexes.map(i => row[i] ?? null) : row,
+        );
+
+        return JSON.stringify({
+          sheetName,
+          availableSheets: sheetNames,
+          headers,
+          rows: windowRows,
+          rowRange: { startRow, endRow, totalRows: allRows.length },
+          hint: endRow < allRows.length
+            ? `Returned rows ${startRow}-${endRow - 1} of ${allRows.length}. Request more with startRow/endRow.`
+            : `All ${allRows.length} rows returned.`,
         });
       }
 

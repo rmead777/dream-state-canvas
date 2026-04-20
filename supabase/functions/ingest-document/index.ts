@@ -350,6 +350,199 @@ Return ONLY JSON, no markdown fences.`;
 }
 
 /**
+ * AI Structural Scan — runs on upload to build a "map" of the document's layout.
+ *
+ * For spreadsheets: detects header rows, wide-vs-long format, entity/measure/date
+ * columns, subtotal/section rows, and generates query hints. This map is stored
+ * in metadata.structuralProfile so Sherpa sees the layout BEFORE answering
+ * questions — no more guessing which row is a header or whether "Total Acadia"
+ * is a data row.
+ *
+ * For PDFs/docs: detects document type, sections, and query hints (e.g.,
+ * "Revenue figures in table on page 3; narrative in sections 1-2").
+ *
+ * Design principles:
+ *  - One AI call per upload (not per query) — cost amortized across all future reads
+ *  - Small sample (first ~30 rows per sheet) — don't burn tokens on full file
+ *  - Haiku model — scanning is a structured-extraction task, not reasoning
+ *  - Graceful failure — if the scan errors, we still save the doc without profile
+ */
+interface StructuralProfile {
+  kind: 'spreadsheet' | 'document';
+  summary: string;
+  // Spreadsheet fields (undefined for PDFs/docs)
+  sheetType?: 'wide' | 'long' | 'hybrid' | 'unknown';
+  headerRows?: number[];           // row indices (0-based) that together form the header
+  entityColumns?: string[];        // columns that identify entities/rows (e.g., "Vendor", "Account")
+  measureColumns?: string[];       // columns with numeric measures
+  dateColumns?: string[];          // columns representing dates/periods (in wide format: month columns)
+  subtotalRows?: number[];         // row indices that are aggregates, not data (exclude from sums)
+  multiHeader?: boolean;           // true when header spans multiple rows
+  // Document fields (undefined for spreadsheets)
+  documentType?: string;           // "report" | "contract" | "memo" | "transcript" | etc.
+  sections?: string[];             // section titles or headings
+  hasTables?: boolean;             // true if tabular regions are present
+  // Universal
+  queryHints: string[];            // plain-English tips for Sherpa on how to read this doc
+  scanModel?: string;              // which model produced the profile (for debugging)
+  scannedAt?: string;              // ISO timestamp
+}
+
+async function aiStructuralScanSpreadsheet(
+  filename: string,
+  sheets: Record<string, { headers: string[]; rows: string[][] }>,
+): Promise<StructuralProfile | null> {
+  // Build a compact sample: first 30 rows of each sheet (capped at 4 sheets to keep prompt small)
+  const sheetNames = Object.keys(sheets).slice(0, 4);
+  const sampleBlocks: string[] = [];
+  for (const name of sheetNames) {
+    const s = sheets[name];
+    const preview = [
+      `  Headers row: [${(s.headers || []).map(h => JSON.stringify(h)).join(', ')}]`,
+      ...(s.rows || []).slice(0, 30).map((r, i) =>
+        `  Row ${i}: [${r.map(v => JSON.stringify(v ?? '')).join(', ')}]`
+      ),
+    ].join('\n');
+    sampleBlocks.push(`--- Sheet "${name}" (${s.rows?.length ?? 0} total rows) ---\n${preview}`);
+  }
+
+  const systemPrompt = `You are a spreadsheet-layout analyst. Given a sample of a workbook, produce a JSON "structural profile" that lets a downstream AI answer questions about the file without guessing its layout.
+
+DETECT:
+- Header rows: which rows (0-based indices) are header/label rows? Often row 0, but may be rows 1, 2, or multiple consecutive rows (multi-tier headers).
+- Sheet type: "wide" = dates/periods as columns (e.g. Jan-2026, Feb-2026 as column headers), "long" = one row per observation with a date column, "hybrid" = mixed.
+- Entity columns: which column(s) identify entities/rows (e.g. "Vendor", "Account", "Case")?
+- Measure columns: which columns contain numeric measures?
+- Date columns: which columns represent dates or periods? In wide format these are the date-named columns.
+- Subtotal rows: which row indices (0-based, in the sample) are aggregate/subtotal rows that should be EXCLUDED from sums/averages? Indicators: "Total", "Subtotal", "Grand Total", bolded-looking rows, rows where entity column is empty but measures are populated.
+- Query hints: 2-5 plain-English tips for how to query this file correctly.
+
+Return STRICT JSON:
+{
+  "summary": "1-2 sentence description of what this file contains and how it's laid out",
+  "sheetType": "wide" | "long" | "hybrid" | "unknown",
+  "headerRows": [0] or [0,1] (array of row indices),
+  "entityColumns": ["ColumnName", ...],
+  "measureColumns": ["ColumnName", ...],
+  "dateColumns": ["ColumnName", ...],
+  "subtotalRows": [row_index, ...],
+  "multiHeader": true|false,
+  "queryHints": ["hint 1", "hint 2", ...]
+}
+No markdown. No explanation. ONLY the JSON object.`;
+
+  const userMsg = `Workbook: "${filename}"\n\n${sampleBlocks.join('\n\n')}`;
+
+  try {
+    const { response: resp } = await routeToProvider(
+      SUMMARY_MODEL,  // Haiku is plenty for structured extraction
+      systemPrompt,
+      [{ role: 'user', content: userMsg }],
+      SUMMARY_MAX_TOKENS,
+      false,
+    );
+    if (!resp.ok) {
+      console.warn('[ingest] structural scan HTTP error:', resp.status);
+      return null;
+    }
+    const result = await resp.json();
+    let text = '';
+    if (result.choices?.[0]?.message?.content) text = result.choices[0].message.content;
+    else if (result.content && Array.isArray(result.content)) {
+      text = result.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
+    }
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+    const parsed = JSON.parse(jsonMatch[0]);
+    return {
+      kind: 'spreadsheet',
+      summary: String(parsed.summary ?? ''),
+      sheetType: parsed.sheetType ?? 'unknown',
+      headerRows: Array.isArray(parsed.headerRows) ? parsed.headerRows.map(Number).filter(Number.isFinite) : [0],
+      entityColumns: Array.isArray(parsed.entityColumns) ? parsed.entityColumns.map(String) : [],
+      measureColumns: Array.isArray(parsed.measureColumns) ? parsed.measureColumns.map(String) : [],
+      dateColumns: Array.isArray(parsed.dateColumns) ? parsed.dateColumns.map(String) : [],
+      subtotalRows: Array.isArray(parsed.subtotalRows) ? parsed.subtotalRows.map(Number).filter(Number.isFinite) : [],
+      multiHeader: Boolean(parsed.multiHeader),
+      queryHints: Array.isArray(parsed.queryHints) ? parsed.queryHints.map(String) : [],
+      scanModel: SUMMARY_MODEL,
+      scannedAt: new Date().toISOString(),
+    };
+  } catch (e) {
+    console.warn('[ingest] structural scan failed:', e);
+    return null;
+  }
+}
+
+async function aiStructuralScanDocument(
+  filename: string,
+  extractedText: string,
+  fileType: string,
+): Promise<StructuralProfile | null> {
+  // Sample: first 6K chars. Enough to characterize most documents' structure.
+  const sample = extractedText.slice(0, 6000);
+  if (sample.length < 100) return null; // Not enough text to scan
+
+  const systemPrompt = `You are a document-structure analyst. Given the opening of an uploaded document, produce a JSON "structural profile" that helps a downstream AI answer questions about the doc without re-reading the whole thing.
+
+Return STRICT JSON:
+{
+  "summary": "1-2 sentence description of this document",
+  "documentType": "report" | "contract" | "memo" | "transcript" | "invoice" | "email-thread" | "policy" | "other",
+  "sections": ["Section title 1", "Section title 2", ...],
+  "hasTables": true|false,
+  "queryHints": ["hint 1", "hint 2", ...]
+}
+No markdown. ONLY the JSON object.`;
+
+  const userMsg = `Document: "${filename}" (${fileType})\n\nOpening content:\n${sample}${
+    extractedText.length > 6000 ? `\n\n[... ${extractedText.length - 6000} more characters ...]` : ''
+  }`;
+
+  try {
+    const { response: resp } = await routeToProvider(
+      SUMMARY_MODEL,
+      systemPrompt,
+      [{ role: 'user', content: userMsg }],
+      SUMMARY_MAX_TOKENS,
+      false,
+    );
+    if (!resp.ok) return null;
+    const result = await resp.json();
+    let text = '';
+    if (result.choices?.[0]?.message?.content) text = result.choices[0].message.content;
+    else if (result.content && Array.isArray(result.content)) {
+      text = result.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
+    }
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+    const parsed = JSON.parse(jsonMatch[0]);
+    return {
+      kind: 'document',
+      summary: String(parsed.summary ?? ''),
+      documentType: String(parsed.documentType ?? 'other'),
+      sections: Array.isArray(parsed.sections) ? parsed.sections.map(String) : [],
+      hasTables: Boolean(parsed.hasTables),
+      queryHints: Array.isArray(parsed.queryHints) ? parsed.queryHints.map(String) : [],
+      scanModel: SUMMARY_MODEL,
+      scannedAt: new Date().toISOString(),
+    };
+  } catch (e) {
+    console.warn('[ingest] document scan failed:', e);
+    return null;
+  }
+}
+
+/**
+ * Compute a serialized size estimate for raw cell data so we can gate
+ * storage in metadata (Supabase JSONB column — keep metadata reasonable).
+ */
+function estimateBytes(obj: unknown): number {
+  try { return JSON.stringify(obj).length; } catch { return Infinity; }
+}
+const RAW_CELLS_SIZE_CAP = 2_000_000; // 2 MB — safe for JSONB metadata
+
+/**
  * Extract tabular data from an image (screenshot of a spreadsheet, table, report).
  * Returns { headers, rows } suitable for the structured_data.sheets format.
  * Only called when the initial analysis suggests tabular content is present.
@@ -566,6 +759,16 @@ Return ONLY JSON.`,
       }
 
       structuredData = { sheets: parsedSheets };
+
+      // ─── Structural scan (gives Sherpa the layout map upfront) ──────────
+      const structuralProfile = await aiStructuralScanSpreadsheet(filename, parsedSheets);
+
+      // ─── Raw cells for surgical access (getCells tool) ──────────────────
+      // Only persist when it fits comfortably in JSONB metadata. Large workbooks
+      // skip this — Sherpa falls back to queryDataset + structured_data.sheets.
+      const rawCellsSize = estimateBytes(parsedSheets);
+      const rawCells = rawCellsSize <= RAW_CELLS_SIZE_CAP ? parsedSheets : null;
+
       metadata = {
         sheetNames,
         sheetCount: sheetNames.length,
@@ -574,6 +777,9 @@ Return ONLY JSON.`,
         summary: aiAnalysis.summary || `Workbook with ${sheetNames.length} sheets`,
         keywords: aiAnalysis.keywords || [filename],
         sheetAssessments: aiAnalysis.sheetAssessments || {},
+        structuralProfile,
+        rawCells,
+        rawCellsBytes: rawCellsSize,
       };
 
       // Build extracted text from all sheets for search
@@ -595,23 +801,30 @@ Return ONLY JSON.`,
     // ─── CSV ─────────────────────────────────────────────────────────────────
     else if (fileType === "csv" && textContent) {
       const parsed = parseCSV(textContent);
-      structuredData = { sheets: { [filename]: parsed } };
-      metadata = {
-        sheetNames: [filename],
-        sheetCount: 1,
-        primarySheet: filename,
-        domain: "unknown",
-        summary: `CSV with ${parsed.rows.length} rows and ${parsed.headers.length} columns`,
-        keywords: [filename],
-      };
+      const csvSheets = { [filename]: parsed };
+      structuredData = { sheets: csvSheets };
       extractedText = textContent;
       fingerprint = "csv-" + simpleHash(textContent.slice(0, 2000));
 
       // Quick AI analysis for domain/summary (lightweight — uses Haiku, 2K output)
       const aiResult = await aiLightweightSummary(textContent, filename, "csv");
-      metadata.summary = aiResult.summary;
-      metadata.keywords = aiResult.keywords;
-      metadata.domain = (aiResult.structuredInsights?.documentType as string) || "data";
+
+      // Structural scan + raw cells (same treatment as XLSX)
+      const structuralProfile = await aiStructuralScanSpreadsheet(filename, csvSheets);
+      const rawCellsSize = estimateBytes(csvSheets);
+      const rawCells = rawCellsSize <= RAW_CELLS_SIZE_CAP ? csvSheets : null;
+
+      metadata = {
+        sheetNames: [filename],
+        sheetCount: 1,
+        primarySheet: filename,
+        domain: (aiResult.structuredInsights?.documentType as string) || "data",
+        summary: aiResult.summary,
+        keywords: aiResult.keywords,
+        structuralProfile,
+        rawCells,
+        rawCellsBytes: rawCellsSize,
+      };
     }
 
     // ─── PDF — Native document reading via provider-router ──────────────────
@@ -628,12 +841,17 @@ Return ONLY JSON.`,
         resolvedMaxTokens,
       );
       extractedText = aiResult.extractedText;
+
+      // Structural scan for PDFs — runs on the already-extracted text, so it's cheap.
+      const structuralProfile = await aiStructuralScanDocument(filename, extractedText, "pdf");
+
       metadata = {
         summary: aiResult.summary,
         keywords: aiResult.keywords,
         structuredInsights: aiResult.structuredInsights,
         domain: (aiResult.structuredInsights?.documentType as string) || "document",
         ingestModel: resolvedModel,
+        structuralProfile,
       };
       fingerprint = "pdf-" + simpleHash(base64Content.slice(0, 2000));
     }
@@ -675,12 +893,22 @@ Return ONLY JSON.`,
         }
       }
 
+      // Structural scan for images: use extracted text if tabular extraction
+      // happened too, profile will reflect the table layout.
+      let imgProfile: StructuralProfile | null = null;
+      if (looksTabular && structuredData.sheets) {
+        imgProfile = await aiStructuralScanSpreadsheet(filename, structuredData.sheets as any);
+      } else if (extractedText && extractedText.length > 100) {
+        imgProfile = await aiStructuralScanDocument(filename, extractedText, "image");
+      }
+
       metadata = {
         summary: aiResult.summary,
         keywords: aiResult.keywords,
         structuredInsights: aiResult.structuredInsights,
         domain: looksTabular ? "data" : "image",
         hasStructuredData: Object.keys(structuredData).length > 0,
+        structuralProfile: imgProfile,
       };
       fingerprint = "img-" + simpleHash(base64Content.slice(0, 2000));
     }
@@ -690,6 +918,10 @@ Return ONLY JSON.`,
       // Raw text is ALWAYS preserved verbatim — we never truncate via AI output caps.
       extractedText = textContent;
       fingerprint = "txt-" + simpleHash(textContent.slice(0, 2000));
+
+      // Structural scan runs in parallel with whichever summary path — it's
+      // always a useful map for Sherpa regardless of bypass mode.
+      const structuralProfile = await aiStructuralScanDocument(filename, textContent, fileType);
 
       if (resolvedBypassText) {
         // Fast path: lightweight summary only (uses opening sample, Haiku, 2K output).
@@ -702,6 +934,7 @@ Return ONLY JSON.`,
           domain: (aiResult.structuredInsights?.documentType as string) || "document",
           rawChars: textContent.length,
           extractionMode: "bypass",
+          structuralProfile,
         };
       } else {
         // Full-fat path: send entire text to the main ingest model for deep analysis.
@@ -722,6 +955,7 @@ Return ONLY JSON.`,
           rawChars: textContent.length,
           extractionMode: "full",
           ingestModel: resolvedModel,
+          structuralProfile,
         };
       }
     }

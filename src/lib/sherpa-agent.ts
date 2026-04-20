@@ -104,16 +104,28 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
     focusedHint = `\nFOCUSED CARD: "${focusedObj.title}" (${focusedObj.type}, ID: ${focusedObj.id})\nNOTE: Only use "update" on this card if the user EXPLICITLY references it ("this card", "that table", "show 5 rows"). General questions like "help me visualize" or "what should I do" should CREATE a new card, not update the focused one.`;
   }
 
-  // Uploaded documents list so the AI knows what's available for getDocumentContent tool
+  // Uploaded documents list so the AI knows what's available for getDocumentContent tool.
+  // Each line surfaces the structuralProfile summary + flags (hasRawCells, sheetType, etc.)
+  // so Sherpa sees the document's LAYOUT MAP inline without needing a separate tool call
+  // for simple awareness.
   let documentsHint = '';
   try {
     const docs = await listDocuments();
     if (docs.length > 0) {
       documentsHint = `\nUPLOADED DOCUMENTS — always pass documentId when using queryDataset, editDataset, or createCard with dataQuery:\n${docs.map(d => {
-        const isScratchpad = (d.metadata as any)?.isScratchpad;
+        const meta = (d.metadata || {}) as Record<string, any>;
+        const isScratchpad = meta.isScratchpad;
         const dataset = (d.file_type === 'xlsx' || d.file_type === 'csv') ? extractDataset(d) : null;
         const colInfo = dataset ? ` | ${dataset.rows.length} rows | columns: ${dataset.columns.join(', ')}` : '';
-        return `  - ID: ${d.id} | "${d.filename}" (${d.file_type})${isScratchpad ? ' [AI SCRATCHPAD]' : ''}${colInfo}`;
+        const profile = meta.structuralProfile as any | undefined;
+        const profileTags: string[] = [];
+        if (profile?.sheetType && profile.sheetType !== 'unknown') profileTags.push(`layout: ${profile.sheetType}`);
+        if (profile?.multiHeader) profileTags.push('multi-tier header');
+        if (profile?.subtotalRows?.length) profileTags.push(`${profile.subtotalRows.length} subtotal rows`);
+        if (meta.rawCells) profileTags.push('rawCells available');
+        const profileInline = profile?.summary ? `\n      profile: ${profile.summary}` : '';
+        const tagsInline = profileTags.length > 0 ? ` [${profileTags.join(' | ')}]` : '';
+        return `  - ID: ${d.id} | "${d.filename}" (${d.file_type})${isScratchpad ? ' [AI SCRATCHPAD]' : ''}${colInfo}${tagsInline}${profileInline}`;
       }).join('\n')}`;
     }
   } catch {}
