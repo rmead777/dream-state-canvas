@@ -347,13 +347,32 @@ async function makeAnthropicRequest(
       ]
     : systemPrompt;
 
+  // Extended thinking — only on OAuth path where the interleaved-thinking
+  // beta header is sent. Gives Sherpa reasoning room between tool calls,
+  // which is the workload where it helps most (deciding what to do with a
+  // messy tool result before making the next move).
+  //
+  // Constraints: max_tokens MUST exceed budget_tokens; temperature MUST be
+  // 1 or unset. The stream transform below already ignores thinking_delta
+  // events, so thinking text never leaks to the UI.
+  const useThinking = useOAuth;
+  const thinkingBudget = 5000;
+  const minMaxTokensForThinking = thinkingBudget + 4096;
+  const finalMaxTokens = useThinking
+    ? Math.max(maxTokens, minMaxTokensForThinking)
+    : maxTokens;
+
   const body: Record<string, unknown> = {
     model,
     system: systemField,
     messages: anthropicMessages,
-    max_tokens: maxTokens,
+    max_tokens: finalMaxTokens,
     stream,
   };
+
+  if (useThinking) {
+    body.thinking = { type: 'enabled', budget_tokens: thinkingBudget };
+  }
 
   if (tools && tools.length > 0) {
     body.tools = tools.map(t => ({
