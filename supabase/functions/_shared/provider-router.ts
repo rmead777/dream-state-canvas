@@ -349,29 +349,42 @@ async function makeAnthropicRequest(
 
   // Extended thinking — only on OAuth path where the interleaved-thinking
   // beta header is sent. Gives Sherpa reasoning room between tool calls,
-  // which is the workload where it helps most (deciding what to do with a
-  // messy tool result before making the next move).
+  // which is the workload where it helps most.
   //
-  // Constraints: max_tokens MUST exceed budget_tokens; temperature MUST be
-  // 1 or unset. The stream transform below already ignores thinking_delta
-  // events, so thinking text never leaks to the UI.
+  // Anthropic has TWO thinking APIs that depend on the model generation:
+  //   - Legacy (Claude 4.6 and earlier): `thinking: {type: 'enabled', budget_tokens: N}`.
+  //     Requires max_tokens > budget_tokens. Interleaved with tool use via beta header.
+  //   - Adaptive (Claude 4.7+): `thinking: {type: 'adaptive'}` + `output_config.effort`.
+  //     No budget param — `effort` ("low" | "medium" | "high" | "max" | "xhigh") tunes depth.
+  //     OFF by default on 4.7; must be explicitly requested.
+  //
+  // Sampling parameters (temperature, top_p, top_k) are REMOVED on Claude 4.7 —
+  // setting any of them to a non-default value returns 400. On older models they
+  // must be 1 (or unset) when thinking is on. We never set them, so no changes needed.
+  // Stream transform below only emits text_delta and tool-use events, so thinking
+  // blocks (empty content on 4.7 by default anyway) never leak to the UI.
   const useThinking = useOAuth;
+  const isAdaptiveThinkingModel = /claude-(opus|sonnet|haiku)-4-7/i.test(model);
   const thinkingBudget = 5000;
-  const minMaxTokensForThinking = thinkingBudget + 4096;
-  const finalMaxTokens = useThinking
-    ? Math.max(maxTokens, minMaxTokensForThinking)
-    : maxTokens;
+  const minMaxTokensForLegacyThinking = thinkingBudget + 4096;
 
   const body: Record<string, unknown> = {
     model,
     system: systemField,
     messages: anthropicMessages,
-    max_tokens: finalMaxTokens,
+    max_tokens: useThinking && !isAdaptiveThinkingModel
+      ? Math.max(maxTokens, minMaxTokensForLegacyThinking)
+      : maxTokens,
     stream,
   };
 
   if (useThinking) {
-    body.thinking = { type: 'enabled', budget_tokens: thinkingBudget };
+    if (isAdaptiveThinkingModel) {
+      body.thinking = { type: 'adaptive' };
+      body.output_config = { effort: 'medium' };
+    } else {
+      body.thinking = { type: 'enabled', budget_tokens: thinkingBudget };
+    }
   }
 
   if (tools && tools.length > 0) {
