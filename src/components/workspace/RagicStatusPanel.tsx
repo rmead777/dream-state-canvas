@@ -5,7 +5,10 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { getRagicStatus, syncRagicOrders, syncRagicCustomers, clearRagicCache, type RagicStatusResult } from '@/lib/ragic-store';
+import {
+  getRagicStatus, syncRagicOrders, syncRagicCustomers, clearRagicCache,
+  updateRagicApiKey, type RagicStatusResult,
+} from '@/lib/ragic-store';
 import { toast } from 'sonner';
 
 const STATUS_COLORS = {
@@ -19,6 +22,9 @@ export function RagicStatusPanel() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [isExpanded, setIsExpanded] = useState(true);
+  const [showKeyEditor, setShowKeyEditor] = useState(false);
+  const [newApiKey, setNewApiKey] = useState('');
+  const [updatingKey, setUpdatingKey] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -38,6 +44,25 @@ export function RagicStatusPanel() {
     const interval = setInterval(fetchStatus, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [fetchStatus]);
+
+  const handleUpdateKey = async () => {
+    if (!newApiKey.trim()) return;
+    setUpdatingKey(true);
+    try {
+      const result = await updateRagicApiKey(newApiKey);
+      if (result.success) {
+        toast.success('Ragic API key updated. Run a sync to verify it works.');
+        setNewApiKey('');
+        setShowKeyEditor(false);
+      } else {
+        toast.error(`Update failed: ${result.error}`);
+      }
+    } catch (err: any) {
+      toast.error(`Update failed: ${err.message}`);
+    } finally {
+      setUpdatingKey(false);
+    }
+  };
 
   const handleSync = async (target: 'orders' | 'customers' | 'all') => {
     setSyncing(true);
@@ -156,6 +181,49 @@ export function RagicStatusPanel() {
                 >
                   Customers
                 </button>
+              </div>
+
+              {/* API key editor (toggleable) */}
+              <div className="pt-1 mt-1 border-t border-workspace-border/10">
+                {!showKeyEditor ? (
+                  <button
+                    onClick={() => setShowKeyEditor(true)}
+                    className="text-[9px] text-workspace-text-secondary/40 hover:text-workspace-accent/70 transition-colors"
+                  >
+                    Update API key
+                  </button>
+                ) : (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="password"
+                        value={newApiKey}
+                        onChange={(e) => setNewApiKey(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && newApiKey.trim()) handleUpdateKey(); }}
+                        placeholder="Paste new Ragic API key"
+                        autoComplete="off"
+                        className="flex-1 rounded border border-workspace-border/30 bg-workspace-surface/40 px-2 py-1 text-[10px] text-workspace-text placeholder:text-workspace-text-secondary/30 outline-none focus:border-workspace-accent/50 font-mono"
+                      />
+                      <button
+                        onClick={handleUpdateKey}
+                        disabled={updatingKey || !newApiKey.trim()}
+                        className="rounded-md border border-workspace-accent/30 bg-workspace-accent/10 px-2 py-1 text-[9px] font-medium text-workspace-accent hover:bg-workspace-accent/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {updatingKey ? 'Saving…' : 'Save'}
+                      </button>
+                      <button
+                        onClick={() => { setShowKeyEditor(false); setNewApiKey(''); }}
+                        disabled={updatingKey}
+                        className="text-[9px] text-workspace-text-secondary/40 hover:text-workspace-text-secondary/70 px-1"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <p className="text-[8px] text-workspace-text-secondary/40 leading-tight">
+                      Writes to the active Ragic connection row. Run a sync afterward to verify the new key works.
+                    </p>
+                  </div>
+                )}
               </div>
             </>
           )}

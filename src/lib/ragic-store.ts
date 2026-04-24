@@ -271,3 +271,25 @@ export async function getRagicSummary(): Promise<{
     lastSyncAt: status.lastSyncAt ?? null,
   };
 }
+
+/**
+ * Update the Ragic API key on the active connection row.
+ * Despite the column name `api_key_encrypted`, the value is stored plaintext —
+ * the name is a legacy misnomer inherited from WCW. The edge functions read
+ * it as-is with no decryption step.
+ *
+ * Returns { success, error? } — error is a human-readable message on failure.
+ */
+export async function updateRagicApiKey(newKey: string): Promise<{ success: boolean; error?: string }> {
+  const trimmed = newKey.trim();
+  if (!trimmed) return { success: false, error: 'API key cannot be empty' };
+  if (trimmed.length < 10) return { success: false, error: 'API key looks too short to be valid' };
+
+  const { error } = await supabase
+    .from('ragic_connections')
+    .update({ api_key_encrypted: trimmed, updated_at: new Date().toISOString() })
+    .eq('is_active', true);
+
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+}
