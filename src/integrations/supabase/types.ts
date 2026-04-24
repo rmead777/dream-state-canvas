@@ -22,6 +22,7 @@ export type Database = {
           last_error: string | null
           last_message_date: string | null
           last_sync_at: string | null
+          supabase_user_id: string | null
           sync_status: string | null
           updated_at: string | null
           user_id: string
@@ -33,6 +34,7 @@ export type Database = {
           last_error?: string | null
           last_message_date?: string | null
           last_sync_at?: string | null
+          supabase_user_id?: string | null
           sync_status?: string | null
           updated_at?: string | null
           user_id: string
@@ -44,6 +46,7 @@ export type Database = {
           last_error?: string | null
           last_message_date?: string | null
           last_sync_at?: string | null
+          supabase_user_id?: string | null
           sync_status?: string | null
           updated_at?: string | null
           user_id?: string
@@ -66,6 +69,7 @@ export type Database = {
           sender_address: string | null
           sender_name: string | null
           subject: string | null
+          supabase_user_id: string | null
           synced_at: string | null
           to_recipients: Json | null
           user_id: string
@@ -85,6 +89,7 @@ export type Database = {
           sender_address?: string | null
           sender_name?: string | null
           subject?: string | null
+          supabase_user_id?: string | null
           synced_at?: string | null
           to_recipients?: Json | null
           user_id: string
@@ -104,6 +109,7 @@ export type Database = {
           sender_address?: string | null
           sender_name?: string | null
           subject?: string | null
+          supabase_user_id?: string | null
           synced_at?: string | null
           to_recipients?: Json | null
           user_id?: string
