@@ -140,6 +140,22 @@ export function WorkspaceObjectWrapper({ object, dragHandleProps }: { object: WO
   const isFocused = state.activeContext.focusedObjectId === object.id;
   const manifestation = useManifestation(object);
 
+  // Lineage pulse — when a scaffold spawns with this card as a source,
+  // we briefly add `lineage-pulsing`. The animation is 1.2s; we keep the
+  // class on for 1300ms (a touch longer) so it always finishes cleanly.
+  const [isLineagePulsing, setIsLineagePulsing] = useState(false);
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ sourceIds?: string[] }>).detail;
+      if (detail?.sourceIds?.includes(object.id)) {
+        setIsLineagePulsing(true);
+        window.setTimeout(() => setIsLineagePulsing(false), 1300);
+      }
+    };
+    window.addEventListener('sherpa-lineage-highlight', handler);
+    return () => window.removeEventListener('sherpa-lineage-highlight', handler);
+  }, [object.id]);
+
   // Scroll into view when focused
   useEffect(() => {
     if (isFocused && cardRef.current) {
@@ -178,10 +194,12 @@ export function WorkspaceObjectWrapper({ object, dragHandleProps }: { object: WO
   return (
     <div
       ref={cardRef}
+      data-workspace-object-id={object.id}
       className={`
         workspace-focus-ring group relative isolate overflow-hidden rounded-2xl border workspace-card-surface
         transition-all duration-300 workspace-spring
         ${size.height ? 'flex flex-col' : ''}
+        ${isLineagePulsing ? 'lineage-pulsing' : ''}
         ${useLegacyMaterializeAnim
           ? 'animate-[materialize_0.4s_cubic-bezier(0.16,1,0.3,1)_forwards] opacity-0'
           : manifestation.active ? '' : 'opacity-100'

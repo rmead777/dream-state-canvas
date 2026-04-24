@@ -142,17 +142,35 @@ export function useWorkspaceActions() {
               // can track distinct arrivals.
               const delay = scaffoldCount * MULTI_SCAFFOLD_STAGGER_MS;
               scaffoldCount += 1;
+              const shadowId = event.shadowId;
+              const sourceObjectIds = event.sourceObjectIds;
               const spawn = () => {
                 dispatch({
                   type: 'MATERIALIZE_SCAFFOLD',
                   payload: {
-                    id: event.shadowId,
+                    id: shadowId,
                     objectType: event.objectType,
                     title: event.title,
-                    sourceObjectIds: event.sourceObjectIds,
+                    sourceObjectIds,
                     origin,
                   },
                 });
+                // If the scaffold has source cards, pulse them and fire a
+                // particle burst from their DOM positions toward the new
+                // card. ParticleLayer retries for 3 frames if the scaffold
+                // hasn't rendered yet.
+                if (sourceObjectIds.length > 0) {
+                  window.dispatchEvent(new CustomEvent('sherpa-lineage-highlight', {
+                    detail: { sourceIds: sourceObjectIds },
+                  }));
+                  // Small delay so the scaffold DOM renders before we
+                  // query for its position.
+                  window.setTimeout(() => {
+                    window.dispatchEvent(new CustomEvent('sherpa-particle-burst', {
+                      detail: { fromIds: sourceObjectIds, toId: shadowId },
+                    }));
+                  }, 40);
+                }
               };
               if (delay > 0) window.setTimeout(spawn, delay);
               else spawn();
