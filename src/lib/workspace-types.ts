@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import type { ManifestationPhase } from './manifestation-types';
+
 // ─── Workspace Object Model ───────────────────────────────────────────────────
 
 export type ObjectType =
@@ -61,6 +63,19 @@ export interface WorkspaceObject {
   freeformPosition?: FreeformPosition;
   createdAt: number;
   lastInteractedAt: number;
+  // ─── Manifestation (optional; only populated during the materialize sequence) ─────────
+  /**
+   * Sub-phase within `status: 'materializing'`. When present, drives the
+   * choreographed manifestation (scaffold → resolving → hydrating → settled).
+   * When absent, the legacy single-step `materialize` CSS animation applies.
+   */
+  manifestationPhase?: ManifestationPhase;
+  /**
+   * Cards this card was derived from. Used by the particle layer to draw
+   * data-lineage flows from source positions to the new card's spawn point.
+   * Populated at scaffold time from agent shadow state.
+   */
+  sourceObjectIds?: string[];
 }
 
 // ─── Intent Engine Types ──────────────────────────────────────────────────────
@@ -203,4 +218,29 @@ export type WorkspaceReducerAction =
   | { type: 'COLLAPSE_ALL_OBJECTS' }
   | { type: 'DISSOLVE_ALL_OBJECTS' }
   | { type: 'HIGHLIGHT_ENTITY'; payload: { entityName: string | null } }
-  | { type: 'UPDATE_OBJECT_ENTITY_REFS'; payload: { id: string; entityRefs: EntityRef[] } };
+  | { type: 'UPDATE_OBJECT_ENTITY_REFS'; payload: { id: string; entityRefs: EntityRef[] } }
+  // ─── Manifestation actions ─────────────────────────────────────────────────
+  /**
+   * Spawn a provisional scaffold card during the agent loop — before the real
+   * MATERIALIZE_OBJECT has fired. Creates a WorkspaceObject with:
+   *   - status: 'materializing'
+   *   - manifestationPhase: 'scaffold'
+   *   - minimal context (empty sections)
+   * When the agent loop completes and handleCreate runs, if an object with
+   * the same id already exists (the scaffold), it's upgraded via UPDATE_OBJECT
+   * + ADVANCE_MANIFESTATION_PHASE rather than re-materialized.
+   */
+  | {
+      type: 'MATERIALIZE_SCAFFOLD';
+      payload: {
+        id: string;
+        objectType: ObjectType;
+        title: string;
+        sourceObjectIds: string[];
+        origin: IntentOrigin;
+      };
+    }
+  | {
+      type: 'ADVANCE_MANIFESTATION_PHASE';
+      payload: { id: string; phase: ManifestationPhase };
+    };

@@ -3,6 +3,8 @@ import { computeLayoutWithOverflow } from '@/lib/spatial-orchestrator';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { agentLoop, orchestratorLoop } from '@/lib/sherpa-agent';
 import { WorkspaceObject, IntentOrigin, WorkspaceAction, WorkspaceReducerAction } from '@/lib/workspace-types';
+import type { AgentLoopEvent } from '@/lib/manifestation-types';
+import { MULTI_SCAFFOLD_STAGGER_MS } from '@/lib/manifestation-types';
 import { computeFreeformPosition } from '@/lib/freeform-placement';
 import { handleUpdate, handleFuse, handleRefineRules, HandlerResult, DispatchInstruction } from '@/lib/action-handlers';
 import { toast } from '@/hooks/use-toast';
@@ -95,7 +97,52 @@ export function useWorkspaceActions() {
         console.warn('[processIntent] Memory retrieval failed, continuing without:', e);
       }
 
+      // Track scaffolds we've already spawned this turn, so shadow_update
+      // events for the same id don't double-spawn and we can stagger.
+      // Declared outside the try so the catch block can dissolve any
+      // orphaned scaffolds if the agent loop throws before handleCreate runs.
+      const spawnedScaffolds = new Set<string>();
+      let scaffoldCount = 0;
+
       try {
+        const handleEvent = (event: AgentLoopEvent) => {
+          switch (event.type) {
+            case 'shadow_create': {
+              if (spawnedScaffolds.has(event.shadowId)) break;
+              spawnedScaffolds.add(event.shadowId);
+              // Stagger simultaneous scaffold spawns by 120ms so the eye
+              // can track distinct arrivals.
+              const delay = scaffoldCount * MULTI_SCAFFOLD_STAGGER_MS;
+              scaffoldCount += 1;
+              const spawn = () => {
+                dispatch({
+                  type: 'MATERIALIZE_SCAFFOLD',
+                  payload: {
+                    id: event.shadowId,
+                    objectType: event.objectType,
+                    title: event.title,
+                    sourceObjectIds: event.sourceObjectIds,
+                    origin,
+                  },
+                });
+              };
+              if (delay > 0) window.setTimeout(spawn, delay);
+              else spawn();
+              break;
+            }
+            case 'shadow_dissolve': {
+              // Optional future hook — for now, keep the card on canvas; the
+              // real dissolve action will arrive at loop_complete via actions[].
+              break;
+            }
+            default:
+              // Other events (loop_start, iteration_start, tool_executing,
+              // tool_complete, shadow_update, loop_complete) are consumed by
+              // ambient-field / telemetry layers. No reducer action here.
+              break;
+          }
+        };
+
         const agentResult = await orchestratorLoop({
           query,
           workspaceState: stateRef.current,
@@ -108,6 +155,7 @@ export function useWorkspaceActions() {
               dispatch({ type: 'SET_SHERPA_STATUS', payload: status });
             }
           },
+          onEvent: handleEvent,
         });
 
         // Convert agent result to the format applyResult expects
@@ -179,6 +227,14 @@ export function useWorkspaceActions() {
         return { steps: agentResult.steps || [] };
       } catch (aiError) {
         console.error('[processIntent] AI intent parsing failed:', aiError);
+        // Dissolve any orphan scaffolds — cards spawned by shadow_create
+        // events that never got reconciled because the loop threw.
+        for (const scaffoldId of spawnedScaffolds) {
+          const obj = stateRef.current.objects[scaffoldId];
+          if (obj && obj.manifestationPhase === 'scaffold') {
+            dispatch({ type: 'DISSOLVE_OBJECT', payload: { id: scaffoldId } });
+          }
+        }
         const errorMsg = 'Sherpa is having trouble reaching the AI service right now. Please check your connection and try again in a moment.';
         updateLastResponse(errorMsg);
         dispatch({ type: 'SET_SHERPA_RESPONSE', payload: errorMsg });
@@ -527,8 +583,40 @@ export function useWorkspaceActions() {
       position: { zone: 'primary', order: 0 },
       freeformPosition,
     };
-    dispatch({ type: 'MATERIALIZE_OBJECT', payload: obj });
-    setTimeout(() => dispatch({ type: 'OPEN_OBJECT', payload: { id } }), 400);
+
+    // ─── Manifestation reconciliation ─────────────────────────────────────
+    // If a scaffold already exists for this id (dispatched mid-loop via
+    // MATERIALIZE_SCAFFOLD in response to a shadow_create event), reconcile
+    // instead of re-materializing. The scaffold carries 'materializing' +
+    // phase:'scaffold'; we fill in context via UPDATE_OBJECT and advance the
+    // phase to 'hydrating'. The timer-based auto-advance in useManifestation
+    // then carries it through 'actions-ready' → 'settled' (which flips status
+    // to 'open'). This preserves the sub-phase choreography the user has
+    // already been watching.
+    const existing = stateRef.current.objects[id];
+    const isScaffold = existing && existing.status === 'materializing' && existing.manifestationPhase === 'scaffold';
+
+    if (isScaffold) {
+      // Fill in the scaffold with real content and kick the phase forward.
+      // useManifestation's auto-advance carries it through resolving →
+      // hydrating → actions-ready → settled (reducer flips status to 'open').
+      // Scaffold-time sourceObjectIds are the canonical lineage — relationships
+      // from the create action are not re-merged (they were derived from the
+      // same tool args anyway).
+      dispatch({
+        type: 'UPDATE_OBJECT',
+        payload: {
+          id,
+          title: obj.title,
+          context: context as Record<string, any>,
+        },
+      });
+      dispatch({ type: 'ADVANCE_MANIFESTATION_PHASE', payload: { id, phase: 'resolving' } });
+    } else {
+      // No scaffold — legacy path.
+      dispatch({ type: 'MATERIALIZE_OBJECT', payload: obj });
+      setTimeout(() => dispatch({ type: 'OPEN_OBJECT', payload: { id } }), 400);
+    }
 
     // Extract entity refs from sections for smart card linking
     const sections = (context as any).sections;

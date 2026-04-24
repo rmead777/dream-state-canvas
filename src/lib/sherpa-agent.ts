@@ -57,6 +57,14 @@ export interface AgentLoopParams {
   /** Base64 data URIs (e.g. "data:image/jpeg;base64,...") attached to this turn */
   images?: string[];
   onStatusUpdate?: (status: string | null) => void;
+  /**
+   * Optional rich event stream. Emitted at meaningful moments during the
+   * loop (loop_start, iteration_start, tool_executing, tool_complete,
+   * shadow_create/update/dissolve, loop_complete). Consumers use this to
+   * drive mid-loop UI manifestation — scaffolding cards before real data
+   * arrives. See `src/lib/manifestation-types.ts` for the event schema.
+   */
+  onEvent?: (event: import('./manifestation-types').AgentLoopEvent) => void;
 }
 
 export interface AgentLoopResult {
@@ -73,7 +81,11 @@ export interface AgentLoopResult {
  * as parseIntentAI so applyResult() works unchanged downstream.
  */
 export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResult> {
-  const { query, workspaceState, activeContext, documentIds, memories, onStatusUpdate } = params;
+  const { query, workspaceState, activeContext, documentIds, memories, onStatusUpdate, onEvent } = params;
+  const emit = (ev: Parameters<NonNullable<AgentLoopParams['onEvent']>>[0]) => {
+    try { onEvent?.(ev); } catch { /* never let event consumers break the loop */ }
+  };
+  emit({ type: 'loop_start', query, t: Date.now() });
   const { contextWindow } = getAdminSettings();
   const isMorningBriefQuery = /morning\s*brief/i.test(query);
   // Morning brief needs more iterations to survey scratchpads, pull data, write state, and render
@@ -233,6 +245,7 @@ Use syncRagic when the user says "refresh ragic", "sync orders", "update ragic d
   let firstProvider = ''; // Detect provider switches mid-loop
 
   for (let iteration = 0; iteration < maxIterations; iteration++) {
+    emit({ type: 'iteration_start', iteration, t: Date.now() });
     // Show interim thoughts untruncated — user needs to read the full reasoning
     if (iteration > 0) {
       onStatusUpdate?.(bestText || 'Thinking...');
@@ -361,7 +374,9 @@ Use syncRagic when the user says "refresh ragic", "sync orders", "update ragic d
         args = {};
       }
 
+      emit({ type: 'tool_executing', toolName, args, t: Date.now() });
       const result = await executeTool(toolName, args, shadowState);
+      emit({ type: 'tool_complete', toolName, t: Date.now() });
 
       // Check if the tool returned a write action to queue (or next moves to capture)
       try {
@@ -390,8 +405,24 @@ Use syncRagic when the user says "refresh ragic", "sync orders", "update ragic d
               createdAt: Date.now(),
               lastInteractedAt: Date.now(),
             } as any;
+            // Derive source lineage from the tool's args — relatedTo is the
+            // standard field, fall back to any sources/context refs. Best-effort.
+            const sourceObjectIds: string[] = Array.isArray(parsed.relatedTo)
+              ? parsed.relatedTo.filter((s: unknown): s is string => typeof s === 'string')
+              : Array.isArray((args as any).relatedTo)
+                ? ((args as any).relatedTo as unknown[]).filter((s): s is string => typeof s === 'string')
+                : [];
+            emit({
+              type: 'shadow_create',
+              shadowId: id,
+              objectType: parsed.objectType,
+              title: parsed.title,
+              sourceObjectIds,
+              t: Date.now(),
+            });
           } else if (parsed.action === 'dissolve' && parsed.objectId && shadowObjects[parsed.objectId]) {
             shadowObjects[parsed.objectId] = { ...shadowObjects[parsed.objectId], status: 'dissolved' as any };
+            emit({ type: 'shadow_dissolve', objectId: parsed.objectId, t: Date.now() });
           } else if (parsed.action === 'update' && parsed.objectId && shadowObjects[parsed.objectId]) {
             const obj = shadowObjects[parsed.objectId];
             shadowObjects[parsed.objectId] = {
@@ -403,6 +434,7 @@ Use syncRagic when the user says "refresh ragic", "sync orders", "update ragic d
               },
               ...(parsed.title ? { title: parsed.title } : {}),
             } as any;
+            emit({ type: 'shadow_update', objectId: parsed.objectId, t: Date.now() });
           }
         }
       } catch {}

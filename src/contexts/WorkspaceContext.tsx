@@ -360,6 +360,59 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
       };
     }
 
+    // ─── Manifestation ────────────────────────────────────────────────────
+    case 'MATERIALIZE_SCAFFOLD': {
+      const { id, objectType, title, sourceObjectIds, origin } = action.payload;
+      // If a card with this id already exists (edge case: duplicate scaffold
+      // emission, or real MATERIALIZE_OBJECT raced ahead), do nothing.
+      if (state.objects[id]) return state;
+      const obj: WorkspaceObject = {
+        id,
+        type: objectType,
+        title,
+        status: 'materializing',
+        pinned: false,
+        origin,
+        relationships: sourceObjectIds, // wire lineage into relationships
+        context: {}, // empty — content arrives at MATERIALIZE_OBJECT / UPDATE_OBJECT
+        position: { zone: 'primary', order: 0 },
+        createdAt: now,
+        lastInteractedAt: now,
+        manifestationPhase: 'scaffold',
+        sourceObjectIds,
+      };
+      const withNew = { ...state.objects, [id]: obj };
+      const { objects: newObjects, layout } = layoutWithOverflowCollapse(withNew);
+      return {
+        ...state,
+        objects: newObjects,
+        spatialLayout: layout,
+        activeContext: { ...state.activeContext, focusedObjectId: id },
+      };
+    }
+
+    case 'ADVANCE_MANIFESTATION_PHASE': {
+      const { id, phase } = action.payload;
+      const obj = state.objects[id];
+      if (!obj) return state;
+      // On 'settled', clear the phase AND flip status 'materializing' → 'open'
+      // so downstream code (focus flash, layout, ambient hints) sees a normal
+      // card. Other phases update the phase field only.
+      const nextObj: WorkspaceObject =
+        phase === 'settled'
+          ? {
+              ...obj,
+              manifestationPhase: undefined,
+              status: obj.status === 'materializing' ? 'open' : obj.status,
+              lastInteractedAt: now,
+            }
+          : { ...obj, manifestationPhase: phase, lastInteractedAt: now };
+      return {
+        ...state,
+        objects: { ...state.objects, [id]: nextObj },
+      };
+    }
+
     default:
       return state;
   }

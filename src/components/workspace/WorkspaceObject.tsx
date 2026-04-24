@@ -5,6 +5,7 @@ import { useWorkspaceActions } from '@/hooks/useWorkspaceActions';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useCrossObjectBehavior } from '@/hooks/useCrossObjectBehavior';
 import { useAmbientSherpa } from '@/hooks/useAmbientSherpa';
+import { useManifestation } from '@/hooks/useManifestation';
 import { AmbientHint } from '@/components/workspace/AmbientHint';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { MetricDetail } from '@/components/objects/MetricDetail';
@@ -28,6 +29,54 @@ import { AutomationPanel } from '@/components/objects/AutomationPanel';
 import { DatasetEditPreview } from '@/components/objects/DatasetEditPreview';
 import { MemoryCleanupPreview } from '@/components/objects/MemoryCleanupPreview';
 import { getObjectTypeToken, getFamilyTokens, derivePosture, POSTURE_LABELS } from '@/lib/design-tokens';
+
+/**
+ * ManifestationSkeleton — geometry-only placeholder shown during the
+ * `scaffold` and `resolving` phases of manifestation. Communicates type
+ * + structure before the real content hydrates. Uses the existing
+ * `.workspace-skeleton` shimmer utility from index.css.
+ */
+function ManifestationSkeleton({ objectType }: { objectType: string }) {
+  // Different object types suggest different skeleton shapes.
+  const isTabular =
+    objectType === 'dataset' ||
+    objectType === 'inspector' ||
+    objectType === 'action-queue' ||
+    objectType === 'escalation-tracker' ||
+    objectType === 'outreach-tracker';
+  const isMetric = objectType === 'metric' || objectType === 'comparison';
+
+  if (isMetric) {
+    return (
+      <div className="space-y-3 py-2">
+        <div className="workspace-skeleton h-8 w-1/3 rounded-md" />
+        <div className="workspace-skeleton h-3 w-2/3 rounded-md" />
+        <div className="workspace-skeleton h-16 w-full rounded-md" />
+      </div>
+    );
+  }
+  if (isTabular) {
+    return (
+      <div className="space-y-1.5 py-2">
+        <div className="workspace-skeleton h-4 w-full rounded-md" />
+        <div className="workspace-skeleton h-3 w-full rounded-md" />
+        <div className="workspace-skeleton h-3 w-full rounded-md" />
+        <div className="workspace-skeleton h-3 w-full rounded-md" />
+        <div className="workspace-skeleton h-3 w-5/6 rounded-md" />
+      </div>
+    );
+  }
+  // Default: analysis/brief — paragraph-shaped skeleton
+  return (
+    <div className="space-y-2 py-2">
+      <div className="workspace-skeleton h-3 w-5/6 rounded-md" />
+      <div className="workspace-skeleton h-3 w-full rounded-md" />
+      <div className="workspace-skeleton h-3 w-11/12 rounded-md" />
+      <div className="workspace-skeleton h-3 w-3/4 rounded-md" />
+      <div className="workspace-skeleton h-3 w-full rounded-md" />
+    </div>
+  );
+}
 
 function ObjectContent({ object }: { object: WO }) {
   // Special flag: automation panel view
@@ -89,6 +138,7 @@ export function WorkspaceObjectWrapper({ object, dragHandleProps }: { object: WO
   const cardRef = useRef<HTMLDivElement>(null);
 
   const isFocused = state.activeContext.focusedObjectId === object.id;
+  const manifestation = useManifestation(object);
 
   // Scroll into view when focused
   useEffect(() => {
@@ -109,6 +159,10 @@ export function WorkspaceObjectWrapper({ object, dragHandleProps }: { object: WO
   const isDimmed = shouldDim(object.id);
   const isHighlighted = shouldHighlight(object.id);
   const isMaterializing = object.status === 'materializing';
+  // When the manifestation controller is driving visuals, skip the legacy
+  // CSS `materialize` keyframe (the hook's inline style handles opacity/
+  // scale/blur and composes with phase-driven transitions).
+  const useLegacyMaterializeAnim = isMaterializing && !manifestation.active;
   const contextualActions = getContextualActions(object.id);
   const objectHints = ambientHints.filter((h) => h.objectId === object.id && !dismissedHints.has(h.hint));
 
@@ -128,9 +182,9 @@ export function WorkspaceObjectWrapper({ object, dragHandleProps }: { object: WO
         workspace-focus-ring group relative isolate overflow-hidden rounded-2xl border workspace-card-surface
         transition-all duration-300 workspace-spring
         ${size.height ? 'flex flex-col' : ''}
-        ${isMaterializing
+        ${useLegacyMaterializeAnim
           ? 'animate-[materialize_0.4s_cubic-bezier(0.16,1,0.3,1)_forwards] opacity-0'
-          : 'opacity-100'
+          : manifestation.active ? '' : 'opacity-100'
         }
         ${isFocused
           ? 'border-workspace-accent/20 shadow-[0_18px_50px_rgba(99,102,241,0.16)] scale-[1.01]'
@@ -147,6 +201,10 @@ export function WorkspaceObjectWrapper({ object, dragHandleProps }: { object: WO
       style={{
         ...(size.width ? { width: size.width } : {}),
         ...(size.height ? { height: size.height } : {}),
+        // Manifestation style overrides opacity / transform / boxShadow
+        // during the scaffold → settled choreography. Merged last so it wins
+        // over any class-based values (e.g. the focused scale).
+        ...manifestation.style,
       }}
       onClick={() => focusObject(object.id)}
       onFocus={(e) => {
@@ -259,12 +317,16 @@ export function WorkspaceObjectWrapper({ object, dragHandleProps }: { object: WO
       <div className={`relative z-10 px-5 pb-4 ${size.height ? 'overflow-y-auto flex-1 min-h-0' : ''}`}
         style={size.height ? { maxHeight: `calc(100% - 100px)` } : {}}
       >
-        <ErrorBoundary label={object.title}>
-          <ObjectContent object={object} />
-        </ErrorBoundary>
+        {manifestation.showSkeleton ? (
+          <ManifestationSkeleton objectType={object.type} />
+        ) : (
+          <ErrorBoundary label={object.title}>
+            <ObjectContent object={object} />
+          </ErrorBoundary>
+        )}
 
         {/* Ambient Sherpa hints — contextual, inline */}
-        {objectHints.map((h) => (
+        {!manifestation.showSkeleton && objectHints.map((h) => (
           <AmbientHint
             key={h.hint}
             hint={h.hint}
