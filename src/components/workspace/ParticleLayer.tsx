@@ -44,6 +44,14 @@ const BASE_DURATION_MS = 820;
 const DURATION_JITTER_MS = 220;
 const SOURCE_ACCENT_HUE = 234; // matches workspace-accent
 
+// Convergence burst (fires on every scaffold birth, regardless of sources).
+// Particles swarm in from random off-viewport positions to the target center
+// while the scaffold keyframe is crystallizing — the effect is "stuff
+// condensing into this card."
+const CONVERGE_PARTICLE_COUNT = 32;
+const CONVERGE_DURATION_MS = 520;
+const CONVERGE_DURATION_JITTER_MS = 140;
+
 /** Ease-in-out cubic — same curve used across the workspace. */
 function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
@@ -142,6 +150,65 @@ export function ParticleLayer() {
     };
     window.addEventListener('sherpa-particle-burst', burstHandler);
 
+    // ─── Convergence burst — "stuff condensing into this card" ─────────────
+    const spawnConverge = (toId: string, retriesLeft: number) => {
+      const targetCenter = findCardCenter(toId);
+      if (!targetCenter) {
+        if (retriesLeft > 0) {
+          requestAnimationFrame(() => spawnConverge(toId, retriesLeft - 1));
+        }
+        return;
+      }
+      const now = performance.now();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+
+      for (let i = 0; i < CONVERGE_PARTICLE_COUNT; i++) {
+        // Origin: random point on a "radius" outside the target, biased
+        // toward the edges of the viewport. Angle uniform; distance
+        // randomised 40%-100% of the shortest viewport axis.
+        const angle = Math.random() * Math.PI * 2;
+        const minDim = Math.min(vw, vh);
+        const dist = minDim * (0.4 + Math.random() * 0.6);
+        const x0 = targetCenter.x + Math.cos(angle) * dist;
+        const y0 = targetCenter.y + Math.sin(angle) * dist;
+
+        // Control point offset PERPENDICULAR to the flight path so the
+        // particles curl in rather than arrive on straight lines.
+        const dx = targetCenter.x - x0;
+        const dy = targetCenter.y - y0;
+        const len = Math.hypot(dx, dy) || 1;
+        const px = -dy / len;
+        const py = dx / len;
+        // Swirl direction alternates so particles corkscrew around the target
+        const swirl = (i % 2 === 0 ? 1 : -1) * (100 + Math.random() * 180);
+
+        particlesRef.current.push({
+          x0,
+          y0,
+          cx: (x0 + targetCenter.x) / 2 + px * swirl,
+          cy: (y0 + targetCenter.y) / 2 + py * swirl,
+          x1: targetCenter.x + (Math.random() - 0.5) * 18,
+          y1: targetCenter.y + (Math.random() - 0.5) * 18,
+          startedAt: now + Math.random() * 80, // gentle stagger
+          duration: CONVERGE_DURATION_MS + Math.random() * CONVERGE_DURATION_JITTER_MS,
+          hue: SOURCE_ACCENT_HUE + (Math.random() - 0.5) * 30,
+          size: 1.4 + Math.random() * 1.6,
+        });
+      }
+      ensureRaf();
+    };
+
+    const convergeHandler = (e: Event) => {
+      const detail = (e as CustomEvent<{ toId: string }>).detail;
+      if (!detail?.toId) return;
+      // 4 retries: the scaffold's DOM appears on the SAME frame as this
+      // event + a 40ms timeout, but during a busy main-thread we may still
+      // miss the first attempt.
+      spawnConverge(detail.toId, 4);
+    };
+    window.addEventListener('sherpa-particle-converge', convergeHandler);
+
     // ─── Render loop ────────────────────────────────────────────────────────
     const render = () => {
       const now = performance.now();
@@ -206,6 +273,7 @@ export function ParticleLayer() {
     return () => {
       window.removeEventListener('resize', resize);
       window.removeEventListener('sherpa-particle-burst', burstHandler);
+      window.removeEventListener('sherpa-particle-converge', convergeHandler);
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
       particlesRef.current = [];
     };

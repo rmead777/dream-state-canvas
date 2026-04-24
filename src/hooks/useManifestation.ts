@@ -152,15 +152,22 @@ export function useManifestation(object: WorkspaceObject): ManifestationVisuals 
   if (!phase) return INACTIVE;
 
   const targets = PHASE_TARGETS[phase];
-  const style: React.CSSProperties = {
-    opacity: targets.surfaceOpacity,
-    transform: `scale(${targets.scale})`,
-    boxShadow: `0 0 ${12 + targets.glow * 40}px hsl(234 60% 60% / ${targets.glow * 0.3})`,
-    transition:
-      'opacity 220ms var(--workspace-motion-swift), ' +
-      'transform 280ms var(--workspace-motion-spring), ' +
-      'box-shadow 260ms var(--workspace-motion-swift)',
-  };
+  // During the scaffold phase, the CSS keyframe `.scaffold-crystallizing`
+  // drives opacity/transform/filter/box-shadow — we yield styling to it
+  // so the dramatic entrance reads as "condensing into being" rather than
+  // a soft fade. From `resolving` onward, the inline style takes over.
+  const style: React.CSSProperties =
+    phase === 'scaffold'
+      ? {}
+      : {
+          opacity: targets.surfaceOpacity,
+          transform: `scale(${targets.scale})`,
+          boxShadow: `0 0 ${12 + targets.glow * 40}px hsl(234 60% 60% / ${targets.glow * 0.3})`,
+          transition:
+            'opacity 220ms var(--workspace-motion-swift), ' +
+            'transform 280ms var(--workspace-motion-spring), ' +
+            'box-shadow 260ms var(--workspace-motion-swift)',
+        };
 
   return {
     active: true,

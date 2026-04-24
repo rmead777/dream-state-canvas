@@ -155,16 +155,21 @@ export function useWorkspaceActions() {
                     origin,
                   },
                 });
-                // If the scaffold has source cards, pulse them and fire a
-                // particle burst from their DOM positions toward the new
-                // card. ParticleLayer retries for 3 frames if the scaffold
-                // hasn't rendered yet.
+                // Convergence particles always fire — "stuff condensing into
+                // this card" pre-amble. 40ms delay lets the scaffold DOM
+                // mount so ParticleLayer can query its position.
+                window.setTimeout(() => {
+                  window.dispatchEvent(new CustomEvent('sherpa-particle-converge', {
+                    detail: { toId: shadowId },
+                  }));
+                }, 40);
+                // If the scaffold has source cards, ALSO pulse them and
+                // fire the lineage burst in parallel — runs as a second
+                // channel alongside the convergence.
                 if (sourceObjectIds.length > 0) {
                   window.dispatchEvent(new CustomEvent('sherpa-lineage-highlight', {
                     detail: { sourceIds: sourceObjectIds },
                   }));
-                  // Small delay so the scaffold DOM renders before we
-                  // query for its position.
                   window.setTimeout(() => {
                     window.dispatchEvent(new CustomEvent('sherpa-particle-burst', {
                       detail: { fromIds: sourceObjectIds, toId: shadowId },

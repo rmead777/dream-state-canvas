@@ -175,6 +175,48 @@
   animation: lineage-pulse 1.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Scaffold crystallization — dramatic entrance for a newly-spawned scaffold.
+   Card starts invisible + small + heavily blurred, ramps into the scaffold
+   "hold" state. Paired with ParticleLayer's converge burst for a 520ms
+   window where particles swarm in as the geometry solidifies.
+   Ends at scaffold phase targets: opacity 0.5, scale 0.96, soft glow. */
+@keyframes scaffold-crystallize {
+  0% {
+    opacity: 0;
+    transform: scale(0.72);
+    filter: blur(22px);
+    box-shadow:
+      0 0 80px hsl(234 75% 60% / 0.55),
+      0 0 0 2px hsl(234 75% 60% / 0.35);
+  }
+  35% {
+    opacity: 0.28;
+    transform: scale(0.86);
+    filter: blur(14px);
+    box-shadow:
+      0 0 60px hsl(234 75% 60% / 0.48),
+      0 0 0 2px hsl(234 75% 60% / 0.22);
+  }
+  70% {
+    opacity: 0.52;
+    transform: scale(0.98);
+    filter: blur(6px);
+    box-shadow:
+      0 0 36px hsl(234 70% 60% / 0.35),
+      0 0 0 1px hsl(234 70% 60% / 0.12);
+  }
+  100% {
+    opacity: 0.5;
+    transform: scale(0.96);
+    filter: blur(0);
+    box-shadow: 0 0 22px hsl(234 60% 60% / 0.22);
+  }
+}
+
+.scaffold-crystallizing {
+  animation: scaffold-crystallize 520ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 /* Breathing border glow for live objects */
 @keyframes breathing-glow {
   0%, 100% {

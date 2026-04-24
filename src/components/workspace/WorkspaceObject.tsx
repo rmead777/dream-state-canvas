@@ -200,6 +200,7 @@ export function WorkspaceObjectWrapper({ object, dragHandleProps }: { object: WO
         transition-all duration-300 workspace-spring
         ${size.height ? 'flex flex-col' : ''}
         ${isLineagePulsing ? 'lineage-pulsing' : ''}
+        ${manifestation.phase === 'scaffold' ? 'scaffold-crystallizing' : ''}
         ${useLegacyMaterializeAnim
           ? 'animate-[materialize_0.4s_cubic-bezier(0.16,1,0.3,1)_forwards] opacity-0'
           : manifestation.active ? '' : 'opacity-100'
