@@ -7,9 +7,11 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { isOutlookConnected, getOutlookAccount, signInToOutlook, signOutOfOutlook, syncEmails, getStoredEmailCount, getSyncState, getAllowedEmailFolder } from '@/lib/email-store';
-
-const DEFAULT_FOLDER = getAllowedEmailFolder();
+import {
+  isOutlookConnected, getOutlookAccount, signInToOutlook, signOutOfOutlook,
+  syncEmails, getStoredEmailCount, getSyncState, getAllowedEmailFolder,
+  hasUserSetFolder, setAllowedEmailFolder,
+} from '@/lib/email-store';
 
 export function OutlookStatusPanel() {
   const [connected, setConnected] = useState(false);
@@ -19,7 +21,10 @@ export function OutlookStatusPanel() {
   const [isExpanded, setIsExpanded] = useState(true);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
-  const [folderName] = useState(DEFAULT_FOLDER);
+  const [folderName, setFolderName] = useState(getAllowedEmailFolder());
+  const [folderConfigured, setFolderConfigured] = useState(hasUserSetFolder());
+  const [folderDraft, setFolderDraft] = useState('');
+  const [folderError, setFolderError] = useState<string | null>(null);
   const [syncDays, setSyncDays] = useState(90);
 
   const checkConnection = useCallback(() => {
@@ -75,7 +80,27 @@ export function OutlookStatusPanel() {
     setLoading(false);
   };
 
-  // Folder change requires super admin passphrase via unlockEmailFolderChange() + setAllowedEmailFolder().
+  const handleSaveFolder = () => {
+    setFolderError(null);
+    const trimmed = folderDraft.trim();
+    if (!trimmed) {
+      setFolderError('Folder name cannot be empty.');
+      return;
+    }
+    try {
+      setAllowedEmailFolder(trimmed);
+      setFolderName(trimmed);
+      setFolderConfigured(true);
+      setFolderDraft('');
+      setEmailCount(null); // Reset count since folder changed
+      setLastSync(null);
+    } catch (e: any) {
+      setFolderError(e?.message || 'Failed to set folder.');
+    }
+  };
+
+  // Folder change AFTER first setup requires super admin passphrase
+  // via unlockEmailFolderChange() + setAllowedEmailFolder().
 
   return (
     <div className="border-b border-workspace-border/30 mb-3">
@@ -142,19 +167,48 @@ export function OutlookStatusPanel() {
                 </span>
               </div>
 
-              {/* Folder — locked, display only */}
-              <div className="flex items-center gap-2 rounded px-2 py-1 bg-workspace-surface/30">
-                <span className="text-[9px] text-workspace-text-secondary/40 shrink-0">Folder:</span>
-                <span className="flex-1 text-[10px] text-workspace-text truncate">
-                  {folderName}
-                </span>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-workspace-text-secondary/30 shrink-0">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
-                <span className="text-[8px] text-workspace-text-secondary/40 shrink-0 tabular-nums">
-                  {emailCount != null ? `${emailCount}` : '—'}
-                </span>
-              </div>
+              {/* Folder — picker on first-time setup, locked display after */}
+              {!folderConfigured ? (
+                <div className="space-y-1 rounded px-2 py-1.5 bg-workspace-surface/30 border border-workspace-accent/20">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] text-workspace-text-secondary/60 shrink-0">Folder:</span>
+                    <input
+                      type="text"
+                      value={folderDraft}
+                      onChange={(e) => { setFolderDraft(e.target.value); setFolderError(null); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleSaveFolder(); }}
+                      placeholder="Pick your Outlook folder, e.g. Inbox"
+                      className="flex-1 bg-transparent text-[10px] text-workspace-text placeholder:text-workspace-text-secondary/30 outline-none border-b border-workspace-border/20 focus:border-workspace-accent/50"
+                    />
+                    <button
+                      onClick={handleSaveFolder}
+                      disabled={!folderDraft.trim()}
+                      className="text-[9px] text-workspace-accent hover:text-workspace-accent/80 disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+                    >
+                      Save
+                    </button>
+                  </div>
+                  {folderError && (
+                    <p className="text-[9px] text-red-400/70 px-1">{folderError}</p>
+                  )}
+                  <p className="text-[8px] text-workspace-text-secondary/40 px-1 leading-tight">
+                    First-time setup — pick any folder in your mailbox. The folder will be locked after this.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 rounded px-2 py-1 bg-workspace-surface/30">
+                  <span className="text-[9px] text-workspace-text-secondary/40 shrink-0">Folder:</span>
+                  <span className="flex-1 text-[10px] text-workspace-text truncate">
+                    {folderName}
+                  </span>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-workspace-text-secondary/30 shrink-0">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  <span className="text-[8px] text-workspace-text-secondary/40 shrink-0 tabular-nums">
+                    {emailCount != null ? `${emailCount}` : '—'}
+                  </span>
+                </div>
+              )}
 
               {/* Date range — only on first sync */}
               {!lastSync && (
@@ -190,13 +244,14 @@ export function OutlookStatusPanel() {
                 </div>
               )}
 
-              {/* Sync button */}
+              {/* Sync button — requires folder configured */}
               <button
                 onClick={handleSync}
-                disabled={loading}
-                className="w-full mt-1 rounded px-2 py-1 text-[9px] text-workspace-text-secondary/50 hover:text-workspace-accent border border-workspace-border/20 hover:border-workspace-accent/20 transition-colors disabled:opacity-50"
+                disabled={loading || !folderConfigured}
+                className="w-full mt-1 rounded px-2 py-1 text-[9px] text-workspace-text-secondary/50 hover:text-workspace-accent border border-workspace-border/20 hover:border-workspace-accent/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title={!folderConfigured ? 'Pick a folder above before syncing' : undefined}
               >
-                {loading ? 'Syncing...' : lastSync ? 'Sync New Emails' : 'Initial Sync'}
+                {loading ? 'Syncing...' : !folderConfigured ? 'Pick a folder first' : lastSync ? 'Sync New Emails' : 'Initial Sync'}
               </button>
 
               <div className="flex items-center justify-between mt-1 px-1">

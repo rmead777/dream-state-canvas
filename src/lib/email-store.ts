@@ -17,12 +17,14 @@ import { loginRequest } from './msal-config';
 import { supabase } from '@/integrations/supabase/client';
 
 // ─── EMAIL FOLDER GUARDRAIL ──────────────────────────────────────────────────
-// STRICT SECURITY: Only this folder is accessible. No browsing, no overrides.
-// The app has Mail.Read on the user's entire mailbox, but we ONLY touch this
-// one folder. This cannot be changed without the super admin passphrase.
+// Per-user folder selection. Each browser/user picks their own folder on first
+// setup (no passphrase needed). To CHANGE a folder that's already been set,
+// the super admin passphrase is required — this prevents accidental repoint
+// of an existing sync.
 //
-// To change: call unlockEmailFolderChange() with the correct passphrase,
-// then call setAllowedEmailFolder(). Lock resets on page reload.
+// Design:
+//   - First-time users (no folder stored yet): setAllowedEmailFolder() works freely
+//   - Users with a folder already set: must unlockEmailFolderChange() first
 
 const EMAIL_FOLDER_STORAGE_KEY = 'sherpa-email-allowed-folder';
 const EMAIL_FOLDER_LOCK_PASSPHRASE = 'fairlead-email-vault-2026';
@@ -31,6 +33,14 @@ let folderChangeLocked = true;
 
 function getLockedFolder(): string {
   return localStorage.getItem(EMAIL_FOLDER_STORAGE_KEY) || 'Incoa AP Automated';
+}
+
+/**
+ * Returns true if the user has NEVER set their folder. First-time setup
+ * bypasses the passphrase — whoever arrives first picks their own folder.
+ */
+export function hasUserSetFolder(): boolean {
+  return localStorage.getItem(EMAIL_FOLDER_STORAGE_KEY) !== null;
 }
 
 /**
@@ -46,12 +56,14 @@ export function unlockEmailFolderChange(passphrase: string): boolean {
 }
 
 /**
- * Change the allowed email folder. Requires unlock first.
- * Throws if locked.
+ * Change the allowed email folder.
+ * - First-time setup (no folder stored yet): works without unlock
+ * - Changing an existing folder: requires unlockEmailFolderChange() first
  */
 export function setAllowedEmailFolder(folderName: string): void {
-  if (folderChangeLocked) {
-    throw new Error('Email folder change is locked. Unlock with super admin passphrase first.');
+  const isFirstTime = !hasUserSetFolder();
+  if (!isFirstTime && folderChangeLocked) {
+    throw new Error('Folder is already set. Use the super admin passphrase to change it.');
   }
   localStorage.setItem(EMAIL_FOLDER_STORAGE_KEY, folderName.trim());
   folderChangeLocked = true; // Re-lock immediately after change
@@ -282,6 +294,54 @@ export async function signOutOfOutlook(): Promise<void> {
   try { await msalInstance.logoutPopup(); } catch {}
 }
 
+// ─── Per-user scoping helpers ──────────────────────────────────────────────
+
+/**
+ * Get the current Supabase auth user's ID — used to scope emails to the
+ * person logged into DSC (separate from the Microsoft account they use for
+ * MSAL). Returns null if not authenticated. Paired with the RLS policy that
+ * allows users to see their own rows + grandfathered NULL rows.
+ */
+async function getSupabaseUserId(): Promise<string | null> {
+  try {
+    const { data } = await supabase.auth.getUser();
+    return data.user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * On first sync (or re-sync after migration), claim any existing rows that
+ * match the user's Microsoft email but have a NULL supabase_user_id. This
+ * backfills the per-user scoping column so legacy data becomes properly
+ * isolated once the new schema is in place.
+ */
+async function claimLegacyRows(
+  supabaseUserId: string,
+  msUserId: string,
+  folderName: string,
+): Promise<void> {
+  try {
+    await supabase
+      .from('ap_emails')
+      .update({ supabase_user_id: supabaseUserId })
+      .eq('user_id', msUserId)
+      .eq('folder_name', folderName)
+      .is('supabase_user_id', null);
+
+    await supabase
+      .from('ap_email_sync')
+      .update({ supabase_user_id: supabaseUserId })
+      .eq('user_id', msUserId)
+      .eq('folder_name', folderName)
+      .is('supabase_user_id', null);
+  } catch (e) {
+    // Non-fatal — if the column doesn't exist yet (pre-migration), this just silently fails
+    console.warn('[email-store] claimLegacyRows skipped:', e);
+  }
+}
+
 // ─── Sync: Pull from Graph API → Store in Supabase ────────────────────────
 
 /**
@@ -298,6 +358,13 @@ export async function syncEmails(
   const account = getOutlookAccount();
   if (!account) throw new Error('Not signed in to Outlook');
   const userId = account.username || account.homeAccountId;
+  const supabaseUserId = await getSupabaseUserId();
+
+  // Claim any legacy NULL rows that match this user's Microsoft account
+  // (one-time backfill per user after the per-user RLS migration)
+  if (supabaseUserId) {
+    await claimLegacyRows(supabaseUserId, userId, folderName);
+  }
 
   // Get last sync timestamp (unless full resync requested)
   let afterDate: string | null = null;
@@ -328,6 +395,7 @@ export async function syncEmails(
     .from('ap_email_sync')
     .upsert({
       user_id: userId,
+      supabase_user_id: supabaseUserId,
       folder_name: folderName,
       sync_status: 'syncing',
       updated_at: new Date().toISOString(),
@@ -339,11 +407,11 @@ export async function syncEmails(
   } catch (e: any) {
     // Auth errors from graphFetch — report clearly instead of "folder not found"
     const msg = e?.message || 'Unknown error resolving folder';
-    await updateSyncState(userId, folderName, 'error', 0, null, msg);
+    await updateSyncState(userId, folderName, 'error', 0, null, msg, supabaseUserId);
     throw e;
   }
   if (!folderId) {
-    await updateSyncState(userId, folderName, 'error', 0, null, `Folder "${folderName}" not found in Outlook. Check the folder name or sign in again.`);
+    await updateSyncState(userId, folderName, 'error', 0, null, `Folder "${folderName}" not found in Outlook. Check the folder name or sign in again.`, supabaseUserId);
     throw new Error(`Folder "${folderName}" not found`);
   }
 
@@ -416,6 +484,7 @@ export async function syncEmails(
         })),
         folder_name: folderName,
         user_id: userId,
+        supabase_user_id: supabaseUserId,
         synced_at: new Date().toISOString(),
       };
 
@@ -442,7 +511,7 @@ export async function syncEmails(
     .eq('user_id', userId)
     .eq('folder_name', folderName);
 
-  await updateSyncState(userId, folderName, 'complete', count || 0, latestDate, null);
+  await updateSyncState(userId, folderName, 'complete', count || 0, latestDate, null, supabaseUserId);
 
   return {
     newEmails: newCount,
@@ -458,11 +527,13 @@ async function updateSyncState(
   emailsSynced: number,
   lastMessageDate: string | null,
   error: string | null,
+  supabaseUserId?: string | null,
 ): Promise<void> {
   await supabase
     .from('ap_email_sync')
     .upsert({
       user_id: userId,
+      supabase_user_id: supabaseUserId ?? null,
       folder_name: folderName,
       sync_status: status,
       emails_synced: emailsSynced,
