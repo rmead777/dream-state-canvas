@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useRef, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useCallback, useState } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { generateSuggestions, generateObservations } from '@/lib/sherpa-engine';
 import { Suggestion } from '@/lib/workspace-types';
@@ -7,6 +7,8 @@ import { parseThreshold, checkAlertThresholds } from '@/lib/alert-monitor';
 import { useDocuments } from '@/contexts/DocumentContext';
 import { loadTriggers, checkTriggers, markTriggerFired } from '@/lib/automation-triggers';
 import { supabase } from '@/integrations/supabase/client';
+import { isOutlookConnected } from '@/lib/email-store';
+import { loadFavorites } from '@/lib/next-moves-ranker';
 
 /**
  * SherpaContext — decoupled Sherpa intelligence layer.
@@ -28,6 +30,35 @@ const SherpaCtx = createContext<SherpaContextValue | null>(null);
 export function SherpaProvider({ children }: { children: React.ReactNode }) {
   const { state, dispatch } = useWorkspace();
   const { activeDataset } = useDocuments();
+
+  // Favorites — kept in component state so toggling from the UI (via the
+  // `toggleFavorite` helper + window event below) triggers a re-rank.
+  const [favoriteIds, setFavoriteIds] = useState<string[]>(() => loadFavorites());
+  useEffect(() => {
+    const handler = () => setFavoriteIds(loadFavorites());
+    window.addEventListener('sherpa-favorites-changed', handler);
+    return () => window.removeEventListener('sherpa-favorites-changed', handler);
+  }, []);
+
+  // Connection state — poll lightweight sync checks every 30s so suggestions
+  // auto-filter based on what's actually available. QB/Ragic are optimistic
+  // (default true) since their status checks are async and the AI surfaces
+  // integration errors gracefully.
+  const [connections, setConnections] = useState({
+    qb: true,
+    ragic: true,
+    email: isOutlookConnected(),
+    documents: true,
+  });
+  useEffect(() => {
+    const poll = () => setConnections((c) => ({ ...c, email: isOutlookConnected() }));
+    const timer = setInterval(poll, 30_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Active triggers — automation-trigger IDs that fired in the last 5 minutes.
+  // Used by the ranker to slam relevant catalog entries toward #1.
+  const activeTriggersRef = useRef<{ id: string; at: number }[]>([]);
 
   // Stable ref for the scan function — prevents interval reset on every state change.
   // The interval calls scanRef.current which always points to the latest closure.
@@ -112,11 +143,18 @@ export function SherpaProvider({ children }: { children: React.ReactNode }) {
         if (triggers.length === 0) return;
 
         const firings = checkTriggers(triggers, activeDataset.columns, activeDataset.rows);
+        const now = Date.now();
+        // Prune trigger records older than 5 minutes
+        activeTriggersRef.current = activeTriggersRef.current.filter((t) => now - t.at < 5 * 60_000);
         for (const firing of firings) {
           const obs = firing.observation;
           if (!observationsRef.current.includes(obs) && !dismissedRef.current.includes(obs)) {
             dispatch({ type: 'ADD_SHERPA_OBSERVATION', payload: obs });
           }
+          // Remember this trigger ID for catalog ranking — entries that declare
+          // this as a critical trigger get slammed toward #1 for 5 minutes.
+          const trigType = (firing.trigger as { type?: string } | undefined)?.type || firing.trigger.id;
+          activeTriggersRef.current.push({ id: trigType, at: now });
           // For create_card actions, emit a synthetic sherpa-query event
           if (firing.actionType === 'create_card' && firing.actionParams.query) {
             document.dispatchEvent(new CustomEvent('sherpa-query', { detail: firing.actionParams.query }));
@@ -155,9 +193,20 @@ export function SherpaProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const AI_SUGGESTION_HOLDOFF_MS = 30_000;
     if (Date.now() - state.sherpa.lastAISuggestionsAt < AI_SUGGESTION_HOLDOFF_MS) return;
-    const suggestions = generateSuggestions(state.objects, state.activeContext, activeDataset.columns, activeDataset.rows);
+    const suggestions = generateSuggestions(
+      state.objects,
+      state.activeContext,
+      activeDataset.columns,
+      activeDataset.rows,
+      {
+        connections,
+        activeTriggers: activeTriggersRef.current.map((t) => t.id),
+        favoriteIds,
+        limit: 5,
+      },
+    );
     dispatch({ type: 'SET_SHERPA_SUGGESTIONS', payload: suggestions });
-  }, [objectFingerprint, state.activeContext, state.objects, state.sherpa.lastAISuggestionsAt, dispatch]);
+  }, [objectFingerprint, state.activeContext, state.objects, state.sherpa.lastAISuggestionsAt, dispatch, connections, favoriteIds]);
 
   const value: SherpaContextValue = {
     suggestions: state.sherpa.suggestions,

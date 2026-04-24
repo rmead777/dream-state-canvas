@@ -3,6 +3,7 @@ import { listDocuments, extractDataset } from './document-store';
 import { getCurrentProfile, DataProfile } from './data-analyzer';
 import { detectCrossTierAnomalies, describeRankingLogic } from './data-slicer';
 import { getObjectViewState } from './workspace-intelligence';
+import { rankNextMoves, type RankerInputs } from './next-moves-ranker';
 
 /**
  * System-level Sherpa intelligence — observes workspace state
@@ -353,33 +354,63 @@ function buildRefinementSuggestions(
   return suggestions.slice(0, 4);
 }
 
+export interface GenerateSuggestionsOptions {
+  /** Which integrations are connected (drives hard filtering in the catalog). */
+  connections?: Partial<RankerInputs['connections']>;
+  /** Active trigger IDs firing right now (slams relevant catalog entries to #1). */
+  activeTriggers?: string[];
+  /** User's pinned favorite catalog IDs (loaded from localStorage by caller). */
+  favoriteIds?: string[];
+  /** Max suggestions to return. Defaults to 5. */
+  limit?: number;
+}
+
+/**
+ * Main entry point — produces the ranked suggestions shown in the Sherpa rail's
+ * "Next Moves" tray. Scores the curated catalog against live workspace signals
+ * (time, focused card, recent queries, triggers, favorites) and returns the top N.
+ *
+ * The old refinement / contextual / domain-aware default builders still exist
+ * below for card-specific hints but are NOT the primary source anymore.
+ */
 export function generateSuggestions(
   objects: Record<string, WorkspaceObject>,
   activeContext?: ActiveContext,
   dataColumns?: string[],
   dataRows?: string[][],
+  options: GenerateSuggestionsOptions = {},
 ): Suggestion[] {
+  const ranked = rankNextMoves(
+    {
+      objects,
+      activeContext,
+      connections: {
+        qb: options.connections?.qb ?? true,
+        ragic: options.connections?.ragic ?? true,
+        email: options.connections?.email ?? true,
+        documents: options.connections?.documents ?? true,
+      },
+      activeTriggers: options.activeTriggers ?? [],
+      favoriteIds: options.favoriteIds ?? [],
+    },
+    options.limit ?? 5,
+  );
+
+  if (ranked.length > 0) {
+    return ranked.map((r, i) => ({
+      id: r.entry.id,
+      label: r.isCritical ? `🚨 ${r.entry.label}` : r.entry.label,
+      query: r.entry.query,
+      priority: i + 1,
+    }));
+  }
+
+  // Catalog filtered everything out (all integrations missing?). Fall back to
+  // the legacy profile-aware defaults so the tray is never empty.
   const columns = dataColumns || [];
   const rows = dataRows || [];
   const profile = getCurrentProfile(columns, rows);
-
-  const openObjects = Object.values(objects).filter(
-    (o) => o.status === 'open' || o.status === 'materializing'
-  );
-
-  if (openObjects.length === 0) {
-    return buildDefaultSuggestions(profile);
-  }
-
-  const refinementTarget = pickPrimaryObject(objects, activeContext);
-  const refinement = refinementTarget ? buildRefinementSuggestions(refinementTarget, profile) : [];
-  const contextual = buildContextualSuggestions(objects, profile);
-
-  const merged = [...refinement, ...contextual].filter(
-    (suggestion, index, list) => list.findIndex((candidate) => candidate.query === suggestion.query) === index
-  );
-
-  return merged.length > 0 ? merged.slice(0, 3) : buildDefaultSuggestions(profile);
+  return buildDefaultSuggestions(profile);
 }
 
 export function generateObservations(

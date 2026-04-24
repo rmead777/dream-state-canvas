@@ -31,6 +31,8 @@ import { IngestControlPanel } from './IngestControlPanel';
 import MarkdownRenderer from '../objects/MarkdownRenderer';
 import { compressImage } from '@/lib/image-utils';
 import { extractDataset } from '@/lib/document-store';
+import { NEXT_MOVES_CATALOG, CATEGORY_LABELS, CATEGORY_ORDER, type NextMoveCategory } from '@/lib/next-moves-catalog';
+import { loadFavorites, toggleFavorite } from '@/lib/next-moves-ranker';
 
 const RAIL_MIN_WIDTH = 280;
 const RAIL_MAX_WIDTH = 800;
@@ -61,6 +63,15 @@ export function SherpaRail() {
   const [input, setInput] = useState('');
   const [isExpanded, setIsExpanded] = useState(true);
   const [activeTab, setActiveTab] = useState<RailTab>('origin');
+  // Next Moves tray state — expanded shows all 25 grouped by category.
+  const [showAllMoves, setShowAllMoves] = useState(false);
+  const [favoriteIds, setFavoriteIds] = useState<string[]>(() => loadFavorites());
+  const handleToggleFavorite = useCallback((id: string) => {
+    const next = toggleFavorite(id);
+    setFavoriteIds(next);
+    // Notify SherpaContext so suggestions immediately re-rank.
+    window.dispatchEvent(new CustomEvent('sherpa-favorites-changed'));
+  }, []);
 
   // Resizable width — narrower defaults on tablet
   const maxWidth = isTablet ? RAIL_TABLET_MAX : RAIL_MAX_WIDTH;
@@ -602,25 +613,97 @@ export function SherpaRail() {
             </div>
           </div>
 
-          {/* ═══ NEXT MOVES — quarantined bottom section ═══ */}
+          {/* ═══ NEXT MOVES — curated library w/ expandable tray ═══ */}
           {suggestions.length > 0 && (
             <div className="relative z-10 border-t border-workspace-border/40 px-4 py-2.5 bg-workspace-surface/20">
-              <span className="text-[9px] font-medium uppercase tracking-[0.2em] text-workspace-accent/55 mb-1.5 block">
-                Next Moves
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {suggestions.map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => handleSuggestionClick(s.query)}
-                    className="rounded-full border border-workspace-border/50 bg-white/80 px-2.5 py-1
-                      text-[10px] text-workspace-text transition-all duration-200
-                      hover:border-workspace-accent/20 hover:bg-workspace-accent/5 hover:text-workspace-accent"
-                  >
-                    {s.label}
-                  </button>
-                ))}
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[9px] font-medium uppercase tracking-[0.2em] text-workspace-accent/55">
+                  Next Moves
+                </span>
+                <button
+                  onClick={() => setShowAllMoves((v) => !v)}
+                  className="text-[9px] uppercase tracking-widest text-workspace-text-secondary/40 hover:text-workspace-accent transition-colors"
+                  title={showAllMoves ? 'Collapse' : 'See all 25 prompts'}
+                >
+                  {showAllMoves ? '▾ hide' : '▸ more'}
+                </button>
               </div>
+
+              {/* Top 5 (ranked) */}
+              {!showAllMoves && (
+                <div className="flex flex-wrap gap-1.5">
+                  {suggestions.map((s) => {
+                    const isFav = favoriteIds.includes(s.id);
+                    return (
+                      <div key={s.id} className="group relative">
+                        <button
+                          onClick={() => handleSuggestionClick(s.query)}
+                          className="rounded-full border border-workspace-border/50 bg-white/80 pl-2.5 pr-6 py-1
+                            text-[10px] text-workspace-text transition-all duration-200
+                            hover:border-workspace-accent/20 hover:bg-workspace-accent/5 hover:text-workspace-accent"
+                        >
+                          {s.label}
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleToggleFavorite(s.id); }}
+                          className={`absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] leading-none transition-opacity ${
+                            isFav ? 'text-amber-400 opacity-100' : 'text-workspace-text-secondary/30 opacity-0 group-hover:opacity-100 hover:text-amber-400'
+                          }`}
+                          title={isFav ? 'Unpin favorite' : 'Pin as favorite'}
+                          aria-label={isFav ? 'Unpin favorite' : 'Pin as favorite'}
+                        >
+                          {isFav ? '★' : '☆'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Full catalog, grouped by category */}
+              {showAllMoves && (
+                <div className="space-y-2 max-h-[40vh] overflow-y-auto pr-1">
+                  {CATEGORY_ORDER.map((cat: NextMoveCategory) => {
+                    const entries = NEXT_MOVES_CATALOG.filter((e) => e.category === cat);
+                    if (entries.length === 0) return null;
+                    return (
+                      <div key={cat}>
+                        <div className="text-[9px] uppercase tracking-widest text-workspace-text-secondary/50 mb-1">
+                          {CATEGORY_LABELS[cat]}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {entries.map((entry) => {
+                            const isFav = favoriteIds.includes(entry.id);
+                            return (
+                              <div key={entry.id} className="group relative">
+                                <button
+                                  onClick={() => { handleSuggestionClick(entry.query); setShowAllMoves(false); }}
+                                  title={entry.description || entry.query}
+                                  className="rounded-full border border-workspace-border/40 bg-white/60 pl-2.5 pr-6 py-1
+                                    text-[10px] text-workspace-text transition-all duration-200
+                                    hover:border-workspace-accent/20 hover:bg-workspace-accent/5 hover:text-workspace-accent"
+                                >
+                                  {entry.label}
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleToggleFavorite(entry.id); }}
+                                  className={`absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] leading-none transition-opacity ${
+                                    isFav ? 'text-amber-400 opacity-100' : 'text-workspace-text-secondary/30 opacity-0 group-hover:opacity-100 hover:text-amber-400'
+                                  }`}
+                                  title={isFav ? 'Unpin favorite' : 'Pin as favorite'}
+                                  aria-label={isFav ? 'Unpin favorite' : 'Pin as favorite'}
+                                >
+                                  {isFav ? '★' : '☆'}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 

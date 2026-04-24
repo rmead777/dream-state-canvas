@@ -26,10 +26,6 @@ function makeObject(overrides: Partial<WorkspaceObject> = {}): WorkspaceObject {
     context: {
       columns: TEST_COLUMNS,
       rows: TEST_ROWS,
-      view: {
-        sortBy: 'Balance',
-        sortDirection: 'desc',
-      },
     },
     position: { zone: 'primary', order: 0 },
     createdAt: 1,
@@ -46,22 +42,51 @@ const activeContext: ActiveContext = {
   highlightedEntity: null,
 };
 
-describe('generateSuggestions', () => {
+describe('generateSuggestions (catalog-ranked)', () => {
   beforeEach(async () => {
     clearProfileCache();
-    // No global singleton — pass data directly to generateSuggestions
     await analyzeDataset(TEST_COLUMNS, TEST_ROWS);
   });
 
-  it('prefers refinement suggestions for the focused object', () => {
-    // generateSuggestions now accepts data columns/rows as params
+  it('returns a non-empty ranked list with all connections available', () => {
     const suggestions = generateSuggestions(
       { 'inspector-1': makeObject() },
       activeContext,
       TEST_COLUMNS,
       TEST_ROWS,
+      { limit: 5 },
     );
-    expect(suggestions.some((suggestion) => suggestion.query.includes('only Tier 1'))).toBe(true);
-    expect(suggestions.some((suggestion) => suggestion.query.includes('bar chart'))).toBe(true);
+    expect(suggestions.length).toBeGreaterThan(0);
+    expect(suggestions.length).toBeLessThanOrEqual(5);
+    // Every entry has the shape the UI expects
+    for (const s of suggestions) {
+      expect(typeof s.id).toBe('string');
+      expect(typeof s.label).toBe('string');
+      expect(typeof s.query).toBe('string');
+      expect(typeof s.priority).toBe('number');
+    }
+  });
+
+  it('hides entries that require missing integrations', () => {
+    const withoutQb = generateSuggestions(
+      { 'inspector-1': makeObject() },
+      activeContext,
+      TEST_COLUMNS,
+      TEST_ROWS,
+      { limit: 25, connections: { qb: false, ragic: true, email: true, documents: true } },
+    );
+    // No entry whose query requires live QB should appear
+    expect(withoutQb.every((s) => !/QuickBooks/i.test(s.query))).toBe(true);
+  });
+
+  it('anchors favorited entries at the top', () => {
+    const suggestions = generateSuggestions(
+      { 'inspector-1': makeObject() },
+      activeContext,
+      TEST_COLUMNS,
+      TEST_ROWS,
+      { limit: 5, favoriteIds: ['cash-flow-signals'] },
+    );
+    expect(suggestions[0].id).toBe('cash-flow-signals');
   });
 });
