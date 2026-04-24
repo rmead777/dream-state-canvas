@@ -67,6 +67,17 @@ export function useWorkspaceActions() {
     async (query: string, images?: string[]) => {
       dispatch({ type: 'SET_SHERPA_PROCESSING', payload: true });
 
+      // Cancel in-flight manifestations from a previous query. A scaffold
+      // still on the canvas means the last loop didn't reconcile it —
+      // either the user hit Enter again, the loop is still running, or
+      // something upstream broke. Either way, stale scaffolds shouldn't
+      // outlive the new turn.
+      for (const obj of Object.values(stateRef.current.objects)) {
+        if (obj.manifestationPhase === 'scaffold') {
+          dispatch({ type: 'DISSOLVE_OBJECT', payload: { id: obj.id } });
+        }
+      }
+
       const origin: IntentOrigin = {
         type: 'user-query',
         intentId: createIntentId(),
@@ -105,11 +116,28 @@ export function useWorkspaceActions() {
       let scaffoldCount = 0;
 
       try {
+        // Emit a shader pulse event. BackgroundShader listens and bumps a
+        // transient multiplier on flow-field speed + intensity that decays
+        // each frame. Makes the canvas feel alive during long agent loops.
+        const pulseShader = (amount: number) => {
+          window.dispatchEvent(new CustomEvent('sherpa-shader-pulse', { detail: amount }));
+        };
+
         const handleEvent = (event: AgentLoopEvent) => {
           switch (event.type) {
+            case 'loop_start':
+              pulseShader(0.25);
+              break;
+            case 'tool_executing':
+              pulseShader(0.35);
+              break;
+            case 'loop_complete':
+              pulseShader(0.5); // finishing flourish
+              break;
             case 'shadow_create': {
               if (spawnedScaffolds.has(event.shadowId)) break;
               spawnedScaffolds.add(event.shadowId);
+              pulseShader(0.4);
               // Stagger simultaneous scaffold spawns by 120ms so the eye
               // can track distinct arrivals.
               const delay = scaffoldCount * MULTI_SCAFFOLD_STAGGER_MS;
@@ -136,9 +164,8 @@ export function useWorkspaceActions() {
               break;
             }
             default:
-              // Other events (loop_start, iteration_start, tool_executing,
-              // tool_complete, shadow_update, loop_complete) are consumed by
-              // ambient-field / telemetry layers. No reducer action here.
+              // iteration_start, tool_complete, shadow_update, loop_error —
+              // no visual consumer yet. Available for future telemetry.
               break;
           }
         };
@@ -612,6 +639,10 @@ export function useWorkspaceActions() {
         },
       });
       dispatch({ type: 'ADVANCE_MANIFESTATION_PHASE', payload: { id, phase: 'resolving' } });
+      // Scaffold-time focus was suppressed to avoid multi-card flicker. Set
+      // focus now on reconciliation. For multi-card spawns the LAST card to
+      // reconcile wins — usually the one the user asked for most specifically.
+      dispatch({ type: 'FOCUS_OBJECT', payload: { id } });
     } else {
       // No scaffold — legacy path.
       dispatch({ type: 'MATERIALIZE_OBJECT', payload: obj });

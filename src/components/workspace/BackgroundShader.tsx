@@ -290,6 +290,20 @@ const FRAME_MS = 1000 / TARGET_FPS
 
 export function BackgroundShader() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  // Transient pulse multiplier driven by agent loop events. Listeners add
+  // to this on `sherpa-shader-pulse`; the render loop decays it each frame.
+  // Values stay in [0, 1] range and are applied as (1 + pulse * gain)
+  // multipliers on speed + intensity at uniform-write time.
+  const pulseRef = useRef(0)
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const amt = (e as CustomEvent<number>).detail ?? 0
+      pulseRef.current = Math.min(1, pulseRef.current + Math.max(0, amt))
+    }
+    window.addEventListener('sherpa-shader-pulse', handler)
+    return () => window.removeEventListener('sherpa-shader-pulse', handler)
+  }, [])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -455,9 +469,18 @@ export function BackgroundShader() {
       gl.uniform1f(simUniforms.time, time)
       gl.uniform2f(simUniforms.mouse, simMX, simMY)
 
+      // Decay the pulse each frame (30fps → ~1s half-life at 0.977). Apply
+      // as a multiplier on the motion-related uniforms so the field breathes
+      // during agent work. Gain tuned so full pulse ≈ 2x speed, 1.8x intensity.
+      pulseRef.current *= 0.977
+      if (pulseRef.current < 0.001) pulseRef.current = 0
+      const pulseMult = 1 + pulseRef.current
+      const speedBoost = pulseMult * pulseMult      // slightly super-linear on speed
+      const intensityBoost = 1 + pulseRef.current * 0.8
+
       // Tunable uniforms — map 0..1 slider range to shader-appropriate ranges
-      gl.uniform1f(simUniforms.speed,      lerp(0.01,  0.15,  s.speed))
-      gl.uniform1f(simUniforms.intensity,  lerp(0.0005, 0.006, s.intensity))
+      gl.uniform1f(simUniforms.speed,      lerp(0.01,  0.15,  s.speed) * speedBoost)
+      gl.uniform1f(simUniforms.intensity,  lerp(0.0005, 0.006, s.intensity) * intensityBoost)
       gl.uniform1f(simUniforms.diffusion,  lerp(0.01,  0.12,  s.diffusion))
       gl.uniform1f(simUniforms.emission,   lerp(0.2,   3.0,   s.emission))
       gl.uniform1f(simUniforms.mouseReact, lerp(0.0,   0.08,  s.mouseReactivity))

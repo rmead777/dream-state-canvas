@@ -383,11 +383,14 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceReducerAction)
       };
       const withNew = { ...state.objects, [id]: obj };
       const { objects: newObjects, layout } = layoutWithOverflowCollapse(withNew);
+      // Intentionally DO NOT set focusedObjectId here. Multi-card spawns
+      // would thrash focus across 3 scaffolds in ~240ms. Real focus is set
+      // by handleCreate on reconciliation (single card) or by the agent
+      // loop's final outcome (multi-card).
       return {
         ...state,
         objects: newObjects,
         spatialLayout: layout,
-        activeContext: { ...state.activeContext, focusedObjectId: id },
       };
     }
 
