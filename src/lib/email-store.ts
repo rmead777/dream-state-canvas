@@ -16,69 +16,48 @@ import { PublicClientApplication, InteractionRequiredAuthError, type AccountInfo
 import { loginRequest } from './msal-config';
 import { supabase } from '@/integrations/supabase/client';
 
-// ─── EMAIL FOLDER GUARDRAIL ──────────────────────────────────────────────────
-// Per-user folder selection. Each browser/user picks their own folder on first
-// setup (no passphrase needed). To CHANGE a folder that's already been set,
-// the super admin passphrase is required — this prevents accidental repoint
-// of an existing sync.
-//
-// Design:
-//   - First-time users (no folder stored yet): setAllowedEmailFolder() works freely
-//   - Users with a folder already set: must unlockEmailFolderChange() first
+// ─── EMAIL FOLDER SELECTION ─────────────────────────────────────────────────
+// Per-user folder selection stored in localStorage. Each user picks any folder
+// from their own Microsoft mailbox via listMailFolders() and can change it
+// at any time. Sync state is keyed by (user, folder), so switching folders
+// is non-destructive — already-synced data from the prior folder stays in
+// Supabase and resumes if the user switches back.
 
 const EMAIL_FOLDER_STORAGE_KEY = 'sherpa-email-allowed-folder';
-const EMAIL_FOLDER_LOCK_PASSPHRASE = 'fairlead-email-vault-2026';
 
-let folderChangeLocked = true;
-
-function getLockedFolder(): string {
+function getActiveFolder(): string {
   return localStorage.getItem(EMAIL_FOLDER_STORAGE_KEY) || 'Incoa AP Automated';
 }
 
 /**
- * Returns true if the user has NEVER set their folder. First-time setup
- * bypasses the passphrase — whoever arrives first picks their own folder.
+ * Returns true if the user has explicitly picked a folder. Used to gate the
+ * sync button until the user has chosen one.
  */
 export function hasUserSetFolder(): boolean {
   return localStorage.getItem(EMAIL_FOLDER_STORAGE_KEY) !== null;
 }
 
 /**
- * Attempt to unlock folder change. Returns true if passphrase matches.
- * Lock resets on page reload — cannot be permanently unlocked.
- */
-export function unlockEmailFolderChange(passphrase: string): boolean {
-  if (passphrase.trim() === EMAIL_FOLDER_LOCK_PASSPHRASE) {
-    folderChangeLocked = false;
-    return true;
-  }
-  return false;
-}
-
-/**
- * Change the allowed email folder.
- * - First-time setup (no folder stored yet): works without unlock
- * - Changing an existing folder: requires unlockEmailFolderChange() first
+ * Set the active email folder. Callable any time — no gating.
+ * Caller is responsible for refreshing sync state and email count display.
  */
 export function setAllowedEmailFolder(folderName: string): void {
-  const isFirstTime = !hasUserSetFolder();
-  if (!isFirstTime && folderChangeLocked) {
-    throw new Error('Folder is already set. Use the super admin passphrase to change it.');
-  }
-  localStorage.setItem(EMAIL_FOLDER_STORAGE_KEY, folderName.trim());
-  folderChangeLocked = true; // Re-lock immediately after change
+  const trimmed = folderName.trim();
+  if (!trimmed) throw new Error('Folder name cannot be empty.');
+  localStorage.setItem(EMAIL_FOLDER_STORAGE_KEY, trimmed);
 }
 
 /**
- * Enforce that a folder name matches the allowed folder.
- * Any request for a different folder is silently redirected to the allowed folder.
+ * Resolve the folder name a sync/read operation should use. Always returns
+ * the user's currently selected folder — argument is accepted for API
+ * compatibility but ignored unless it matches.
  */
 function enforceAllowedFolder(requestedFolder?: string): string {
-  const allowed = getLockedFolder();
-  if (requestedFolder && requestedFolder.toLowerCase() !== allowed.toLowerCase()) {
-    console.warn(`[email-store] BLOCKED: Requested folder "${requestedFolder}" — only "${allowed}" is allowed. Redirecting.`);
+  const active = getActiveFolder();
+  if (requestedFolder && requestedFolder.toLowerCase() !== active.toLowerCase()) {
+    console.warn(`[email-store] Requested folder "${requestedFolder}" differs from active "${active}". Using active.`);
   }
-  return allowed;
+  return active;
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -174,26 +153,31 @@ async function graphFetch<T>(endpoint: string): Promise<T | null> {
   return response.json();
 }
 
-// ─── Folder Resolution ─────────────────────────────────────────────────────
-
 // ─── Folder Discovery ─────────────────────────────────────────────────────
 
 /**
- * List mail folders — INTERNAL ONLY for folder resolution.
- * Not exposed to Sherpa tools. Users cannot browse folders.
- */
-/**
- * Public: returns ONLY the allowed folder name. No browsing.
+ * Returns the user's currently selected folder name.
  */
 export function getAllowedEmailFolder(): string {
-  return getLockedFolder();
+  return getActiveFolder();
+}
+
+export interface MailFolder {
+  id: string;
+  displayName: string;
+  totalItemCount: number;
+  childFolderCount: number;
 }
 
 /**
- * List mail folders — INTERNAL ONLY for folder resolution.
- * Not exposed to Sherpa tools. Users cannot browse folders.
+ * List mail folders from the user's Microsoft mailbox via Graph API.
+ * Returns top-level folders + their immediate children. Child display names
+ * are prefixed with "Parent / Child" for visual nesting in dropdowns.
+ *
+ * Used by the OutlookStatusPanel folder picker. Not exposed to Sherpa tools —
+ * users browse their own mailbox; the AI does not enumerate folders.
  */
-async function listMailFoldersInternal(): Promise<Array<{ id: string; displayName: string; totalItemCount: number; childFolderCount: number }>> {
+export async function listMailFolders(): Promise<MailFolder[]> {
   const folders: Array<{ id: string; displayName: string; totalItemCount: number; childFolderCount: number }> = [];
 
   // Top-level folders

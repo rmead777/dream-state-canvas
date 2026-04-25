@@ -10,7 +10,8 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   isOutlookConnected, getOutlookAccount, signInToOutlook, signOutOfOutlook,
   syncEmails, getStoredEmailCount, getSyncState, getAllowedEmailFolder,
-  hasUserSetFolder, setAllowedEmailFolder,
+  hasUserSetFolder, setAllowedEmailFolder, listMailFolders,
+  type MailFolder,
 } from '@/lib/email-store';
 
 export function OutlookStatusPanel() {
@@ -23,9 +24,15 @@ export function OutlookStatusPanel() {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [folderName, setFolderName] = useState(getAllowedEmailFolder());
   const [folderConfigured, setFolderConfigured] = useState(hasUserSetFolder());
-  const [folderDraft, setFolderDraft] = useState('');
   const [folderError, setFolderError] = useState<string | null>(null);
   const [syncDays, setSyncDays] = useState(90);
+
+  // Folder picker state
+  const [picking, setPicking] = useState(false);
+  const [folderList, setFolderList] = useState<MailFolder[] | null>(null);
+  const [folderListLoading, setFolderListLoading] = useState(false);
+  const [folderListError, setFolderListError] = useState<string | null>(null);
+  const [pendingFolder, setPendingFolder] = useState<string>('');
 
   const checkConnection = useCallback(() => {
     const conn = isOutlookConnected();
@@ -80,27 +87,60 @@ export function OutlookStatusPanel() {
     setLoading(false);
   };
 
-  const handleSaveFolder = () => {
+  const handleFetchFolders = useCallback(async () => {
+    setFolderListLoading(true);
+    setFolderListError(null);
+    try {
+      const folders = await listMailFolders();
+      setFolderList(folders);
+    } catch (e: any) {
+      setFolderListError(e?.message || 'Could not load folders from Outlook.');
+    } finally {
+      setFolderListLoading(false);
+    }
+  }, []);
+
+  const handleStartPick = () => {
     setFolderError(null);
-    const trimmed = folderDraft.trim();
+    setPendingFolder(folderName);
+    setPicking(true);
+    if (!folderList) handleFetchFolders();
+  };
+
+  const handleConfirmPick = () => {
+    setFolderError(null);
+    const trimmed = pendingFolder.trim();
     if (!trimmed) {
-      setFolderError('Folder name cannot be empty.');
+      setFolderError('Pick a folder before saving.');
       return;
     }
     try {
       setAllowedEmailFolder(trimmed);
       setFolderName(trimmed);
       setFolderConfigured(true);
-      setFolderDraft('');
-      setEmailCount(null); // Reset count since folder changed
-      setLastSync(null);
+      setEmailCount(null); // Different folder → different stored count
+      setLastSync(null);   // Force re-sync prompt
+      setPicking(false);
+      setPendingFolder('');
     } catch (e: any) {
-      setFolderError(e?.message || 'Failed to set folder.');
+      setFolderError(e?.message || 'Failed to save folder.');
     }
   };
 
-  // Folder change AFTER first setup requires super admin passphrase
-  // via unlockEmailFolderChange() + setAllowedEmailFolder().
+  const handleCancelPick = () => {
+    setPicking(false);
+    setPendingFolder('');
+    setFolderError(null);
+  };
+
+  // First-time setup: auto-open the picker once Outlook connects so the user
+  // sees the folder list immediately instead of having to click "Change."
+  useEffect(() => {
+    if (connected && !folderConfigured && !picking) {
+      setPicking(true);
+      if (!folderList) handleFetchFolders();
+    }
+  }, [connected, folderConfigured, picking, folderList, handleFetchFolders]);
 
   return (
     <div className="border-b border-workspace-border/30 mb-3">
@@ -167,33 +207,69 @@ export function OutlookStatusPanel() {
                 </span>
               </div>
 
-              {/* Folder — picker on first-time setup, locked display after */}
-              {!folderConfigured ? (
-                <div className="space-y-1 rounded px-2 py-1.5 bg-workspace-surface/30 border border-workspace-accent/20">
+              {/* Folder — picker dropdown when picking (or first-time), summary otherwise */}
+              {picking || !folderConfigured ? (
+                <div className="space-y-1.5 rounded px-2 py-2 bg-workspace-surface/30 border border-workspace-accent/20">
                   <div className="flex items-center gap-2">
                     <span className="text-[9px] text-workspace-text-secondary/60 shrink-0">Folder:</span>
-                    <input
-                      type="text"
-                      value={folderDraft}
-                      onChange={(e) => { setFolderDraft(e.target.value); setFolderError(null); }}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleSaveFolder(); }}
-                      placeholder="Pick your Outlook folder, e.g. Inbox"
-                      className="flex-1 bg-transparent text-[10px] text-workspace-text placeholder:text-workspace-text-secondary/30 outline-none border-b border-workspace-border/20 focus:border-workspace-accent/50"
-                    />
-                    <button
-                      onClick={handleSaveFolder}
-                      disabled={!folderDraft.trim()}
-                      className="text-[9px] text-workspace-accent hover:text-workspace-accent/80 disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
-                    >
-                      Save
-                    </button>
+                    {folderListLoading ? (
+                      <span className="flex-1 text-[10px] text-workspace-text-secondary/50">Loading folders…</span>
+                    ) : folderList && folderList.length > 0 ? (
+                      <select
+                        value={pendingFolder}
+                        onChange={(e) => { setPendingFolder(e.target.value); setFolderError(null); }}
+                        className="flex-1 bg-transparent text-[10px] text-workspace-text outline-none cursor-pointer border-b border-workspace-border/20 focus:border-workspace-accent/50"
+                      >
+                        <option value="">— pick a folder —</option>
+                        {[...folderList]
+                          .sort((a, b) => a.displayName.localeCompare(b.displayName))
+                          .map((f) => (
+                            <option key={f.id} value={f.displayName}>
+                              {f.displayName} ({f.totalItemCount.toLocaleString()})
+                            </option>
+                          ))}
+                      </select>
+                    ) : folderListError ? (
+                      <button
+                        onClick={handleFetchFolders}
+                        className="flex-1 text-left text-[10px] text-red-400 hover:text-red-300 underline"
+                      >
+                        Retry
+                      </button>
+                    ) : (
+                      <span className="flex-1 text-[10px] text-workspace-text-secondary/50">No folders found.</span>
+                    )}
                   </div>
+                  {folderListError && (
+                    <p className="text-[9px] text-red-400/70 px-1">{folderListError}</p>
+                  )}
                   {folderError && (
                     <p className="text-[9px] text-red-400/70 px-1">{folderError}</p>
                   )}
-                  <p className="text-[8px] text-workspace-text-secondary/40 px-1 leading-tight">
-                    First-time setup — pick any folder in your mailbox. The folder will be locked after this.
-                  </p>
+                  <div className="flex items-center justify-between gap-2 px-1">
+                    <p className="text-[8px] text-workspace-text-secondary/40 leading-tight">
+                      {folderConfigured
+                        ? 'Switching folders resets sync state for this folder.'
+                        : 'Pick any folder in your mailbox to start syncing.'}
+                    </p>
+                    <div className="flex items-center gap-3 shrink-0">
+                      {folderConfigured && (
+                        <button
+                          onClick={handleCancelPick}
+                          className="text-[9px] text-workspace-text-secondary/50 hover:text-workspace-text transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                      <button
+                        onClick={handleConfirmPick}
+                        disabled={!pendingFolder.trim() || folderListLoading}
+                        className="text-[9px] text-workspace-accent hover:text-workspace-accent/80 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="flex items-center gap-2 rounded px-2 py-1 bg-workspace-surface/30">
@@ -201,12 +277,16 @@ export function OutlookStatusPanel() {
                   <span className="flex-1 text-[10px] text-workspace-text truncate">
                     {folderName}
                   </span>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-workspace-text-secondary/30 shrink-0">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
                   <span className="text-[8px] text-workspace-text-secondary/40 shrink-0 tabular-nums">
                     {emailCount != null ? `${emailCount}` : '—'}
                   </span>
+                  <button
+                    onClick={handleStartPick}
+                    className="text-[9px] text-workspace-accent/70 hover:text-workspace-accent transition-colors shrink-0"
+                    title="Pick a different folder"
+                  >
+                    Change
+                  </button>
                 </div>
               )}
 
