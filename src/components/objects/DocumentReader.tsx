@@ -145,6 +145,7 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
   const d = object.context;
   const [askInput, setAskInput] = useState('');
   const [aiResponse, setAiResponse] = useState<string | null>(null);
+  const [lastQuestion, setLastQuestion] = useState<string | null>(null);
   const [highlights, setHighlights] = useState<number[]>([]);
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
@@ -230,6 +231,7 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
     if (!askInput.trim() || isStreaming) return;
     const question = askInput;
     setAskInput('');
+    setLastQuestion(question);
     setAiResponse('');
 
     await streamChat(
@@ -364,7 +366,7 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
       )}
 
       {/* Right sidebar (or bottom panel on mobile) — AI Summary + Ask */}
-      <div className="workspace-card-surface w-full md:w-[380px] lg:w-[420px] md:shrink-0 overflow-y-auto rounded-[28px] border border-workspace-border/45 bg-workspace-bg">
+      <div className="workspace-card-surface w-full md:w-[400px] lg:w-[480px] xl:w-[560px] 2xl:w-[640px] md:shrink-0 overflow-y-auto rounded-[28px] border border-workspace-border/45 bg-workspace-bg">
         <div className="px-6 py-6 space-y-6">
           <div className="flex items-center justify-between">
             <div>
@@ -419,8 +421,17 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
               Ask for risks, commitments, names, or supporting evidence. Press Enter to send.
             </p>
 
+            {showAiResponsePanel && lastQuestion && (
+              <div className="mt-4 animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards] rounded-2xl border border-workspace-border/35 bg-workspace-accent-subtle/10 px-5 py-3">
+                <div className="mb-1 text-[10px] font-medium uppercase tracking-[0.22em] text-workspace-text-secondary/60">
+                  You asked
+                </div>
+                <p className="text-sm leading-relaxed text-workspace-text/85">{lastQuestion}</p>
+              </div>
+            )}
+
             {showAiResponsePanel && (
-              <div role="status" aria-live="polite" className="mt-4 animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards] rounded-2xl bg-workspace-surface/60 px-5 py-4 border border-workspace-border/35">
+              <div role="status" aria-live="polite" className={`${lastQuestion ? 'mt-2' : 'mt-4'} animate-[materialize_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards] rounded-2xl bg-workspace-surface/60 px-5 py-4 border border-workspace-border/35`}>
                 <div className="mb-3 text-[10px] font-medium uppercase tracking-[0.22em] text-workspace-accent/70">
                   {isStreaming && !aiResponse ? 'Preparing answer' : 'AI answer'}
                 </div>
