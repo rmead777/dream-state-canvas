@@ -137,25 +137,40 @@ export function ImmersiveOverlay() {
         </div>
       </div>
 
-      {/* Immersive content — full width for data, constrained for reading */}
-      <div className={`relative z-10 flex-1 overflow-y-auto pt-4 md:pt-6 pb-6 md:pb-8 ${
-        safeObject.type === 'dataset' || safeObject.type === 'inspector' || safeObject.type === 'dataset-edit-preview' || safeObject.type === 'memory-cleanup-preview' || safeObject.context?.isDatasetEdit || safeObject.context?.isMemoryCleanup ? 'px-2 md:px-4' : 'px-4 md:px-8'
-      }`}>
-        {/* PDF preview overlay — positioned over content */}
-        {pdfMode && (
-          <PdfPreviewMode
-            contentRef={contentRef}
-            title={safeObject.title}
-            onClose={() => setPdfMode(false)}
-          />
-        )}
-        <div
-          ref={contentRef}
-          className={`relative ${safeObject.type === 'dataset' || safeObject.type === 'inspector' || safeObject.type === 'dataset-edit-preview' || safeObject.type === 'memory-cleanup-preview' || safeObject.context?.isDatasetEdit || safeObject.context?.isMemoryCleanup ? '' : 'mx-auto max-w-4xl'}`}
-        >
-          <ImmersiveContent object={safeObject} />
-        </div>
-      </div>
+      {/* Immersive content — full width for data + documents (which have their own internal split layout),
+          constrained for narrative reading where line length matters. */}
+      {(() => {
+        const wantsFullWidth =
+          safeObject.type === 'dataset' ||
+          safeObject.type === 'inspector' ||
+          safeObject.type === 'dataset-edit-preview' ||
+          safeObject.type === 'memory-cleanup-preview' ||
+          safeObject.type === 'document' ||
+          safeObject.type === 'document-viewer' ||
+          safeObject.context?.isDatasetEdit ||
+          safeObject.context?.isMemoryCleanup;
+
+        return (
+          <div className={`relative z-10 flex-1 overflow-y-auto pt-4 md:pt-6 pb-6 md:pb-8 ${
+            wantsFullWidth ? 'px-2 md:px-4' : 'px-4 md:px-8'
+          }`}>
+            {/* PDF preview overlay — positioned over content */}
+            {pdfMode && (
+              <PdfPreviewMode
+                contentRef={contentRef}
+                title={safeObject.title}
+                onClose={() => setPdfMode(false)}
+              />
+            )}
+            <div
+              ref={contentRef}
+              className={`relative ${wantsFullWidth ? '' : 'mx-auto max-w-4xl'}`}
+            >
+              <ImmersiveContent object={safeObject} />
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -295,10 +295,10 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
   }
 
   return (
-    <div className="flex h-full gap-4">
+    <div className="flex h-full flex-col gap-4 md:flex-row">
       {/* PDF Viewer — main area */}
       {isPdf ? (
-        <div className="workspace-card-surface flex-1 min-w-0 overflow-hidden rounded-[28px] border border-workspace-border/45 bg-workspace-surface">
+        <div className="workspace-card-surface flex-1 min-w-0 min-h-[60vh] md:min-h-0 overflow-hidden rounded-[28px] border border-workspace-border/45 bg-workspace-surface">
           {pdfBlob ? (
             <PdfCanvasViewer fileBlob={pdfBlob} fileName={fileName} />
           ) : (
@@ -363,8 +363,8 @@ export function DocumentReader({ object, isImmersive = false }: DocumentReaderPr
         </div>
       )}
 
-      {/* Right sidebar — AI Summary + Ask */}
-      <div className="workspace-card-surface w-[380px] shrink-0 overflow-y-auto rounded-[28px] border border-workspace-border/45 bg-workspace-bg">
+      {/* Right sidebar (or bottom panel on mobile) — AI Summary + Ask */}
+      <div className="workspace-card-surface w-full md:w-[380px] lg:w-[420px] md:shrink-0 overflow-y-auto rounded-[28px] border border-workspace-border/45 bg-workspace-bg">
         <div className="px-6 py-6 space-y-6">
           <div className="flex items-center justify-between">
             <div>
