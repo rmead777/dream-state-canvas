@@ -171,35 +171,72 @@ export interface MailFolder {
 
 /**
  * List mail folders from the user's Microsoft mailbox via Graph API.
- * Returns top-level folders + their immediate children. Child display names
- * are prefixed with "Parent / Child" for visual nesting in dropdowns.
+ * Walks the full folder tree (top-level + all descendants), prefixing
+ * each descendant's displayName with its full path: "Inbox / Sub / Deep".
+ * Sibling fetches at each depth run in parallel.
  *
  * Used by the OutlookStatusPanel folder picker. Not exposed to Sherpa tools —
  * users browse their own mailbox; the AI does not enumerate folders.
  */
 export async function listMailFolders(): Promise<MailFolder[]> {
-  const folders: Array<{ id: string; displayName: string; totalItemCount: number; childFolderCount: number }> = [];
+  const MAX_DEPTH = 6; // safety cap — handles typical nesting; deeper trees still work, just truncated
+  type GraphFolder = { id: string; displayName: string; totalItemCount: number; childFolderCount: number };
 
-  // Top-level folders
-  const topLevel = await graphFetch<{ value: Array<{ id: string; displayName: string; totalItemCount: number; childFolderCount: number }> }>(
+  // Top-level fetch — auth errors propagate to the caller so the panel can
+  // show "session expired" instead of "no folders found"
+  const topLevel = await graphFetch<{ value: GraphFolder[] }>(
     `/me/mailFolders?$top=100`
   );
-  if (topLevel?.value) {
-    for (const f of topLevel.value) {
-      folders.push(f);
-      // Also fetch child folders
-      if (f.childFolderCount > 0) {
-        const children = await graphFetch<{ value: Array<{ id: string; displayName: string; totalItemCount: number; childFolderCount: number }> }>(
-          `/me/mailFolders/${f.id}/childFolders?$top=100`
-        );
-        if (children?.value) {
-          folders.push(...children.value.map(c => ({ ...c, displayName: `${f.displayName} / ${c.displayName}` })));
-        }
+  if (!topLevel?.value) return [];
+
+  const all: MailFolder[] = [];
+  for (const top of topLevel.value) {
+    all.push({ ...top });
+    if (top.childFolderCount > 0) {
+      try {
+        const descendants = await fetchFolderDescendants(top.id, top.displayName, 1, MAX_DEPTH);
+        all.push(...descendants);
+      } catch (e) {
+        // Some system folders (e.g. Conversation History containers) reject
+        // childFolder enumeration. Log and skip — don't abort the whole tree.
+        console.warn(`[email-store] Could not fetch descendants of "${top.displayName}":`, e);
       }
     }
   }
 
-  return folders;
+  return all;
+}
+
+async function fetchFolderDescendants(
+  parentId: string,
+  prefix: string,
+  depth: number,
+  maxDepth: number,
+): Promise<MailFolder[]> {
+  if (depth >= maxDepth) return [];
+
+  type GraphFolder = { id: string; displayName: string; totalItemCount: number; childFolderCount: number };
+  const result = await graphFetch<{ value: GraphFolder[] }>(
+    `/me/mailFolders/${parentId}/childFolders?$top=100`
+  );
+  if (!result?.value || result.value.length === 0) return [];
+
+  // Parallelize sibling subtrees — much faster on wide trees
+  const branches = await Promise.all(
+    result.value.map(async (child): Promise<MailFolder[]> => {
+      const displayName = `${prefix} / ${child.displayName}`;
+      const self: MailFolder = { ...child, displayName };
+      if (child.childFolderCount === 0) return [self];
+      try {
+        const nested = await fetchFolderDescendants(child.id, displayName, depth + 1, maxDepth);
+        return [self, ...nested];
+      } catch (e) {
+        console.warn(`[email-store] Could not fetch descendants of "${displayName}":`, e);
+        return [self];
+      }
+    })
+  );
+  return branches.flat();
 }
 
 const folderIdCache = new Map<string, string>();
