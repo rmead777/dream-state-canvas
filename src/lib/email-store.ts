@@ -183,9 +183,12 @@ export async function listMailFolders(): Promise<MailFolder[]> {
   type GraphFolder = { id: string; displayName: string; totalItemCount: number; childFolderCount: number };
 
   // Top-level fetch — auth errors propagate to the caller so the panel can
-  // show "session expired" instead of "no folders found"
+  // show "session expired" instead of "no folders found".
+  // includeHiddenFolders=true surfaces folders created by rules / external
+  // sync apps that Outlook flags as hidden — without this, custom AP-routing
+  // folders often go missing from the picker.
   const topLevel = await graphFetch<{ value: GraphFolder[] }>(
-    `/me/mailFolders?$top=100`
+    `/me/mailFolders?includeHiddenFolders=true&$top=100`
   );
   if (!topLevel?.value) return [];
 
@@ -217,7 +220,7 @@ async function fetchFolderDescendants(
 
   type GraphFolder = { id: string; displayName: string; totalItemCount: number; childFolderCount: number };
   const result = await graphFetch<{ value: GraphFolder[] }>(
-    `/me/mailFolders/${parentId}/childFolders?$top=100`
+    `/me/mailFolders/${parentId}/childFolders?includeHiddenFolders=true&$top=100`
   );
   if (!result?.value || result.value.length === 0) return [];
 

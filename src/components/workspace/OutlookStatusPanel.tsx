@@ -33,6 +33,7 @@ export function OutlookStatusPanel() {
   const [folderListLoading, setFolderListLoading] = useState(false);
   const [folderListError, setFolderListError] = useState<string | null>(null);
   const [pendingFolder, setPendingFolder] = useState<string>('');
+  const [manualEntry, setManualEntry] = useState(false);
 
   const checkConnection = useCallback(() => {
     const conn = isOutlookConnected();
@@ -122,6 +123,7 @@ export function OutlookStatusPanel() {
       setLastSync(null);   // Force re-sync prompt
       setPicking(false);
       setPendingFolder('');
+      setManualEntry(false);
     } catch (e: any) {
       setFolderError(e?.message || 'Failed to save folder.');
     }
@@ -131,6 +133,7 @@ export function OutlookStatusPanel() {
     setPicking(false);
     setPendingFolder('');
     setFolderError(null);
+    setManualEntry(false);
   };
 
   // First-time setup: auto-open the picker once Outlook connects so the user
@@ -212,7 +215,17 @@ export function OutlookStatusPanel() {
                 <div className="space-y-1.5 rounded px-2 py-2 bg-workspace-surface/30 border border-workspace-accent/20">
                   <div className="flex items-center gap-2">
                     <span className="text-[9px] text-workspace-text-secondary/60 shrink-0">Folder:</span>
-                    {folderListLoading ? (
+                    {manualEntry ? (
+                      <input
+                        type="text"
+                        value={pendingFolder}
+                        onChange={(e) => { setPendingFolder(e.target.value); setFolderError(null); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmPick(); }}
+                        autoFocus
+                        placeholder="e.g. Inbox / INCOA / AP Automated"
+                        className="flex-1 bg-transparent text-[10px] text-workspace-text placeholder:text-workspace-text-secondary/30 outline-none border-b border-workspace-border/20 focus:border-workspace-accent/50"
+                      />
+                    ) : folderListLoading ? (
                       <span className="flex-1 text-[10px] text-workspace-text-secondary/50">Loading folders…</span>
                     ) : folderList && folderList.length > 0 ? (
                       <select
@@ -240,6 +253,19 @@ export function OutlookStatusPanel() {
                       <span className="flex-1 text-[10px] text-workspace-text-secondary/50">No folders found.</span>
                     )}
                   </div>
+
+                  {/* Manual-entry toggle — escape hatch for shared mailboxes,
+                      hidden folders, or anything Graph didn't surface */}
+                  <button
+                    onClick={() => {
+                      setManualEntry(!manualEntry);
+                      setPendingFolder('');
+                      setFolderError(null);
+                    }}
+                    className="text-[9px] text-workspace-accent/60 hover:text-workspace-accent transition-colors px-1"
+                  >
+                    {manualEntry ? '← Pick from list instead' : "Can't find it? Type folder name →"}
+                  </button>
                   {folderListError && (
                     <p className="text-[9px] text-red-400/70 px-1">{folderListError}</p>
                   )}
