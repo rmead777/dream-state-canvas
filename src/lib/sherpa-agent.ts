@@ -48,6 +48,15 @@ const WRITE_TOOLS = new Set([
   'rememberFact', 'setThreshold', 'suggestNextMoves',
 ]);
 
+// Tools to EXCLUDE from provenance chips. These are actions/side effects/UX
+// helpers, not "consulted sources" — showing them as provenance would be
+// misleading (a card claiming "createCard" as its source is circular).
+// Superset of WRITE_TOOLS plus additional mutators like editDataset.
+const NON_PROVENANCE_TOOLS = new Set([
+  ...WRITE_TOOLS,
+  'editDataset', 'createScratchpad', 'deleteScratchpad',
+]);
+
 /** Count discrete memory items injected via formatMemoriesForPrompt. */
 function countInjectedMemories(memories: string): number {
   if (!memories) return 0;
@@ -407,7 +416,13 @@ Use syncRagic when the user says "refresh ragic", "sync orders", "update ragic d
       emit({ type: 'tool_complete', toolName, t: Date.now() });
 
       // Provenance capture — record this tool + any document it touched.
-      toolsConsulted.push({ name: toolName, arg: describeProvenanceArg(toolName, args) });
+      // EXCLUDE write/action tools (NON_PROVENANCE_TOOLS) — those are what the
+      // agent DID, not what it READ. Document IDs from write tools (e.g. the
+      // documentId arg of editDataset) are still captured because the data
+      // edit was informed by the document's contents.
+      if (!NON_PROVENANCE_TOOLS.has(toolName)) {
+        toolsConsulted.push({ name: toolName, arg: describeProvenanceArg(toolName, args) });
+      }
       if (typeof args.documentId === 'string') documentsConsulted.add(args.documentId);
       if (typeof args.docId === 'string') documentsConsulted.add(args.docId);
 
