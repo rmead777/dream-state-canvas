@@ -218,8 +218,8 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-workspace-border bg-workspace-surface/40">
-                  {previewCols.map((col) => (
-                    <th key={col} className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.18em] text-workspace-text-secondary whitespace-nowrap">
+                  {previewCols.map((col, idx) => (
+                    <th key={`${idx}-${col}`} className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.18em] text-workspace-text-secondary whitespace-nowrap">
                       {col}
                     </th>
                   ))}
@@ -471,7 +471,7 @@ function VirtualizedTable({
             </div>
           )}
           {columns.map((col, idx) => (
-            <div key={col} className="px-4 py-2.5">
+            <div key={`${idx}-${col}`} className="px-4 py-2.5">
               <button
                 onClick={() => onSort(idx)}
                 aria-sort={sortCol === idx ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
