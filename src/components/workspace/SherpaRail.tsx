@@ -22,7 +22,7 @@ import {
 } from '@/lib/admin-settings';
 import { toast } from 'sonner';
 import { PromptEditor } from './PromptEditor';
-import { MemoryPanel } from './MemoryPanel';
+import { Notebook } from './Notebook';
 import { RulesEditor } from './RulesEditor';
 import { AITelemetryPanel } from './AITelemetryPanel';
 import { ShaderControlPanel } from './ShaderControlPanel';
@@ -41,11 +41,11 @@ const RAIL_TABLET_DEFAULT = 280;
 const RAIL_TABLET_MAX = 360;
 const RAIL_WIDTH_KEY = 'sherpa-rail-width';
 
-type RailTab = 'origin' | 'memory' | 'rules' | 'context' | 'admin' | 'log';
+type RailTab = 'origin' | 'notebook' | 'rules' | 'context' | 'admin' | 'log';
 
 const TAB_CONFIG: { id: RailTab; label: string; adminOnly?: boolean }[] = [
   { id: 'origin', label: 'Origin' },
-  { id: 'memory', label: 'Memory' },
+  { id: 'notebook', label: 'Notebook' },
   { id: 'rules', label: 'Rules' },
   { id: 'context', label: 'Context' },
   { id: 'admin', label: 'Admin', adminOnly: true },
@@ -912,7 +912,7 @@ export function SherpaRail() {
       ) : (
         /* ═══ NON-ORIGIN TAB CONTENT ═══ */
         <div className="relative z-10 flex-1 overflow-y-auto px-4 py-4">
-          {activeTab === 'memory' && <MemoryPanel onSendToSherpa={trackAndProcess} />}
+          {activeTab === 'notebook' && <Notebook onSendToSherpa={trackAndProcess} />}
 
           {activeTab === 'rules' && (
             <RulesEditor onClose={() => setActiveTab('origin')} />

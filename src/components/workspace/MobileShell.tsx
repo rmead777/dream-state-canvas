@@ -13,7 +13,7 @@ import { VoiceIndicator } from './VoiceIndicator';
 import { DocumentContextSelector, ContextMode } from './DocumentContextSelector';
 import { QBOStatusPanel } from './QBOStatusPanel';
 import { OutlookStatusPanel } from './OutlookStatusPanel';
-import { MemoryPanel } from './MemoryPanel';
+import { Notebook } from './Notebook';
 import MarkdownRenderer from '../objects/MarkdownRenderer';
 import { compressImage } from '@/lib/image-utils';
 import { extractDataset } from '@/lib/document-store';
@@ -481,7 +481,7 @@ export function MobileShell() {
               />
               <QBOStatusPanel />
               <OutlookStatusPanel />
-              <MemoryPanel onSendToSherpa={trackAndProcess} />
+              <Notebook onSendToSherpa={trackAndProcess} />
             </div>
           )}
 
