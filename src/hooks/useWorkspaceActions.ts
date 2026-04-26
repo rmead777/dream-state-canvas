@@ -5,6 +5,7 @@ import { agentLoop, orchestratorLoop } from '@/lib/sherpa-agent';
 import { WorkspaceObject, IntentOrigin, WorkspaceAction, WorkspaceReducerAction } from '@/lib/workspace-types';
 import type { AgentLoopEvent } from '@/lib/manifestation-types';
 import { MULTI_SCAFFOLD_STAGGER_MS } from '@/lib/manifestation-types';
+import { dispatchAgentEvent } from '@/hooks/useAgentEvents';
 import { computeFreeformPosition } from '@/lib/freeform-placement';
 import { handleUpdate, handleFuse, handleRefineRules, HandlerResult, DispatchInstruction } from '@/lib/action-handlers';
 import { toast } from '@/hooks/use-toast';
@@ -124,6 +125,10 @@ export function useWorkspaceActions() {
         };
 
         const handleEvent = (event: AgentLoopEvent) => {
+          // Forward every event to the UI subscriber channel so ThinkingStrip
+          // can render the live reasoning timeline. Side effects below are the
+          // existing materialization / shader / particle hooks.
+          dispatchAgentEvent(event);
           switch (event.type) {
             case 'loop_start':
               pulseShader(0.25);

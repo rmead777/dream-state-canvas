@@ -14,6 +14,7 @@ import { DocumentContextSelector, ContextMode } from './DocumentContextSelector'
 import { QBOStatusPanel } from './QBOStatusPanel';
 import { OutlookStatusPanel } from './OutlookStatusPanel';
 import { Notebook } from './Notebook';
+import { ThinkingStrip } from './ThinkingStrip';
 import MarkdownRenderer from '../objects/MarkdownRenderer';
 import { compressImage } from '@/lib/image-utils';
 import { extractDataset } from '@/lib/document-store';
@@ -291,6 +292,14 @@ export function MobileShell() {
                           </div>
                         ));
                       })()}
+                      {/* Thinking strip — only on the most-recent entry */}
+                      {i === promptHistory.length - 1 && (
+                        <div className="flex justify-start">
+                          <div className="max-w-[92%] w-full">
+                            <ThinkingStrip />
+                          </div>
+                        </div>
+                      )}
                       {/* Final response */}
                       {entry.response && (
                         <div className="flex flex-col items-start gap-1">

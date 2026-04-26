@@ -23,6 +23,7 @@ import {
 import { toast } from 'sonner';
 import { PromptEditor } from './PromptEditor';
 import { Notebook } from './Notebook';
+import { ThinkingStrip } from './ThinkingStrip';
 import { RulesEditor } from './RulesEditor';
 import { AITelemetryPanel } from './AITelemetryPanel';
 import { ShaderControlPanel } from './ShaderControlPanel';
@@ -582,6 +583,16 @@ export function SherpaRail() {
                     ));
                   })()}
                   {/* Final response */}
+                  {/* Thinking strip — renders the live agent event timeline.
+                      Only on the most-recent entry since the strip subscribes
+                      to the global event stream which only carries one loop. */}
+                  {i === promptHistory.length - 1 && (
+                    <div className="flex justify-start">
+                      <div className="max-w-[90%] w-full">
+                        <ThinkingStrip />
+                      </div>
+                    </div>
+                  )}
                   {entry.response && (
                     <div className="flex flex-col items-start gap-1">
                       <div className="max-w-[90%] rounded-2xl rounded-bl-md bg-white border border-workspace-border/40 px-3.5 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
