@@ -627,6 +627,12 @@ export function useWorkspaceActions() {
       context = { ...context, dataQuery: (action as any).dataQuery };
     }
 
+    // Provenance — chips the AnalysisCard footer renders to prove which
+    // tools/scratchpads/memories the agent consulted for this card.
+    if ((action as any).provenance) {
+      context = { ...context, provenance: (action as any).provenance };
+    }
+
     const obj: Omit<WorkspaceObject, 'status' | 'createdAt' | 'lastInteractedAt'> = {
       id,
       type: action.objectType,

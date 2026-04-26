@@ -48,6 +48,27 @@ const WRITE_TOOLS = new Set([
   'rememberFact', 'setThreshold', 'suggestNextMoves',
 ]);
 
+/** Count discrete memory items injected via formatMemoriesForPrompt. */
+function countInjectedMemories(memories: string): number {
+  if (!memories) return 0;
+  // formatMemoriesForPrompt emits one bullet per memory ("- [N% confidence] ...")
+  return (memories.match(/^- /gm) || []).length;
+}
+
+/** Compact, human-readable arg description for provenance chips. */
+function describeProvenanceArg(toolName: string, args: Record<string, any>): string | undefined {
+  if (!args || typeof args !== 'object') return undefined;
+  if (toolName === 'queryQuickBooks' && typeof args.dataType === 'string') return args.dataType;
+  if (toolName === 'queryDataset' && typeof args.documentId === 'string') return undefined; // doc shown as separate chip
+  if (toolName === 'queryRagicOrders' && typeof args.customerName === 'string') return args.customerName;
+  if (toolName === 'queryEmails' && typeof args.query === 'string') {
+    return args.query.length > 22 ? args.query.slice(0, 22) + '…' : args.query;
+  }
+  if ((toolName === 'createCard' || toolName === 'updateCard') && typeof args.title === 'string') return undefined;
+  if (toolName === 'createScratchpad' && typeof args.name === 'string') return args.name;
+  return undefined;
+}
+
 export interface AgentLoopParams {
   query: string;
   workspaceState: WorkspaceState;
@@ -224,6 +245,13 @@ Use syncRagic when the user says "refresh ragic", "sync orders", "update ragic d
   /** All non-empty AI text responses, collected for reasoning visibility */
   const allSteps: string[] = [];
 
+  // Provenance: which tools were consulted and which documents/scratchpads they
+  // touched. Snapshotted onto every create/update action so the AnalysisCard
+  // footer can render chips proving where the answer came from.
+  const toolsConsulted: Array<{ name: string; arg?: string }> = [];
+  const documentsConsulted = new Set<string>();
+  const memoryCount = countInjectedMemories(memories);
+
   /** Remap tool executor output to applyResult format: { action: 'create' } → { type: 'create' } */
   function remapPendingActions(): any[] {
     return pendingWriteActions.map(a => {
@@ -378,6 +406,11 @@ Use syncRagic when the user says "refresh ragic", "sync orders", "update ragic d
       const result = await executeTool(toolName, args, shadowState);
       emit({ type: 'tool_complete', toolName, t: Date.now() });
 
+      // Provenance capture — record this tool + any document it touched.
+      toolsConsulted.push({ name: toolName, arg: describeProvenanceArg(toolName, args) });
+      if (typeof args.documentId === 'string') documentsConsulted.add(args.documentId);
+      if (typeof args.docId === 'string') documentsConsulted.add(args.docId);
+
       // Check if the tool returned a write action to queue (or next moves to capture)
       try {
         const parsed = JSON.parse(result);
@@ -385,6 +418,15 @@ Use syncRagic when the user says "refresh ragic", "sync orders", "update ragic d
           // Not a write action — capture suggestions for the caller
           capturedNextMoves = parsed.moves || [];
         } else if (parsed.action) {
+          // Snapshot provenance for create/update actions so the card footer
+          // can show what Sherpa consulted to produce this card.
+          if (parsed.action === 'create' || parsed.action === 'update') {
+            parsed.provenance = {
+              tools: [...toolsConsulted],
+              documentIds: Array.from(documentsConsulted),
+              memoryCount,
+            };
+          }
           pendingWriteActions.push(parsed);
 
           // Apply to shadow state so subsequent read tools see the change

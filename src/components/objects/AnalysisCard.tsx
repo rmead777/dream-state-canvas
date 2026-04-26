@@ -27,6 +27,7 @@ import {
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useWorkspaceActions } from '@/hooks/useWorkspaceActions';
 import { ENTITY_COLUMN_PATTERNS } from '@/lib/entity-extractor';
+import { ProvenanceChips, type Provenance } from './ProvenanceChips';
 
 interface AnalysisCardProps {
   object: WorkspaceObject;
@@ -60,11 +61,18 @@ export function AnalysisCard({ object }: AnalysisCardProps) {
     );
   }
 
+  const provenance = object.context?.provenance as Provenance | undefined;
+
+  const handleSourceClick = useCallback((docId: string) => {
+    processIntent(`Open the source for "${object.title}" — show me document ${docId}.`);
+  }, [processIntent, object.title]);
+
   return (
     <div className={`space-y-4 transition-all duration-300 ${isHighlighted ? 'ring-2 ring-workspace-accent ring-offset-2 ring-offset-workspace-bg rounded-xl p-1' : ''}`}>
       {sections.map((section, i) => (
         <SectionRenderer key={i} section={section} highlightedEntity={highlightedEntity} onEntityClick={handleEntityClick} />
       ))}
+      {provenance && <ProvenanceChips provenance={provenance} onSourceClick={handleSourceClick} />}
       {/* Calendar event download — shown when card has .ics content */}
       {object.context?.icsContent && (
         <CalendarDownloadButton
