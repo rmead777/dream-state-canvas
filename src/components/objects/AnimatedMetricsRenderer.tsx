@@ -13,7 +13,7 @@ import { easeOutCubic, getStaggerDelay } from '@/hooks/useAnimationTimeline';
 
 interface AnimatedMetric {
   label: string;
-  value: number;
+  value: number | string;
   unit?: string;
   prefix?: string;
   trend?: 'up' | 'down' | 'flat';
@@ -51,6 +51,17 @@ interface AnimatedMetricsProps {
 
 const REDUCED_MOTION = typeof window !== 'undefined'
   && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// AI frequently emits string values like "$153,950" or "2.19M" — coerce to number.
+function parseMetricValue(v: number | string | undefined): number {
+  if (typeof v === 'number') return isNaN(v) ? 0 : v;
+  if (!v) return 0;
+  const s = String(v).replace(/[$,\s]/g, '');
+  if (/m$/i.test(s)) return parseFloat(s) * 1_000_000;
+  if (/k$/i.test(s)) return parseFloat(s) * 1_000;
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
 
 function formatValue(val: number, unit?: string, prefix?: string): string {
   const p = prefix || '';
@@ -176,7 +187,7 @@ export function AnimatedMetricsRenderer({ section }: AnimatedMetricsProps) {
                 fontVariantNumeric: 'tabular-nums',
               }}>
                 <CountingNumber
-                  target={m.value}
+                  target={parseMetricValue(m.value)}
                   duration={duration}
                   delay={delay}
                   unit={m.unit}
