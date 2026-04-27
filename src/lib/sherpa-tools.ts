@@ -671,7 +671,7 @@ export const SHERPA_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'queryRagicOrders',
-      description: 'Query cached Ragic orders (sales orders, delivery pipeline). Returns order details including customer, product, quantity (lbs), unit price, total amount, delivery date, due date, payment terms, status, and packaging class. Use when the user asks about orders, deliveries, the order pipeline, "what\'s shipping next week?", customer order history, revenue forecasting, or cash forecast building. Cross-reference with queryQuickBooks AR data for complete receivables picture.',
+      description: 'Query cached Ragic orders (sales orders, delivery pipeline). Returns order details including customer, product, quantity (lbs), unit price, total amount, payment terms, status, packaging class, and THREE distinct date columns: (1) `actual_ship_date` — when the order actually shipped (null if not yet shipped); (2) `requested_delivery_date` — the customer\'s requested delivery date (used for forecasting); (3) `delivery_date` — backward-compat fallback = actual_ship_date ?? requested_delivery_date. Also includes `has_shipped` boolean. IMPORTANT for monthly sales/forecast: realized revenue = orders where actual_ship_date is in the month; forecasted revenue = orders where actual_ship_date IS NULL AND requested_delivery_date is in the month. Use when the user asks about orders, deliveries, the order pipeline, "what\'s shipping next week?", customer order history, revenue forecasting, or cash forecast building. Cross-reference with queryQuickBooks AR data for complete receivables picture.',
       parameters: {
         type: 'object',
         properties: {
