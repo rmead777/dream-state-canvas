@@ -228,6 +228,19 @@ export function SherpaRail() {
     return () => document.removeEventListener('sherpa-query', handler);
   }, [trackAndProcess]);
 
+  // Listen for tab-switch events from CommandPalette (e.g. /notebook)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const tab = (e as CustomEvent).detail;
+      if (typeof tab === 'string' && ['origin', 'notebook', 'rules', 'context', 'admin', 'log'].includes(tab)) {
+        setActiveTab(tab as RailTab);
+        setIsExpanded(true);
+      }
+    };
+    window.addEventListener('sherpa-switch-tab', handler);
+    return () => window.removeEventListener('sherpa-switch-tab', handler);
+  }, []);
+
   const handleSubmit = useCallback(() => {
     const trimmed = input.trim();
     if (!trimmed && pendingImages.length === 0) return;

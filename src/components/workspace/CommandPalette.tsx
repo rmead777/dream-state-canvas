@@ -49,6 +49,11 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         { id: 'cmd-collapse', kind: 'command', title: '/collapse risk', meta: 'Tuck a panel away', value: '/collapse ' },
         { id: 'cmd-dissolve', kind: 'command', title: '/dissolve timeline', meta: 'Remove an object', value: '/dissolve ' },
         { id: 'cmd-pin', kind: 'command', title: '/pin brief', meta: 'Keep a panel anchored', value: '/pin ' },
+        { id: 'cmd-notebook', kind: 'command', title: '/notebook', meta: 'Open Sherpa\'s notebook', value: '/notebook' },
+        { id: 'cmd-cite', kind: 'command', title: '/cite', meta: 'Show what Sherpa consulted for the focused card', value: '/cite' },
+        { id: 'cmd-explain', kind: 'command', title: '/explain', meta: 'Have Sherpa explain the focused card', value: '/explain' },
+        { id: 'cmd-brief', kind: 'command', title: '/brief', meta: 'Run the morning brief now', value: '/brief' },
+        { id: 'cmd-clear', kind: 'command', title: '/clear', meta: 'Dissolve all open cards', value: '/clear' },
       ];
     }
 
@@ -135,6 +140,32 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       const name = trimmed.slice(5).toLowerCase();
       const obj = activeObjects.find((o) => o.title.toLowerCase().includes(name));
       if (obj) pinObject(obj.id);
+    } else if (trimmed === '/notebook') {
+      // Switch to Notebook tab via window event (SherpaRail listens)
+      window.dispatchEvent(new CustomEvent('sherpa-switch-tab', { detail: 'notebook' }));
+    } else if (trimmed === '/cite') {
+      const focusedId = state.activeContext.focusedObjectId;
+      const obj = focusedId ? state.objects[focusedId] : null;
+      if (obj) {
+        processIntent(`What sources did you consult to produce the "${obj.title}" card?`);
+      } else {
+        processIntent(`What sources did you consult most recently?`);
+      }
+    } else if (trimmed === '/explain') {
+      const focusedId = state.activeContext.focusedObjectId;
+      const obj = focusedId ? state.objects[focusedId] : null;
+      if (obj) {
+        processIntent(`Explain the "${obj.title}" card in detail — what it shows, what's significant, what to watch.`);
+      } else {
+        processIntent(`Explain what's currently on my workspace.`);
+      }
+    } else if (trimmed === '/brief') {
+      processIntent('Run my morning brief.');
+    } else if (trimmed === '/clear') {
+      // Dissolve all non-pinned open objects
+      for (const obj of activeObjects) {
+        if (!obj.pinned && obj.status === 'open') dissolveObject(obj.id);
+      }
     } else {
       processIntent(trimmed);
     }
