@@ -444,14 +444,15 @@ Use syncRagic when the user says "refresh ragic", "sync orders", "update ragic d
       };
     }
 
-    // Detect stuck loop: if 3+ consecutive iterations have empty text + only READ tool calls,
-    // the AI is spinning without making progress. Threshold is 3 (not 2) because a legitimate
-    // multi-read workflow (get state → query data → create card) uses 2 read-only iterations
-    // before the write call. Breaking at 2 fires too early for those flows.
+    // Detect stuck loop: if 6+ consecutive iterations have empty text + only READ tool calls,
+    // the AI is spinning without making progress. Threshold has been bumped over time
+    // (2 → 3 → 6) as Anthropic's Claude has gotten more comfortable chaining tool_use blocks
+    // without intervening text. Multi-stage flows (morning brief, deep analysis) routinely
+    // do 4-5 read-only iterations before producing the synthesis text + write calls.
     // If the current iteration contains a WRITE tool, the AI is about to act — always let it run.
     const hasWriteToolCall = toolCalls.some(tc => WRITE_TOOLS.has(tc.function.name));
-    if (emptyTextStreak >= 3 && !hasWriteToolCall) {
-      console.warn('[sherpa-agent] Stuck loop detected: 3+ empty iterations with only read tools, breaking out at iteration', iteration);
+    if (emptyTextStreak >= 6 && !hasWriteToolCall) {
+      console.warn('[sherpa-agent] Stuck loop detected: 6+ empty iterations with only read tools, breaking out at iteration', iteration);
       onStatusUpdate?.(null);
       const pendingActions = remapPendingActions();
       const finalResponse = bestText || (pendingActions.length > 0 ? 'Done.' : 'I wasn\'t able to complete that. Could you try rephrasing?');
