@@ -26,6 +26,7 @@ import {
 } from 'recharts';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useWorkspaceActions } from '@/hooks/useWorkspaceActions';
+import { useDocuments } from '@/contexts/DocumentContext';
 import { ENTITY_COLUMN_PATTERNS } from '@/lib/entity-extractor';
 import { ProvenanceChips, type Provenance } from './ProvenanceChips';
 
@@ -36,6 +37,7 @@ interface AnalysisCardProps {
 export function AnalysisCard({ object }: AnalysisCardProps) {
   const { state, dispatch } = useWorkspace();
   const { processIntent } = useWorkspaceActions();
+  const { documents } = useDocuments();
   const highlightedEntity = state.activeContext.highlightedEntity;
   const sections: CardSectionType[] = object.context?.sections || [];
 
@@ -64,8 +66,52 @@ export function AnalysisCard({ object }: AnalysisCardProps) {
   const provenance = object.context?.provenance as Provenance | undefined;
 
   const handleSourceClick = useCallback((docId: string) => {
-    processIntent(`Open the source for "${object.title}" — show me document ${docId}.`);
-  }, [processIntent, object.title]);
+    // If there's already a workspace object wrapping this document, enter immersive directly.
+    const existing = Object.values(state.objects).find(
+      (obj) => obj.context?.documentId === docId && obj.status !== 'dissolved'
+    );
+    if (existing) {
+      dispatch({ type: 'ENTER_IMMERSIVE', payload: { id: existing.id } });
+      return;
+    }
+
+    // No workspace card — synthesize a transient document-viewer from the DocumentRecord.
+    // This is the common path for scratchpads (DB-only, never materialized on canvas).
+    const doc = documents.find((d) => d.id === docId);
+    if (!doc) return;
+
+    const viewerId = `viewer-${docId}`;
+    const isScratchpad = Boolean((doc.metadata as Record<string, unknown>)?.isScratchpad);
+    const displayName = String(
+      (doc.metadata as Record<string, unknown>)?.primarySheet
+        ?? doc.filename.replace(/\.scratchpad$/, '')
+    ) || doc.filename;
+
+    dispatch({
+      type: 'MATERIALIZE_OBJECT',
+      payload: {
+        id: viewerId,
+        type: 'document-viewer',
+        title: displayName,
+        status: 'open',
+        pinned: false,
+        origin: { type: 'user-query', query: 'source chip' },
+        relationships: [],
+        context: {
+          documentId: docId,
+          fileName: displayName,
+          fileType: doc.file_type,
+          storagePath: doc.storage_path,
+          summary: isScratchpad ? doc.extracted_text : (doc.extracted_text?.slice(0, 3000) ?? ''),
+          paragraphs: (doc.extracted_text ?? '').split('\n').filter(Boolean),
+        },
+        position: { zone: 'primary', order: 0 },
+        createdAt: Date.now(),
+        lastInteractedAt: Date.now(),
+      },
+    });
+    dispatch({ type: 'ENTER_IMMERSIVE', payload: { id: viewerId } });
+  }, [state.objects, dispatch, documents]);
 
   return (
     <div data-sherpa-id={object.id} className={`space-y-4 transition-all duration-300 ${isHighlighted ? 'ring-2 ring-workspace-accent ring-offset-2 ring-offset-workspace-bg rounded-xl p-1' : ''}`}>
