@@ -388,12 +388,14 @@ export type Database = {
       }
       ragic_orders_cache: {
         Row: {
+          actual_ship_date: string | null
           cached_at: string | null
           class_name: string | null
           customer_name: string | null
           customer_po: string | null
           delivery_date: string | null
           due_date: string | null
+          has_shipped: boolean
           id: string
           invoice_date: string | null
           order_number: string | null
@@ -402,6 +404,7 @@ export type Database = {
           quantity: number | null
           ragic_id: string
           raw_record: Json | null
+          requested_delivery_date: string | null
           resolved_qb_customer_name: string | null
           status: string | null
           total_amount: number | null
@@ -409,12 +412,14 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          actual_ship_date?: string | null
           cached_at?: string | null
           class_name?: string | null
           customer_name?: string | null
           customer_po?: string | null
           delivery_date?: string | null
           due_date?: string | null
+          has_shipped?: boolean
           id?: string
           invoice_date?: string | null
           order_number?: string | null
@@ -423,6 +428,7 @@ export type Database = {
           quantity?: number | null
           ragic_id: string
           raw_record?: Json | null
+          requested_delivery_date?: string | null
           resolved_qb_customer_name?: string | null
           status?: string | null
           total_amount?: number | null
@@ -430,12 +436,14 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          actual_ship_date?: string | null
           cached_at?: string | null
           class_name?: string | null
           customer_name?: string | null
           customer_po?: string | null
           delivery_date?: string | null
           due_date?: string | null
+          has_shipped?: boolean
           id?: string
           invoice_date?: string | null
           order_number?: string | null
@@ -444,6 +452,7 @@ export type Database = {
           quantity?: number | null
           ragic_id?: string
           raw_record?: Json | null
+          requested_delivery_date?: string | null
           resolved_qb_customer_name?: string | null
           status?: string | null
           total_amount?: number | null
