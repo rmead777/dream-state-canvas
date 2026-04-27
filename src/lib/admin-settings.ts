@@ -109,3 +109,8 @@ export function setAdminContextWindow(n: number): void {
   _settings.contextWindow = Math.max(1, Math.min(50, n));
   persist();
 }
+
+export function setAdminAgentMaxIterations(n: number): void {
+  _settings.agentMaxIterations = Math.max(3, Math.min(30, n));
+  persist();
+}

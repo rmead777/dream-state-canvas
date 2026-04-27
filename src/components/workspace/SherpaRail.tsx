@@ -18,7 +18,8 @@ import { invalidateProfileCache } from '@/lib/intent-engine';
 import { clearProfileCache } from '@/lib/data-analyzer';
 import {
   checkPassphrase, unlockAdmin, lockAdmin, isAdminUnlocked,
-  getAdminSettings, setAdminModel, setAdminMaxTokens, setAdminContextWindow, AVAILABLE_MODELS,
+  getAdminSettings, setAdminModel, setAdminMaxTokens, setAdminContextWindow,
+  setAdminAgentMaxIterations, AVAILABLE_MODELS,
 } from '@/lib/admin-settings';
 import { toast } from 'sonner';
 import { PromptEditor } from './PromptEditor';
@@ -1085,6 +1086,32 @@ export function SherpaRail() {
                   <span>1 turn</span>
                   <span>50 turns</span>
                 </div>
+              </div>
+
+              {/* Agent iteration cap slider */}
+              <div>
+                <label className="block text-[10px] text-workspace-text-secondary/60 mb-1.5">
+                  Agent Iteration Cap: <span className="font-mono text-workspace-accent">{adminState.agentMaxIterations} loops</span>
+                </label>
+                <input
+                  type="range"
+                  min={3}
+                  max={30}
+                  step={1}
+                  value={adminState.agentMaxIterations}
+                  onChange={(e) => {
+                    setAdminAgentMaxIterations(Number(e.target.value));
+                    setAdminState(getAdminSettings());
+                  }}
+                  className="w-full h-1.5 rounded-full appearance-none bg-workspace-border/40 accent-workspace-accent cursor-pointer"
+                />
+                <div className="flex justify-between text-[8px] text-workspace-text-secondary/30 mt-1">
+                  <span>3</span>
+                  <span>30</span>
+                </div>
+                <p className="text-[9px] text-workspace-text-secondary/40 mt-1 leading-snug">
+                  Max tool-calling rounds before Sherpa must respond. Higher = deeper investigations, more API cost. Morning briefs override to 12.
+                </p>
               </div>
 
               {/* Prompt Editor */}
