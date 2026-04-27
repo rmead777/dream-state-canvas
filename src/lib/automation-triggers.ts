@@ -81,16 +81,78 @@ export interface TriggerFiring {
   actionParams: Record<string, any>;
 }
 
-function compareOp(num: number, op: TriggerCondition['operator'], value: number): boolean {
-  switch (op) {
-    case 'gt':  return num > value;
-    case 'lt':  return num < value;
-    case 'gte': return num >= value;
-    case 'lte': return num <= value;
-    case 'eq':  return Math.abs(num - value) < 0.0001;
-    case 'neq': return Math.abs(num - value) >= 0.0001;
-    default:    return false;
+function parseNum(raw: unknown): number {
+  return parseFloat(String(raw ?? '').replace(/[$,%\s]/g, ''));
+}
+
+/** Evaluate a single rule against a single cell value. */
+function evalRule(cell: unknown, rule: TriggerRule): boolean {
+  const op = rule.operator;
+  const cellStr = String(cell ?? '');
+  const cellLower = cellStr.toLowerCase();
+
+  if (op === 'is_null') return !cellStr || cellStr === '—' || cellStr === '-';
+  if (op === 'is_not_null') return !!cellStr && cellStr !== '—' && cellStr !== '-';
+
+  if (op === 'in' || op === 'not_in') {
+    const arr = Array.isArray(rule.value) ? rule.value : [rule.value];
+    const hit = arr.some(v => cellLower.includes(String(v ?? '').toLowerCase()));
+    return op === 'in' ? hit : !hit;
   }
+
+  const valStr = String(rule.value ?? '').toLowerCase();
+  if (op === 'contains') return cellLower.includes(valStr);
+  if (op === 'not_contains') return !cellLower.includes(valStr);
+  if (op === 'starts_with') return cellLower.startsWith(valStr);
+  if (op === 'ends_with') return cellLower.endsWith(valStr);
+  if (op === 'equals_text') return cellLower === valStr;
+
+  // Numeric / date comparisons
+  const isDate = /^\d{4}-\d{2}-\d{2}/.test(cellStr) && /^\d{4}-\d{2}-\d{2}/.test(String(rule.value ?? ''));
+  if (op === 'between') {
+    if (isDate) {
+      return cellStr >= String(rule.value) && cellStr <= String(rule.valueMax);
+    }
+    const n = parseNum(cell);
+    return !isNaN(n) && n >= Number(rule.value) && n <= Number(rule.valueMax);
+  }
+  if (isDate) {
+    const v = String(rule.value);
+    switch (op) {
+      case 'gt':  return cellStr > v;
+      case 'lt':  return cellStr < v;
+      case 'gte': return cellStr >= v;
+      case 'lte': return cellStr <= v;
+      case 'eq':  return cellStr === v;
+      case 'neq': return cellStr !== v;
+    }
+  }
+  const n = parseNum(cell);
+  if (isNaN(n)) return false;
+  const v = Number(rule.value);
+  switch (op) {
+    case 'gt':  return n > v;
+    case 'lt':  return n < v;
+    case 'gte': return n >= v;
+    case 'lte': return n <= v;
+    case 'eq':  return Math.abs(n - v) < 0.0001;
+    case 'neq': return Math.abs(n - v) >= 0.0001;
+  }
+  return false;
+}
+
+/** Normalize legacy single-rule conditions into a rules[] array. */
+export function getRules(condition: TriggerCondition): TriggerRule[] {
+  if (condition.rules?.length) return condition.rules;
+  if (condition.column && condition.operator) {
+    return [{
+      column: condition.column,
+      operator: condition.operator,
+      value: condition.value,
+      valueMax: condition.valueMax,
+    }];
+  }
+  return [];
 }
 
 function evaluateTrigger(
@@ -98,31 +160,37 @@ function evaluateTrigger(
   columns: string[],
   rows: string[][],
 ): boolean {
-  const { condition } = trigger;
-  const colIdx = columns.findIndex(c => c.toLowerCase() === condition.column.toLowerCase());
-  if (colIdx === -1) return false;
+  const rules = getRules(trigger.condition);
+  if (!rules.length) return false;
 
-  const parseNum = (raw: unknown) => parseFloat(String(raw ?? '').replace(/[$,%\s]/g, ''));
-  const agg = condition.aggregation ?? 'any';
+  const ruleIndices = rules.map(r => ({
+    rule: r,
+    idx: columns.findIndex(c => c.toLowerCase() === r.column.toLowerCase()),
+  }));
+  if (ruleIndices.some(r => r.idx === -1)) return false;
+
+  const combinator = trigger.condition.combinator ?? 'AND';
+  const agg = trigger.condition.aggregation ?? 'any';
+
+  const rowMatches = (row: string[]): boolean => {
+    const results = ruleIndices.map(({ rule, idx }) => evalRule(row[idx], rule));
+    return combinator === 'OR' ? results.some(Boolean) : results.every(Boolean);
+  };
 
   if (agg === 'sum') {
+    const first = ruleIndices[0];
     const total = rows.reduce((acc, row) => {
-      const n = parseNum(row[colIdx]);
+      const n = parseNum(row[first.idx]);
       return acc + (isNaN(n) ? 0 : n);
     }, 0);
-    return compareOp(total, condition.operator, condition.value);
+    return evalRule(total, first.rule);
   }
 
-  const matched = rows.filter(row => {
-    const n = parseNum(row[colIdx]);
-    return !isNaN(n) && compareOp(n, condition.operator, condition.value);
-  });
-
+  const matchedCount = rows.filter(rowMatches).length;
   if (agg === 'count') {
-    return compareOp(matched.length, condition.operator, condition.value);
+    return evalRule(matchedCount, ruleIndices[0].rule);
   }
-
-  return matched.length > 0;
+  return matchedCount > 0;
 }
 
 /**
