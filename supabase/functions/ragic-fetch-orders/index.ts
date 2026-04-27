@@ -406,6 +406,9 @@ Deno.serve(async (req) => {
         status,
         class_name: className || null,
         delivery_date: formatDateISO(deliveryDate),
+        actual_ship_date: formatDateISO(actualShipDate),
+        requested_delivery_date: formatDateISO(requestedDeliveryDate),
+        has_shipped: hasShipped,
         raw_record: record,
         updated_at: new Date().toISOString(),
       })
