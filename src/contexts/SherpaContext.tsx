@@ -8,6 +8,7 @@ import { useDocuments } from '@/contexts/DocumentContext';
 import { loadTriggers, checkTriggers, markTriggerFired } from '@/lib/automation-triggers';
 import { supabase } from '@/integrations/supabase/client';
 import { isOutlookConnected } from '@/lib/email-store';
+import { getAttentionSignals } from '@/lib/ambient-attention';
 import { loadFavorites } from '@/lib/next-moves-ranker';
 
 /**
@@ -203,6 +204,7 @@ export function SherpaProvider({ children }: { children: React.ReactNode }) {
         activeTriggers: activeTriggersRef.current.map((t) => t.id),
         favoriteIds,
         limit: 5,
+        ambientAttention: getAttentionSignals(),
       },
     );
     dispatch({ type: 'SET_SHERPA_SUGGESTIONS', payload: suggestions });

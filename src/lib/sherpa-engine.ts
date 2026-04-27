@@ -4,6 +4,7 @@ import { getCurrentProfile, DataProfile } from './data-analyzer';
 import { detectCrossTierAnomalies, describeRankingLogic } from './data-slicer';
 import { getObjectViewState } from './workspace-intelligence';
 import { rankNextMoves, type RankerInputs } from './next-moves-ranker';
+import type { AttentionSignals } from './ambient-attention';
 
 /**
  * System-level Sherpa intelligence — observes workspace state
@@ -363,6 +364,8 @@ export interface GenerateSuggestionsOptions {
   favoriteIds?: string[];
   /** Max suggestions to return. Defaults to 5. */
   limit?: number;
+  /** Passive behavioral signals from ambient attention tracking. */
+  ambientAttention?: AttentionSignals;
 }
 
 /**
@@ -392,6 +395,7 @@ export function generateSuggestions(
       },
       activeTriggers: options.activeTriggers ?? [],
       favoriteIds: options.favoriteIds ?? [],
+      ambientAttention: options.ambientAttention,
     },
     options.limit ?? 5,
   );

@@ -19,6 +19,7 @@ import { retrieveRelevantMemories, formatMemoriesForPrompt, determineWorkspaceSt
 import { recordAction, detectLearningSignals } from '@/lib/memory-detector';
 import { supabase } from '@/integrations/supabase/client';
 import { recordUndo } from '@/lib/workspace-undo';
+import { recordQuery } from '@/lib/ambient-attention';
 
 // Store document IDs ref for context injection
 let _documentIdsRef: string[] = [];
@@ -67,6 +68,7 @@ export function useWorkspaceActions() {
 
   const processIntent = useCallback(
     async (query: string, images?: string[]) => {
+      recordQuery();
       dispatch({ type: 'SET_SHERPA_PROCESSING', payload: true });
 
       // Cancel in-flight manifestations from a previous query. A scaffold

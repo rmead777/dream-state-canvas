@@ -68,7 +68,7 @@ export function AnalysisCard({ object }: AnalysisCardProps) {
   }, [processIntent, object.title]);
 
   return (
-    <div className={`space-y-4 transition-all duration-300 ${isHighlighted ? 'ring-2 ring-workspace-accent ring-offset-2 ring-offset-workspace-bg rounded-xl p-1' : ''}`}>
+    <div data-sherpa-id={object.id} className={`space-y-4 transition-all duration-300 ${isHighlighted ? 'ring-2 ring-workspace-accent ring-offset-2 ring-offset-workspace-bg rounded-xl p-1' : ''}`}>
       {sections.map((section, i) => (
         <SectionRenderer key={i} section={section} highlightedEntity={highlightedEntity} onEntityClick={handleEntityClick} />
       ))}

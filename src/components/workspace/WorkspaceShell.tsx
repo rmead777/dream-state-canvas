@@ -16,6 +16,7 @@ import { useWorkspace, useWorkspaceDispatch } from '@/contexts/WorkspaceContext'
 import { useAuth } from '@/hooks/useAuth';
 import { popUndo } from '@/lib/workspace-undo';
 import { toast } from '@/hooks/use-toast';
+import { useAmbientAttention } from '@/hooks/useAmbientAttention';
 
 export function WorkspaceShell() {
   const { state } = useWorkspace();
@@ -24,6 +25,7 @@ export function WorkspaceShell() {
   const { isMobile } = useIsMobile();
   const { isOverCapacity } = useWorkspaceBreathing();
   useCognitiveMode();
+  useAmbientAttention();
   const { play, muted, toggleMute } = useAmbientAudio();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);

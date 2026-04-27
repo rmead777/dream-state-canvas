@@ -17,6 +17,7 @@
 
 import type { WorkspaceObject, ActiveContext } from './workspace-types';
 import type { NextMoveEntry, IntegrationDependency } from './next-moves-catalog';
+import type { AttentionSignals } from './ambient-attention';
 import { NEXT_MOVES_CATALOG } from './next-moves-catalog';
 
 // ─── Signal Weights ─────────────────────────────────────────────────────────
@@ -28,6 +29,10 @@ const SIGNAL_WEIGHTS = {
   recentQueryKeywordMatch: 3,
   favoriteAnchor: 100,      // favorites anchor — shown first unless a critical trigger overrides
   criticalTriggerActive: 1000, // slam to top
+  // ─── Ambient attention ───────────────────────────────────────────────────
+  ambientDwellMatch: 15,    // card user hovered 4+ seconds → boost related entries
+  ambientExploration: 8,    // high query rate → boost data-exploration entries
+  ambientScrollBack: 5,     // scroll-back behavior → boost summary/brief entries
 } as const;
 
 // ─── Inputs ─────────────────────────────────────────────────────────────────
@@ -50,6 +55,8 @@ export interface RankerInputs {
   favoriteIds: string[];
   /** Optional time override (for tests). Defaults to Date.now(). */
   now?: Date;
+  /** Passive behavioral signals from useAmbientAttention. Optional. */
+  ambientAttention?: AttentionSignals;
 }
 
 export interface RankedEntry {
@@ -119,6 +126,37 @@ export function scoreCatalog(input: RankerInputs): RankedEntry[] {
           reasons.push(`kw:${keyword}`);
           break; // one match is enough
         }
+      }
+    }
+
+    // ─── Ambient attention signals ───────────────────────────────────────────
+    if (input.ambientAttention) {
+      const { highDwellObjectIds, scrollBackCount, queryRefinementRate } = input.ambientAttention;
+
+      // Dwell: if user hovered 4+ seconds on a card whose type this entry targets
+      if (highDwellObjectIds.length > 0 && entry.signals.relevantWhenFocused) {
+        const dwellTypes = highDwellObjectIds
+          .map((id) => input.objects[id]?.type)
+          .filter(Boolean);
+        const matchesDwell = dwellTypes.some(
+          (t) => entry.signals.relevantWhenFocused!.includes(t as WorkspaceObject['type'])
+        );
+        if (matchesDwell) {
+          score += SIGNAL_WEIGHTS.ambientDwellMatch;
+          reasons.push('dwell');
+        }
+      }
+
+      // Exploration mode: high query refinement rate boosts data-query entries
+      if (queryRefinementRate > 1.5 && entry.signals.recentQueryKeywords) {
+        score += SIGNAL_WEIGHTS.ambientExploration;
+        reasons.push(`explore:${queryRefinementRate.toFixed(1)}/min`);
+      }
+
+      // Scroll-back: user reviewing history → boost brief/summary entries
+      if (scrollBackCount > 2 && (entry.id.includes('brief') || entry.id.includes('summary') || entry.id.includes('morning'))) {
+        score += SIGNAL_WEIGHTS.ambientScrollBack;
+        reasons.push('scroll-back');
       }
     }
 
