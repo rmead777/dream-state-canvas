@@ -17,10 +17,43 @@ import { listDocuments, extractDataset } from './document-store';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
 
-export interface TriggerCondition {
+/**
+ * A single rule: column + operator + value(s).
+ * Numeric operators: gt, lt, gte, lte, eq, neq, between (value is [min,max])
+ * Text operators:    contains, not_contains, starts_with, ends_with, equals_text
+ * Set operators:     in, not_in (value is array)
+ * Null operators:    is_null, is_not_null (value ignored)
+ */
+export type TriggerOperator =
+  | 'gt' | 'lt' | 'gte' | 'lte' | 'eq' | 'neq' | 'between'
+  | 'contains' | 'not_contains' | 'starts_with' | 'ends_with' | 'equals_text'
+  | 'in' | 'not_in'
+  | 'is_null' | 'is_not_null';
+
+export interface TriggerRule {
   column: string;
-  operator: 'gt' | 'lt' | 'gte' | 'lte' | 'eq' | 'neq';
-  value: number;
+  operator: TriggerOperator;
+  value?: number | string | (number | string)[];
+  /** Two values for 'between' — inclusive min/max */
+  valueMax?: number | string;
+}
+
+/**
+ * TriggerCondition supports BOTH legacy single-rule shape (backward compat)
+ * AND new multi-rule shape with `rules[]` and `combinator` (AND/OR).
+ * Multiple rules on the same column are allowed (e.g. delivery_date >= X AND <= Y).
+ */
+export interface TriggerCondition {
+  /** Legacy fields — kept for backward compat with existing rows */
+  column?: string;
+  operator?: TriggerOperator;
+  value?: number | string | (number | string)[];
+  valueMax?: number | string;
+
+  /** New: stack of rules combined with AND/OR. Same column may appear multiple times. */
+  rules?: TriggerRule[];
+  combinator?: 'AND' | 'OR';
+
   aggregation?: 'any' | 'count' | 'sum';
 }
 
