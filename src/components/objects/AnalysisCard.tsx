@@ -27,6 +27,7 @@ import {
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useWorkspaceActions } from '@/hooks/useWorkspaceActions';
 import { useDocuments } from '@/contexts/DocumentContext';
+import { extractDataset } from '@/lib/document-store';
 import { ENTITY_COLUMN_PATTERNS } from '@/lib/entity-extractor';
 import { ProvenanceChips, type Provenance } from './ProvenanceChips';
 
@@ -66,51 +67,52 @@ export function AnalysisCard({ object }: AnalysisCardProps) {
   const provenance = object.context?.provenance as Provenance | undefined;
 
   const handleSourceClick = useCallback((docId: string) => {
-    // If there's already a workspace object wrapping this document, enter immersive directly.
+    // If a workspace object already wraps this document, enter immersive directly.
     const existing = Object.values(state.objects).find(
-      (obj) => obj.context?.documentId === docId && obj.status !== 'dissolved'
+      (obj) => obj.context?.sourceDocId === docId && obj.status !== 'dissolved'
     );
     if (existing) {
       dispatch({ type: 'ENTER_IMMERSIVE', payload: { id: existing.id } });
       return;
     }
 
-    // No workspace card — synthesize a transient document-viewer from the DocumentRecord.
-    // This is the common path for scratchpads (DB-only, never materialized on canvas).
+    // No workspace card — synthesize one from the DocumentRecord (same logic as SherpaRail).
     const doc = documents.find((d) => d.id === docId);
     if (!doc) return;
 
-    const viewerId = `viewer-${docId}`;
-    const isScratchpad = Boolean((doc.metadata as Record<string, unknown>)?.isScratchpad);
-    const displayName = String(
-      (doc.metadata as Record<string, unknown>)?.primarySheet
-        ?? doc.filename.replace(/\.scratchpad$/, '')
-    ) || doc.filename;
+    const isSpreadsheet = doc.file_type === 'xlsx' || doc.file_type === 'csv';
+    const objectType = isSpreadsheet ? 'dataset' : 'document';
+    const dataset = isSpreadsheet ? extractDataset(doc) : null;
+    const objId = `doc-view-${docId.slice(0, 8)}-${Date.now()}`;
 
     dispatch({
       type: 'MATERIALIZE_OBJECT',
       payload: {
-        id: viewerId,
-        type: 'document-viewer',
-        title: displayName,
-        status: 'open',
+        id: objId,
+        type: objectType,
+        title: doc.filename,
         pinned: false,
-        origin: { type: 'user-query', query: 'source chip' },
+        origin: { type: 'user-query' as const, query: `Open ${doc.filename}` },
         relationships: [],
         context: {
-          documentId: docId,
-          fileName: displayName,
-          fileType: doc.file_type,
-          storagePath: doc.storage_path,
-          summary: isScratchpad ? doc.extracted_text : (doc.extracted_text?.slice(0, 3000) ?? ''),
-          paragraphs: (doc.extracted_text ?? '').split('\n').filter(Boolean),
+          sourceDocId: docId,
+          columns: dataset?.columns || [],
+          rows: dataset?.rows || [],
+          // For non-spreadsheets (docs, scratchpads): pass text content for DocumentReader
+          ...(isSpreadsheet ? {} : {
+            fileName: doc.filename,
+            fileType: doc.file_type,
+            storagePath: doc.storage_path,
+            summary: doc.extracted_text ?? '',
+            paragraphs: (doc.extracted_text ?? '').split('\n').filter(Boolean),
+          }),
         },
-        position: { zone: 'primary', order: 0 },
-        createdAt: Date.now(),
-        lastInteractedAt: Date.now(),
+        position: { zone: 'primary' as const, order: 0 },
       },
     });
-    dispatch({ type: 'ENTER_IMMERSIVE', payload: { id: viewerId } });
+    requestAnimationFrame(() => {
+      dispatch({ type: 'ENTER_IMMERSIVE', payload: { id: objId } });
+    });
   }, [state.objects, dispatch, documents]);
 
   return (
