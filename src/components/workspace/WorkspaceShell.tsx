@@ -15,7 +15,7 @@ import { useWorkspacePersistence } from '@/hooks/useWorkspacePersistence';
 import { useWorkspace, useWorkspaceDispatch } from '@/contexts/WorkspaceContext';
 import { useAuth } from '@/hooks/useAuth';
 import { popUndo } from '@/lib/workspace-undo';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { useAmbientAttention } from '@/hooks/useAmbientAttention';
 
 export function WorkspaceShell() {
@@ -63,11 +63,18 @@ export function WorkspaceShell() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+        // Don't intercept text-field native undo
+        const target = e.target as HTMLElement | null;
+        if (
+          target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement ||
+          target?.isContentEditable
+        ) return;
         const entry = popUndo();
         if (!entry) return;
         e.preventDefault();
         dispatch(entry.inverseAction);
-        toast({ title: `↩ Undone: ${entry.description}`, duration: 2500 });
+        toast(`↩ Undone: ${entry.description}`, { duration: 2500 });
       }
     };
     window.addEventListener('keydown', handler);
