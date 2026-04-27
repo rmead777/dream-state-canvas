@@ -46,7 +46,7 @@ interface ToolCall {
 }
 
 // Tools that indicate the AI is making forward progress (about to act, not just spinning on reads).
-// The stuck loop detector allows these to execute even when emptyTextStreak is high.
+// The stuck loop detector allows these to execute even when same-signature streak is high.
 const WRITE_TOOLS = new Set([
   'createCard', 'updateCard', 'dissolveCard', 'focusCard',
   'draftEmail', 'createCalendarEvent', 'runSimulation',
@@ -145,7 +145,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
   const { contextWindow } = getAdminSettings();
   const isMorningBriefQuery = /morning\s*brief/i.test(query);
   // Morning brief needs more iterations to survey scratchpads, pull data, write state, and render
-  const maxIterations = isMorningBriefQuery ? 12 : (getAdminSettings().agentMaxIterations || 5);
+  const maxIterations = isMorningBriefQuery ? 12 : (getAdminSettings().agentMaxIterations || 8);
 
   // Build conversation history
   const history = getConversationMessages(contextWindow);
@@ -304,7 +304,12 @@ Use syncRagic when the user says "refresh ragic", "sync orders", "update ragic d
   // Track best response text across iterations — earlier iterations often have
   // good explanatory text that gets lost when the loop continues with tool calls
   let bestText = '';
-  let emptyTextStreak = 0; // Detect stuck loops: consecutive iterations with no text
+  // Detect stuck loops by tool-call signature repetition. Anthropic's Claude legitimately
+  // returns tool_use blocks with no text content during multi-stage research, so the prior
+  // "empty text" heuristic produced false positives on healthy chained reads. The new check
+  // catches the real failure mode: AI re-issues the IDENTICAL tool call set across iterations.
+  let lastToolSig = '';
+  let sameSigStreak = 0;
   let firstProvider = ''; // Detect provider switches mid-loop
 
   for (let iteration = 0; iteration < maxIterations; iteration++) {
@@ -406,10 +411,7 @@ Use syncRagic when the user says "refresh ragic", "sync orders", "update ragic d
     // Preserve the best (most recent non-empty) response text across iterations
     if (text && text.trim()) {
       bestText = text;
-      emptyTextStreak = 0;
       allSteps.push(text.trim()); // collect every distinct AI reasoning step
-    } else {
-      emptyTextStreak++;
     }
 
     // If AI returned actions directly (the normal intent-parsing path), return them
@@ -444,14 +446,23 @@ Use syncRagic when the user says "refresh ragic", "sync orders", "update ragic d
       };
     }
 
-    // Detect stuck loop: if 3+ consecutive iterations have empty text + only READ tool calls,
-    // the AI is spinning without making progress. Threshold is 3 (not 2) because a legitimate
-    // multi-read workflow (get state → query data → create card) uses 2 read-only iterations
-    // before the write call. Breaking at 2 fires too early for those flows.
-    // If the current iteration contains a WRITE tool, the AI is about to act — always let it run.
+    // Detect stuck loop by tool-call signature repetition. If the AI re-issues the EXACT
+    // same set of tool calls (name + args) across consecutive iterations, it's truly looping.
+    // Different reads in different iterations = forward progress, even with no text in between.
+    // A WRITE tool in the current iteration always counts as progress (the AI is about to act).
     const hasWriteToolCall = toolCalls.some(tc => WRITE_TOOLS.has(tc.function.name));
-    if (emptyTextStreak >= 3 && !hasWriteToolCall) {
-      console.warn('[sherpa-agent] Stuck loop detected: 3+ empty iterations with only read tools, breaking out at iteration', iteration);
+    const currentSig = toolCalls
+      .map(tc => `${tc.function.name}:${tc.function.arguments}`)
+      .sort()
+      .join('|');
+    if (currentSig === lastToolSig && currentSig.length > 0) {
+      sameSigStreak++;
+    } else {
+      sameSigStreak = 0;
+    }
+    lastToolSig = currentSig;
+    if (sameSigStreak >= 2 && !hasWriteToolCall) {
+      console.warn('[sherpa-agent] Stuck loop detected: identical tool-call set repeated', sameSigStreak + 1, 'times at iteration', iteration);
       onStatusUpdate?.(null);
       const pendingActions = remapPendingActions();
       const finalResponse = bestText || (pendingActions.length > 0 ? 'Done.' : 'I wasn\'t able to complete that. Could you try rephrasing?');
@@ -463,8 +474,8 @@ Use syncRagic when the user says "refresh ragic", "sync orders", "update ragic d
         steps: allSteps,
         error: pendingActions.length > 0 ? undefined : {
           code: 'stuck_loop',
-          message: 'Sherpa was reading data without making progress.',
-          detail: `Stopped at iteration ${iteration} after ${emptyTextStreak} consecutive empty-text iterations with read-only tool calls. Try rephrasing the question or being more specific.`,
+          message: 'Sherpa kept asking for the same data without finishing.',
+          detail: `Stopped at iteration ${iteration} after the AI re-issued the identical read set ${sameSigStreak + 1} times. Try rephrasing or being more specific.`,
         },
       };
     }
