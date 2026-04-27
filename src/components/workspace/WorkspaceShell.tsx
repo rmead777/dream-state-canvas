@@ -12,11 +12,14 @@ import { useWorkspaceBreathing } from '@/hooks/useWorkspaceBreathing';
 import { useCognitiveMode } from '@/hooks/useCognitiveMode';
 import { useAmbientAudio } from '@/hooks/useAmbientAudio';
 import { useWorkspacePersistence } from '@/hooks/useWorkspacePersistence';
-import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { useWorkspace, useWorkspaceDispatch } from '@/contexts/WorkspaceContext';
 import { useAuth } from '@/hooks/useAuth';
+import { popUndo } from '@/lib/workspace-undo';
+import { toast } from '@/hooks/use-toast';
 
 export function WorkspaceShell() {
   const { state } = useWorkspace();
+  const dispatch = useWorkspaceDispatch();
   const { user, signOut } = useAuth();
   const { isMobile } = useIsMobile();
   const { isOverCapacity } = useWorkspaceBreathing();
@@ -53,6 +56,21 @@ export function WorkspaceShell() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, []);
+
+  // Cmd+Z undo handler
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+        const entry = popUndo();
+        if (!entry) return;
+        e.preventDefault();
+        dispatch(entry.inverseAction);
+        toast({ title: `↩ Undone: ${entry.description}`, duration: 2500 });
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [dispatch]);
 
   // Sound on immersive transitions
   useEffect(() => {

@@ -18,6 +18,7 @@ import { extractEntityRefs } from '@/lib/entity-extractor';
 import { retrieveRelevantMemories, formatMemoriesForPrompt, determineWorkspaceState } from '@/lib/memory-retriever';
 import { recordAction, detectLearningSignals } from '@/lib/memory-detector';
 import { supabase } from '@/integrations/supabase/client';
+import { recordUndo } from '@/lib/workspace-undo';
 
 // Store document IDs ref for context injection
 let _documentIdsRef: string[] = [];
@@ -433,11 +434,14 @@ export function useWorkspaceActions() {
           summaryParts.push(`Focused ${stateRef.current.objects[action.objectId]?.title || action.objectId}.`);
           break;
 
-        case 'dissolve':
+        case 'dissolve': {
+          const dissolveObj = stateRef.current.objects[action.objectId];
+          if (dissolveObj) recordUndo(`Dissolved "${dissolveObj.title}"`, { type: 'RESTORE_OBJECT', payload: { id: action.objectId } });
           dispatch({ type: 'DISSOLVE_OBJECT', payload: { id: action.objectId } });
           outcome.affectedObjectIds = mergeUnique(outcome.affectedObjectIds, [action.objectId]);
-          summaryParts.push(`Dissolved ${stateRef.current.objects[action.objectId]?.title || action.objectId}.`);
+          summaryParts.push(`Dissolved ${dissolveObj?.title || action.objectId}.`);
           break;
+        }
 
         case 'update': {
           const target = stateRef.current.objects[action.objectId];
@@ -706,8 +710,12 @@ export function useWorkspaceActions() {
   }
 
   const collapseObject = useCallback(
-    (id: string) => { dispatch({ type: 'COLLAPSE_OBJECT', payload: { id } }); },
-    [dispatch]
+    (id: string) => {
+      const obj = state.objects[id];
+      if (obj) recordUndo(`Collapsed "${obj.title}"`, { type: 'OPEN_OBJECT', payload: { id } });
+      dispatch({ type: 'COLLAPSE_OBJECT', payload: { id } });
+    },
+    [dispatch, state.objects]
   );
 
   const restoreObject = useCallback(
@@ -719,18 +727,30 @@ export function useWorkspaceActions() {
   );
 
   const dissolveObject = useCallback(
-    (id: string) => { dispatch({ type: 'DISSOLVE_OBJECT', payload: { id } }); },
-    [dispatch]
+    (id: string) => {
+      const obj = state.objects[id];
+      if (obj) recordUndo(`Dissolved "${obj.title}"`, { type: 'RESTORE_OBJECT', payload: { id } });
+      dispatch({ type: 'DISSOLVE_OBJECT', payload: { id } });
+    },
+    [dispatch, state.objects]
   );
 
   const pinObject = useCallback(
-    (id: string) => { dispatch({ type: 'PIN_OBJECT', payload: { id } }); },
-    [dispatch]
+    (id: string) => {
+      const obj = state.objects[id];
+      if (obj) recordUndo(`Pinned "${obj.title}"`, { type: 'UNPIN_OBJECT', payload: { id } });
+      dispatch({ type: 'PIN_OBJECT', payload: { id } });
+    },
+    [dispatch, state.objects]
   );
 
   const unpinObject = useCallback(
-    (id: string) => { dispatch({ type: 'UNPIN_OBJECT', payload: { id } }); },
-    [dispatch]
+    (id: string) => {
+      const obj = state.objects[id];
+      if (obj) recordUndo(`Unpinned "${obj.title}"`, { type: 'PIN_OBJECT', payload: { id } });
+      dispatch({ type: 'UNPIN_OBJECT', payload: { id } });
+    },
+    [dispatch, state.objects]
   );
 
   const focusObject = useCallback(
