@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 import { PromptEditor } from './PromptEditor';
 import { Notebook } from './Notebook';
 import { ThinkingStrip } from './ThinkingStrip';
+import { ErrorTray } from './ErrorTray';
 import { RulesEditor } from './RulesEditor';
 import { AITelemetryPanel } from './AITelemetryPanel';
 import { ShaderControlPanel } from './ShaderControlPanel';
@@ -123,7 +124,14 @@ export function SherpaRail() {
 
   const [adminUnlocked, setAdminUnlocked] = useState(isAdminUnlocked());
   const [adminState, setAdminState] = useState(getAdminSettings());
-  const [promptHistory, setPromptHistory] = useState<Array<{ query: string; response: string | null; timestamp: number; steps?: string[] }>>([]);
+  const [promptHistory, setPromptHistory] = useState<Array<{
+    query: string;
+    response: string | null;
+    timestamp: number;
+    steps?: string[];
+    images?: string[];
+    error?: { code: string; message: string; detail?: string };
+  }>>([]);
   const [contextMode, setContextMode] = useState<ContextMode>('auto');
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const [showModelDropdown, setShowModelDropdown] = useState(false);
@@ -192,11 +200,19 @@ export function SherpaRail() {
 
   const trackAndProcess = useCallback(async (text: string, images?: string[]) => {
     const ts = Date.now();
-    setPromptHistory(prev => [...prev, { query: text, response: null, timestamp: ts }]);
+    setPromptHistory(prev => [...prev, { query: text, response: null, timestamp: ts, images }]);
     setActiveTab('origin');
     const result = await processIntent(text, images);
-    if (result?.steps?.length) {
-      setPromptHistory(prev => prev.map(e => e.timestamp === ts ? { ...e, steps: result.steps } : e));
+    setPromptHistory(prev => prev.map(e => {
+      if (e.timestamp !== ts) return e;
+      return {
+        ...e,
+        ...(result?.steps?.length ? { steps: result.steps } : {}),
+        ...(result?.error ? { error: result.error } : {}),
+      };
+    }));
+    if (result?.error) {
+      toast.error(result.error.message, { duration: 5000 });
     }
   }, [processIntent]);
 
@@ -597,6 +613,17 @@ export function SherpaRail() {
                     <div className="flex flex-col items-start gap-1">
                       <div className="max-w-[90%] rounded-2xl rounded-bl-md bg-white border border-workspace-border/40 px-3.5 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
                         <MarkdownRenderer content={entry.response} />
+                      </div>
+                    </div>
+                  )}
+                  {entry.error && (
+                    <div className="flex justify-start">
+                      <div className="max-w-[90%] w-full">
+                        <ErrorTray
+                          error={entry.error}
+                          onRetry={() => trackAndProcess(entry.query, entry.images)}
+                          onEdit={() => setInput(entry.query)}
+                        />
                       </div>
                     </div>
                   )}

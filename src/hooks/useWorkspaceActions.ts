@@ -278,8 +278,8 @@ export function useWorkspaceActions() {
           },
         });
 
-        // Return steps so the caller (SherpaRail) can show reasoning history
-        return { steps: agentResult.steps || [] };
+        // Return steps + any agent error so SherpaRail can render the failure tray
+        return { steps: agentResult.steps || [], error: agentResult.error };
       } catch (aiError) {
         console.error('[processIntent] AI intent parsing failed:', aiError);
         // Dissolve any orphan scaffolds — cards spawned by shadow_create
@@ -306,9 +306,19 @@ export function useWorkspaceActions() {
             },
           },
         });
+        dispatch({ type: 'SET_SHERPA_PROCESSING', payload: false });
+        return {
+          steps: [],
+          error: {
+            code: 'exception' as const,
+            message: 'An unexpected error interrupted Sherpa.',
+            detail: aiError instanceof Error ? `${aiError.name}: ${aiError.message}` : String(aiError),
+          },
+        };
       }
 
       dispatch({ type: 'SET_SHERPA_PROCESSING', payload: false });
+      return { steps: [], error: undefined };
     },
     [dispatch]
   );

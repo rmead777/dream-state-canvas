@@ -97,6 +97,22 @@ export interface AgentLoopParams {
   onEvent?: (event: import('./manifestation-types').AgentLoopEvent) => void;
 }
 
+export type AgentErrorCode =
+  | 'no_response'        // AI service unreachable / null response
+  | 'provider_switch'    // mid-loop provider swap (usually rate limit)
+  | 'stuck_loop'         // 3+ consecutive empty-text iterations
+  | 'max_iterations'     // hit iteration cap without converging
+  | 'exception'          // unexpected throw caught upstream
+  | 'image_unsupported'; // image attachments to a model that doesn't support them
+
+export interface AgentError {
+  code: AgentErrorCode;
+  /** User-facing one-line summary */
+  message: string;
+  /** Optional technical detail surfaced behind a "More info" disclosure */
+  detail?: string;
+}
+
 export interface AgentLoopResult {
   response: string;
   actions: any[];
@@ -104,6 +120,8 @@ export interface AgentLoopResult {
   nextMoves?: { label: string; query: string }[];
   /** All non-empty intermediate AI texts from each iteration, for reasoning visibility */
   steps?: string[];
+  /** Set when the loop short-circuited or aborted in a recoverable way */
+  error?: AgentError;
 }
 
 /**
@@ -292,7 +310,18 @@ Use syncRagic when the user says "refresh ragic", "sync orders", "update ragic d
     const response = await callAIWithTools(messages, documentIds, memories, iteration === 0, query);
 
     if (!response) {
-      return { response: bestText || 'Sherpa could not reach the AI service. Please try again.', actions: remapPendingActions(), toolCallsUsed, nextMoves: capturedNextMoves, steps: allSteps };
+      return {
+        response: bestText || 'Sherpa could not reach the AI service. Please try again.',
+        actions: remapPendingActions(),
+        toolCallsUsed,
+        nextMoves: capturedNextMoves,
+        steps: allSteps,
+        error: {
+          code: 'no_response',
+          message: 'Sherpa could not reach the AI service.',
+          detail: `Iteration ${iteration} returned null. Check VITE_SUPABASE_URL, OAuth/API key, and the ai-chat edge function deployment.`,
+        },
+      };
     }
 
     // Detect which provider responded (Anthropic starts with {"model":, Google with {"id":"gen-)
@@ -311,6 +340,11 @@ Use syncRagic when the user says "refresh ragic", "sync orders", "update ragic d
         toolCallsUsed,
         nextMoves: capturedNextMoves,
         steps: allSteps,
+        error: pendingActions.length > 0 ? undefined : {
+          code: 'provider_switch',
+          message: `Provider switched mid-task (${firstProvider} → ${responseProvider}).`,
+          detail: 'Usually caused by OAuth rate limit triggering fallback to Google. Try again in 30–60 seconds, or switch model in the admin panel.',
+        },
       };
     }
 
@@ -386,6 +420,11 @@ Use syncRagic when the user says "refresh ragic", "sync orders", "update ragic d
         toolCallsUsed,
         nextMoves: capturedNextMoves,
         steps: allSteps,
+        error: pendingActions.length > 0 ? undefined : {
+          code: 'stuck_loop',
+          message: 'Sherpa was reading data without making progress.',
+          detail: `Stopped at iteration ${iteration} after ${emptyTextStreak} consecutive empty-text iterations with read-only tool calls. Try rephrasing the question or being more specific.`,
+        },
       };
     }
 
@@ -517,6 +556,11 @@ Use syncRagic when the user says "refresh ragic", "sync orders", "update ragic d
     toolCallsUsed,
     nextMoves: capturedNextMoves,
     steps: allSteps,
+    error: pendingActions.length > 0 ? undefined : {
+      code: 'max_iterations',
+      message: `Sherpa hit the iteration cap (${maxIterations}).`,
+      detail: `The agent didn't converge within ${maxIterations} iterations. Increase the cap in admin settings, or try a more focused question.`,
+    },
   };
 }
 
