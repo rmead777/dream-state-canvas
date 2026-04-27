@@ -1533,7 +1533,7 @@ export async function executeTool(
         if (!isScratchpad) {
           return JSON.stringify({
             error: 'REFUSED: This tool only deletes scratchpads. The target document is an uploaded file or structured dataset and cannot be deleted through Sherpa. Ask the user to delete it manually if they really want it gone.',
-            documentName: doc.file_name,
+            documentName: doc.filename,
           });
         }
 
@@ -1543,8 +1543,8 @@ export async function executeTool(
         return JSON.stringify({
           deleted: true,
           documentId: docId,
-          name: doc.file_name,
-          hint: `Scratchpad "${doc.file_name}" deleted. Any workspace cards referencing it should be dissolved.`,
+          name: doc.filename,
+          hint: `Scratchpad "${doc.filename}" deleted. Any workspace cards referencing it should be dissolved.`,
         });
       }
 
