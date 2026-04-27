@@ -321,7 +321,7 @@ Use syncRagic when the user says "refresh ragic", "sync orders", "update ragic d
         toolCallsUsed,
         nextMoves: capturedNextMoves,
         steps: allSteps,
-        error: {
+        error: pendingActions.length > 0 ? undefined : {
           code: 'exception',
           message: reason,
           detail: `Loop halted at iteration ${iteration} by user signal.`,

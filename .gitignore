@@ -30,3 +30,6 @@ dist-ssr
 
 # Audit files
 .audit/
+
+# Claude Code session files
+.claude/
