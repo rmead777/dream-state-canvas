@@ -346,10 +346,17 @@ Deno.serve(async (req) => {
       const requestedDateStr = getFieldValue(record, FIELD_MAPPINGS.requestedDeliveryDate)
       const shipDateStr = orderNumber ? shipmentDates.get(orderNumber) : null
 
-      let deliveryDate: Date | null = null
-      if (shipDateStr) deliveryDate = parseRagicDate(shipDateStr)
-      if (!deliveryDate && actualDateStr) deliveryDate = parseRagicDate(actualDateStr)
-      if (!deliveryDate && requestedDateStr) deliveryDate = parseRagicDate(requestedDateStr)
+      // Actual ship date — Shipments sheet is authoritative, falls back to order's own field
+      let actualShipDate: Date | null = null
+      if (shipDateStr) actualShipDate = parseRagicDate(shipDateStr)
+      if (!actualShipDate && actualDateStr) actualShipDate = parseRagicDate(actualDateStr)
+
+      // Requested delivery date — direct from order
+      const requestedDeliveryDate: Date | null = requestedDateStr ? parseRagicDate(requestedDateStr) : null
+
+      // Backward-compat: delivery_date = actual ?? requested
+      const deliveryDate: Date | null = actualShipDate ?? requestedDeliveryDate
+      const hasShipped = actualShipDate !== null
 
       if (deliveryDateFrom && deliveryDate) {
         if (deliveryDate < new Date(deliveryDateFrom)) { skipped++; continue }
