@@ -20,6 +20,48 @@ interface DatasetViewProps {
 type SortDir = 'asc' | 'desc' | null;
 type EditingCell = { rowIdx: number; colIdx: number } | null;
 
+type InferredType = 'date' | 'numeric' | 'numeric-sparse' | 'currency' | 'text' | 'empty';
+
+/**
+ * Convert an Excel/Sheets date serial to YYYY-MM-DD. Excel epoch is 1900-01-01,
+ * UNIX epoch is 1970-01-01 → offset of 25569 days. Returns null if not a plausible serial.
+ */
+function excelSerialToISO(value: string): string | null {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num < 20000 || num > 80000) return null; // ~1954–2118
+  const ms = Math.round((num - 25569) * 86400 * 1000);
+  const dt = new Date(ms);
+  if (Number.isNaN(dt.getTime())) return null;
+  return dt.toISOString().slice(0, 10);
+}
+
+function inferColumnTypes(cols: string[], rows: string[][]): InferredType[] {
+  const SAMPLE = Math.min(80, rows.length);
+  return cols.map((col, i) => {
+    const sample: string[] = [];
+    for (let r = 0; r < SAMPLE; r++) {
+      const v = rows[r]?.[i];
+      if (v != null && String(v).trim() !== '') sample.push(String(v));
+    }
+    if (sample.length === 0) return 'empty';
+    const looksLikeDateName = /\bdate\b|\bday\b|\btime\b|when|requested|delivery|shipped|due|created|start|end/i.test(col);
+    const inSerialRange = sample.every(v => {
+      const n = Number(v);
+      return Number.isFinite(n) && n > 30000 && n < 80000;
+    });
+    if (looksLikeDateName && inSerialRange) return 'date';
+    const allCurrency = sample.every(v => /^\$?-?[\d,]+(\.\d+)?$/.test(v.trim()) && /\$/.test(v));
+    if (allCurrency) return 'currency';
+    const allNumeric = sample.every(v => Number.isFinite(Number(v)));
+    if (allNumeric) {
+      const zeros = sample.filter(v => Number(v) === 0).length;
+      if (zeros / sample.length > 0.6) return 'numeric-sparse';
+      return 'numeric';
+    }
+    return 'text';
+  });
+}
+
 export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
   const { dispatch } = useWorkspace();
   const { updateActiveDataset } = useDocuments();
@@ -184,12 +226,53 @@ export function DatasetView({ object, isImmersive = false }: DatasetViewProps) {
   const handleGenerateInsight = useCallback(async () => {
     if (isStreaming) return;
     setAiInsight('');
-    const tableStr = [allColumns.join(' | '), ...rawRows.slice(0, 30).map((r) => r.join(' | '))].join('\n');
+
+    const columnTypes = inferColumnTypes(allColumns, rawRows);
+
+    // Inline-convert Excel date serials so the model reads real dates, not opaque numbers
+    const formattedRows = rawRows.map((row) =>
+      row.map((cell, colIdx) => {
+        if (columnTypes[colIdx] === 'date') {
+          const iso = excelSerialToISO(String(cell));
+          return iso ?? String(cell);
+        }
+        return String(cell);
+      })
+    );
+
+    const schemaLines = allColumns
+      .map((col, i) => `  ${i + 1}. "${col}" — ${columnTypes[i]}`)
+      .join('\n');
+
+    const tableStr = [
+      allColumns.join(' | '),
+      ...formattedRows.map((r) => r.join(' | ')),
+    ].join('\n');
+
+    const datasetName = object.title || 'this dataset';
+
+    const prompt = `Analyze the dataset below and surface 3–5 key insights.
+
+Dataset: ${datasetName}
+Rows: ${rawRows.length} · Columns: ${allColumns.length}
+
+Schema (column → inferred type):
+${schemaLines}
+
+Notes:
+- Date columns have already been converted from Excel serials to YYYY-MM-DD.
+- "numeric-sparse" columns are mostly zero — likely pivot/category columns where non-zero rows are the signal.
+
+Data (pipe-delimited, all rows):
+${tableStr}
+
+Look for: meaningful patterns, time trends, outliers, top entities, anomalies, or operational risks. Cite specific values, dates, and entity names. Skip surface-level observations like "the dataset has N rows."`;
+
     await streamChat(
-      [{ role: 'user', content: `Analyze this dataset and provide 2-3 key insights:\n\n${tableStr}` }],
+      [{ role: 'user', content: prompt }],
       { mode: 'dataset', onDelta: (text) => setAiInsight((prev) => (prev || '') + text) }
     );
-  }, [isStreaming, streamChat, allColumns, rawRows]);
+  }, [isStreaming, streamChat, allColumns, rawRows, object.title]);
 
   const handleEnterImmersive = () => {
     dispatch({ type: 'ENTER_IMMERSIVE', payload: { id: object.id } });
