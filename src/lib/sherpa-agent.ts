@@ -14,6 +14,12 @@
  */
 import { callAI, type ContentPart } from '@/hooks/useAI';
 import { SHERPA_TOOLS, executeTool, getToolStatus } from './sherpa-tools';
+import {
+  drainInterjections,
+  isStopRequested,
+  resetInterjectionState,
+  getStopReason,
+} from './agent-interjection';
 import { WorkspaceState, WorkspaceAction, ActiveContext } from './workspace-types';
 import { getConversationMessages } from './conversation-memory';
 import { getAdminSettings } from './admin-settings';
@@ -134,6 +140,8 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
     try { onEvent?.(ev); } catch { /* never let event consumers break the loop */ }
   };
   emit({ type: 'loop_start', query, t: Date.now() });
+  // Reset interjection mailbox for this new run.
+  resetInterjectionState();
   const { contextWindow } = getAdminSettings();
   const isMorningBriefQuery = /morning\s*brief/i.test(query);
   // Morning brief needs more iterations to survey scratchpads, pull data, write state, and render
@@ -301,6 +309,39 @@ Use syncRagic when the user says "refresh ragic", "sync orders", "update ragic d
 
   for (let iteration = 0; iteration < maxIterations; iteration++) {
     emit({ type: 'iteration_start', iteration, t: Date.now() });
+
+    // ─── Stop request? Honor it before doing anything else. ─────────────────
+    if (isStopRequested()) {
+      onStatusUpdate?.(null);
+      const pendingActions = remapPendingActions();
+      const reason = getStopReason() || 'User requested stop';
+      return {
+        response: bestText || (pendingActions.length > 0 ? 'Stopped — partial result.' : 'Stopped.'),
+        actions: pendingActions,
+        toolCallsUsed,
+        nextMoves: capturedNextMoves,
+        steps: allSteps,
+        error: {
+          code: 'exception',
+          message: reason,
+          detail: `Loop halted at iteration ${iteration} by user signal.`,
+        },
+      };
+    }
+
+    // ─── Drain pending interjections and inject them as steering messages. ──
+    // The agent will see "USER INTERJECTION:" labeled messages on the next
+    // turn and is expected to integrate them into ongoing reasoning.
+    if (iteration > 0) {
+      const interjects = drainInterjections();
+      for (const text of interjects) {
+        messages.push({
+          role: 'user',
+          content: `USER INTERJECTION (mid-loop steering — incorporate into your next response, do not ask for clarification): ${text}`,
+        });
+      }
+    }
+
     // Show interim thoughts untruncated — user needs to read the full reasoning
     if (iteration > 0) {
       onStatusUpdate?.(bestText || 'Thinking...');

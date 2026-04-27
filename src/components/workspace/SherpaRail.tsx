@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 import { PromptEditor } from './PromptEditor';
 import { Notebook } from './Notebook';
 import { ThinkingStrip } from './ThinkingStrip';
+import { InterjectComposer } from './InterjectComposer';
 import { ErrorTray } from './ErrorTray';
 import { RulesEditor } from './RulesEditor';
 import { AITelemetryPanel } from './AITelemetryPanel';
@@ -612,13 +613,15 @@ export function SherpaRail() {
                     ));
                   })()}
                   {/* Final response */}
-                  {/* Thinking strip — renders the live agent event timeline.
-                      Only on the most-recent entry since the strip subscribes
-                      to the global event stream which only carries one loop. */}
+                  {/* Thinking strip + interject composer — renders the live agent
+                      event timeline above each Sherpa response. Only on the
+                      most-recent entry since both subscribe to the global
+                      event stream which only carries one loop at a time. */}
                   {i === promptHistory.length - 1 && (
                     <div className="flex justify-start">
-                      <div className="max-w-[90%] w-full">
+                      <div className="max-w-[90%] w-full space-y-1">
                         <ThinkingStrip />
+                        <InterjectComposer />
                       </div>
                     </div>
                   )}

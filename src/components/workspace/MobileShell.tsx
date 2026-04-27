@@ -15,6 +15,7 @@ import { QBOStatusPanel } from './QBOStatusPanel';
 import { OutlookStatusPanel } from './OutlookStatusPanel';
 import { Notebook } from './Notebook';
 import { ThinkingStrip } from './ThinkingStrip';
+import { InterjectComposer } from './InterjectComposer';
 import { ErrorTray } from './ErrorTray';
 import MarkdownRenderer from '../objects/MarkdownRenderer';
 import { compressImage } from '@/lib/image-utils';
@@ -308,11 +309,12 @@ export function MobileShell() {
                           </div>
                         ));
                       })()}
-                      {/* Thinking strip — only on the most-recent entry */}
+                      {/* Thinking strip + interject composer — only on the most-recent entry */}
                       {i === promptHistory.length - 1 && (
                         <div className="flex justify-start">
-                          <div className="max-w-[92%] w-full">
+                          <div className="max-w-[92%] w-full space-y-1">
                             <ThinkingStrip />
+                            <InterjectComposer />
                           </div>
                         </div>
                       )}
