@@ -12,7 +12,7 @@ import { getDocument, createScratchpad, listDocuments, extractDataset, deleteDoc
 import { createMemory, deleteMemory, getMemories } from './memory-store';
 import { retrieveRelevantMemories, formatMemoriesForPrompt, determineWorkspaceState } from './memory-retriever';
 import { supabase } from '@/integrations/supabase/client';
-import { createTrigger as saveTrigger } from './automation-triggers';
+import { createTrigger as saveTrigger, updateTrigger as patchTrigger, loadAllTriggers, type TriggerCondition } from './automation-triggers';
 import { fetchQBOData, clearQBOCache, type QBODataType } from './quickbooks-store';
 import { getStoredEmails, searchStoredEmails, getStoredEmail, syncEmails, isOutlookConnected } from './email-store';
 import { getRagicOrders, getRagicCustomers, syncRagicOrders, syncRagicCustomers, clearRagicCache } from './ragic-store';
@@ -410,6 +410,31 @@ export const SHERPA_TOOLS = [
     },
   },
 
+  {
+    type: 'function' as const,
+    function: {
+      name: 'updateTrigger',
+      description: 'Update an existing automation trigger\'s label, condition, action, or enabled state. Use when the user wants to refine an existing trigger (e.g. "add a Status=Open filter to my master trigger", "change the threshold on X to 100", "rename my trigger"). If you don\'t know the trigger ID, first call this with `lookupByLabel` to find it.',
+      parameters: {
+        type: 'object',
+        properties: {
+          triggerId: { type: 'string', description: 'ID of the trigger to update. Omit if using lookupByLabel.' },
+          lookupByLabel: { type: 'string', description: 'Find a trigger by case-insensitive label substring match (e.g. "master trigger watch"). Used when triggerId is unknown.' },
+          label: { type: 'string', description: 'Optional new label.' },
+          condition: {
+            type: 'object',
+            description: 'Optional new full condition. Supports the rich rules[] + combinator + aggregation shape. Replaces the existing condition entirely.',
+          },
+          action: {
+            type: 'object',
+            description: 'Optional new action: { type: "notify" | "create_card", params: {...} }',
+          },
+          enabled: { type: 'boolean', description: 'Optional enabled flag.' },
+        },
+      },
+    },
+  },
+
   // EMAIL DRAFT tool
   {
     type: 'function' as const,
@@ -793,6 +818,7 @@ const TOOL_STATUS: Record<string, string> = {
   setThreshold: 'Setting alert threshold...',
   showAutomations: 'Loading automations...',
   createTrigger: 'Creating automation trigger...',
+  updateTrigger: 'Updating automation trigger...',
   draftEmail: 'Composing email...',
   createCalendarEvent: 'Creating calendar event...',
   exportWorkspace: 'Generating PDF report...',
@@ -1219,6 +1245,39 @@ export async function executeTool(
           id: trigger.id,
           label: trigger.label,
           message: `Automation trigger "${trigger.label}" is active. I'll check it every 30 seconds.`,
+        });
+      }
+
+      case 'updateTrigger': {
+        let triggerId: string | undefined = args.triggerId;
+        let foundLabel: string | undefined;
+        if (!triggerId && args.lookupByLabel) {
+          const all = await loadAllTriggers();
+          const needle = String(args.lookupByLabel).toLowerCase();
+          const match = all.find(t => t.label.toLowerCase().includes(needle));
+          if (!match) {
+            return JSON.stringify({ error: `No trigger label contains "${args.lookupByLabel}". Run showAutomations() first to see all triggers.` });
+          }
+          triggerId = match.id;
+          foundLabel = match.label;
+        }
+        if (!triggerId) {
+          return JSON.stringify({ error: 'Provide either triggerId or lookupByLabel.' });
+        }
+        const ok = await patchTrigger(triggerId, {
+          label: args.label,
+          condition: args.condition as TriggerCondition | undefined,
+          action: args.action,
+          enabled: args.enabled,
+        });
+        if (!ok) {
+          return JSON.stringify({ error: `Update failed for trigger ${triggerId}.` });
+        }
+        return JSON.stringify({
+          updated: true,
+          id: triggerId,
+          label: foundLabel,
+          message: `Trigger updated. Changes take effect on the next 30s scan.`,
         });
       }
 

@@ -5,7 +5,8 @@ import { Suggestion } from '@/lib/workspace-types';
 import { getMemories } from '@/lib/memory-store';
 import { parseThreshold, checkAlertThresholds } from '@/lib/alert-monitor';
 import { useDocuments } from '@/contexts/DocumentContext';
-import { loadTriggers, checkTriggers, markTriggerFired } from '@/lib/automation-triggers';
+import { loadTriggers, checkTriggers, markTriggerFired, type DatasetSlice } from '@/lib/automation-triggers';
+import { extractDataset } from '@/lib/document-store';
 import { supabase } from '@/integrations/supabase/client';
 import { isOutlookConnected } from '@/lib/email-store';
 import { getAttentionSignals } from '@/lib/ambient-attention';
@@ -30,7 +31,12 @@ const SherpaCtx = createContext<SherpaContextValue | null>(null);
 
 export function SherpaProvider({ children }: { children: React.ReactNode }) {
   const { state, dispatch } = useWorkspace();
-  const { activeDataset } = useDocuments();
+  const { activeDataset, documents } = useDocuments();
+  // Stable ref so the trigger scan effect doesn't reset every time documents change
+  const documentsRef = useRef(documents);
+  documentsRef.current = documents;
+  const activeDatasetRef = useRef(activeDataset);
+  activeDatasetRef.current = activeDataset;
 
   // Favorites — kept in component state so toggling from the UI (via the
   // `toggleFavorite` helper + window event below) triggers a re-rank.
@@ -143,7 +149,30 @@ export function SherpaProvider({ children }: { children: React.ReactNode }) {
         const triggers = await loadTriggers();
         if (triggers.length === 0) return;
 
-        const firings = checkTriggers(triggers, activeDataset.columns, activeDataset.rows);
+        // Gather every dataset the engine can evaluate against. The active dataset
+        // goes first (so its source label shows up when applicable), followed by
+        // every uploaded document / scratchpad. This makes triggers always-on —
+        // a trigger fires regardless of which dataset the user is currently viewing.
+        const slices: DatasetSlice[] = [];
+        const ad = activeDatasetRef.current;
+        const seenDocIds = new Set<string>();
+        if (ad?.columns?.length && ad?.rows?.length) {
+          slices.push({ columns: ad.columns, rows: ad.rows, source: 'active dataset' });
+          if (ad.sourceDocId) seenDocIds.add(ad.sourceDocId);
+        }
+        for (const doc of documentsRef.current) {
+          if (seenDocIds.has(doc.id)) continue;
+          const ds = extractDataset(doc);
+          if (!ds || !ds.rows.length) continue;
+          const isScratchpad = (doc.metadata as { isScratchpad?: boolean } | null)?.isScratchpad === true;
+          slices.push({
+            columns: ds.columns,
+            rows: ds.rows,
+            source: `${isScratchpad ? 'scratchpad' : 'doc'}:${doc.filename ?? doc.id.slice(0, 8)}`,
+          });
+        }
+
+        const firings = checkTriggers(triggers, slices);
         const now = Date.now();
         // Prune trigger records older than 5 minutes
         activeTriggersRef.current = activeTriggersRef.current.filter((t) => now - t.at < 5 * 60_000);
