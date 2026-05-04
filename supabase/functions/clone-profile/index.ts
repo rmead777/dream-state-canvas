@@ -193,46 +193,72 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const newStoragePath = `clone-${targetUserId.slice(0, 8)}-${Date.now()}-${safeName(doc.filename ?? 'document')}`;
+        // Scratchpads are virtual documents — content lives in structured_data,
+        // there's no real file in the storage bucket. Detect via metadata flag
+        // OR the scratchpad mime_type so we don't try to copy a non-existent
+        // storage object.
+        const meta = (doc.metadata ?? {}) as Record<string, unknown>;
+        const isScratchpad =
+          meta.isScratchpad === true || doc.mime_type === 'application/x-scratchpad';
 
-        const { error: copyErr } = await admin.storage
-          .from('documents')
-          .copy(doc.storage_path, newStoragePath);
+        let newStoragePath: string;
+        let storageObjectCopied = false;
 
-        if (copyErr) {
-          docResults.errors.push(`${doc.filename}: storage copy failed (${copyErr.message})`);
-          continue;
+        if (isScratchpad) {
+          // Generate a fresh virtual storage_path; nothing to copy in storage.
+          newStoragePath = `scratchpad-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        } else {
+          newStoragePath = `clone-${targetUserId.slice(0, 8)}-${Date.now()}-${safeName(doc.filename ?? 'document')}`;
+          const { error: copyErr } = await admin.storage
+            .from('documents')
+            .copy(doc.storage_path, newStoragePath);
+
+          if (copyErr) {
+            docResults.errors.push(`${doc.filename}: storage copy failed (${copyErr.message})`);
+            continue;
+          }
+          storageObjectCopied = true;
         }
 
-        // Strip immutable/source-specific fields
+        // Strip immutable/source-specific fields. Generate a new fingerprint
+        // for scratchpads so re-running the clone doesn't trip the dup check
+        // on subsequent runs (each clone produces fresh scratchpad rows).
         const {
           id: _id,
           created_at: _createdAt,
           user_id: _origUser,
           storage_path: _origPath,
+          fingerprint: origFingerprint,
           ...docFields
         } = doc;
+
+        const newFingerprint = isScratchpad
+          ? `scratchpad-clone-${Date.now()}-${Math.random().toString(36).slice(2)}`
+          : origFingerprint;
 
         const { error: insertErr } = await admin.from('documents').insert({
           ...docFields,
           user_id: targetUserId,
           storage_path: newStoragePath,
+          fingerprint: newFingerprint,
         });
 
         if (insertErr) {
-          // Rollback storage copy on insert failure
-          await admin.storage
-            .from('documents')
-            .remove([newStoragePath])
-            .catch(() => {
-              /* best effort */
-            });
+          // Rollback storage copy on insert failure (only if we actually copied).
+          if (storageObjectCopied) {
+            await admin.storage
+              .from('documents')
+              .remove([newStoragePath])
+              .catch(() => {
+                /* best effort */
+              });
+          }
           docResults.errors.push(`${doc.filename}: insert failed (${insertErr.message})`);
           continue;
         }
 
         docResults.copied += 1;
-        if (doc.fingerprint) targetFingerprints.add(doc.fingerprint);
+        if (newFingerprint) targetFingerprints.add(newFingerprint);
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'unknown error';
         docResults.errors.push(`${doc.filename ?? '(unknown)'}: ${msg}`);
