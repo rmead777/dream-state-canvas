@@ -9,6 +9,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { SherpaMemory } from '@/lib/memory-types';
 import { getMemories, getPendingMemories, confirmMemory, deleteMemory } from '@/lib/memory-store';
 import { supabase } from '@/integrations/supabase/client';
+import { CloneProfileModal } from './CloneProfileModal';
 
 const TYPE_CONFIG: Record<string, { icon: string; label: string; color: string }> = {
   correction: { icon: '✓', label: 'Corrections', color: 'text-red-500' },
@@ -27,6 +28,7 @@ export function MemoryPanel({ onSendToSherpa }: MemoryPanelProps) {
   const [pending, setPending] = useState<SherpaMemory[]>([]);
   const [loading, setLoading] = useState(true);
   const [cleaningUp, setCleaningUp] = useState(false);
+  const [cloneOpen, setCloneOpen] = useState(false);
 
   const loadMemories = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -81,21 +83,30 @@ export function MemoryPanel({ onSendToSherpa }: MemoryPanelProps) {
             {pending.length > 0 && ` · ${pending.length} pending`}
           </p>
         </div>
-        {totalCount > 3 && onSendToSherpa && (
+        <div className="flex items-center gap-1.5">
+          {totalCount > 3 && onSendToSherpa && (
+            <button
+              onClick={() => {
+                setCleaningUp(true);
+                onSendToSherpa(
+                  `Review ALL of my stored memories (use recallMemories with a broad query to see them all). Identify redundant, duplicate, or obsolete entries. Then use consolidateMemories to propose: (1) which memories to delete and why, (2) consolidated replacements that merge redundant entries into clean, non-repetitive preferences. Be aggressive — if 5 memories say the same thing about frosted charts, merge them into one.`
+                );
+                setTimeout(() => setCleaningUp(false), 3000);
+              }}
+              disabled={cleaningUp}
+              className="rounded-full border border-purple-200/50 bg-purple-50/30 px-2.5 py-1 text-[10px] font-medium text-purple-600 transition-colors hover:bg-purple-100/40 disabled:opacity-50"
+            >
+              {cleaningUp ? 'Cleaning...' : 'Clean Up'}
+            </button>
+          )}
           <button
-            onClick={() => {
-              setCleaningUp(true);
-              onSendToSherpa(
-                `Review ALL of my stored memories (use recallMemories with a broad query to see them all). Identify redundant, duplicate, or obsolete entries. Then use consolidateMemories to propose: (1) which memories to delete and why, (2) consolidated replacements that merge redundant entries into clean, non-repetitive preferences. Be aggressive — if 5 memories say the same thing about frosted charts, merge them into one.`
-              );
-              setTimeout(() => setCleaningUp(false), 3000);
-            }}
-            disabled={cleaningUp}
-            className="rounded-full border border-purple-200/50 bg-purple-50/30 px-2.5 py-1 text-[10px] font-medium text-purple-600 transition-colors hover:bg-purple-100/40 disabled:opacity-50"
+            onClick={() => setCloneOpen(true)}
+            className="rounded-full border border-workspace-accent/30 bg-workspace-accent/10 px-2.5 py-1 text-[10px] font-medium text-workspace-accent transition-colors hover:bg-workspace-accent/20"
+            title="Copy your tuned Sherpa (memories + documents) to another user"
           >
-            {cleaningUp ? 'Cleaning...' : 'Clean Up'}
+            Clone to User…
           </button>
-        )}
+        </div>
       </div>
 
       {/* Pending confirmation */}
@@ -178,6 +189,8 @@ export function MemoryPanel({ onSendToSherpa }: MemoryPanelProps) {
           No memories yet. Sherpa will learn from your interactions over time.
         </p>
       )}
+
+      <CloneProfileModal open={cloneOpen} onClose={() => setCloneOpen(false)} />
     </div>
   );
 }
