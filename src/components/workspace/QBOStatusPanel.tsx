@@ -48,6 +48,8 @@ export function QBOStatusPanel() {
   const [isExpanded, setIsExpanded] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
+  const [connectMessage, setConnectMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -117,8 +119,92 @@ export function QBOStatusPanel() {
     }
   }, [fetchStatus]);
 
+  /**
+   * Begin the QuickBooks OAuth flow.
+   * Calls qbo-oauth-start, then redirects the browser to Intuit's authorize page.
+   * Intuit will redirect back to qbo-oauth-callback, which writes the tokens
+   * and bounces the user back here with ?qbo=connected (or ?qbo=error).
+   */
+  const handleConnect = useCallback(async () => {
+    setConnecting(true);
+    setConnectMessage(null);
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
+      if (!session?.access_token) {
+        setConnectMessage({ kind: 'error', text: 'You must be signed in to connect QuickBooks.' });
+        return;
+      }
+
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/qbo-oauth-start`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ returnTo: window.location.origin + window.location.pathname }),
+        },
+      );
+
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || !data.authUrl) {
+        setConnectMessage({
+          kind: 'error',
+          text: data.error || `Failed to start OAuth (HTTP ${resp.status})`,
+        });
+        return;
+      }
+
+      // Hand off to Intuit. After they consent, Intuit redirects to qbo-oauth-callback
+      // which writes the tokens then redirects back here with ?qbo=connected.
+      window.location.assign(data.authUrl);
+    } catch (err) {
+      setConnectMessage({
+        kind: 'error',
+        text: err instanceof Error ? err.message : 'Unknown error',
+      });
+    } finally {
+      setConnecting(false);
+    }
+  }, []);
+
   // Track whether we've already triggered the warm fetch this session
   const [warmed, setWarmed] = useState(false);
+
+  /**
+   * Handle the ?qbo=connected / ?qbo=error query params that the OAuth
+   * callback redirects with. Show a transient message and clean the URL.
+   */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const qbo = params.get('qbo');
+    if (!qbo) return;
+
+    if (qbo === 'connected') {
+      const company = params.get('company') ?? 'QuickBooks';
+      setConnectMessage({ kind: 'success', text: `Connected to ${company}` });
+      // Refresh status so the panel goes green
+      setLoading(true);
+      fetchStatus();
+    } else if (qbo === 'error') {
+      const msg = params.get('msg') ?? 'OAuth flow failed';
+      setConnectMessage({ kind: 'error', text: msg });
+    }
+
+    // Strip the query params so reload doesn't re-show the message
+    params.delete('qbo');
+    params.delete('company');
+    params.delete('msg');
+    const cleaned = `${window.location.pathname}${params.toString() ? '?' + params.toString() : ''}${window.location.hash}`;
+    window.history.replaceState({}, '', cleaned);
+
+    // Auto-dismiss success after 6s; leave errors up
+    if (qbo === 'connected') {
+      const t = setTimeout(() => setConnectMessage(null), 6000);
+      return () => clearTimeout(t);
+    }
+  }, [fetchStatus]);
 
   useEffect(() => {
     fetchStatus();
@@ -213,20 +299,32 @@ export function QBOStatusPanel() {
                   </p>
                 ) : (
                   <p className="text-[8px] text-workspace-text-secondary/30 mt-0.5">
-                    Click Sync to refresh the QuickBooks token.
+                    Authorize Sherpa to access your QuickBooks company.
                   </p>
                 )}
               </div>
+              <button
+                onClick={handleConnect}
+                disabled={connecting}
+                className="w-full rounded px-2 py-1.5 text-[10px] font-medium text-white bg-workspace-accent hover:bg-workspace-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {connecting ? 'Opening Intuit…' : 'Connect QuickBooks'}
+              </button>
               <button
                 onClick={handleSync}
                 disabled={syncing}
                 className="w-full rounded px-2 py-1.5 text-[10px] text-workspace-accent border border-workspace-accent/30 hover:bg-workspace-accent/5 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {syncing ? 'Syncing…' : 'Sync QuickBooks'}
+                {syncing ? 'Syncing…' : 'Sync QuickBooks (refresh token)'}
               </button>
               {syncError && (
                 <p className="text-[9px] text-red-400/70 px-1 break-words leading-relaxed">
                   {syncError}
+                </p>
+              )}
+              {connectMessage && (
+                <p className={`text-[9px] px-1 break-words leading-relaxed ${connectMessage.kind === 'success' ? 'text-emerald-500/80' : 'text-red-400/70'}`}>
+                  {connectMessage.text}
                 </p>
               )}
             </div>
@@ -295,8 +393,13 @@ export function QBOStatusPanel() {
               )}
 
               <p className="text-[8px] text-workspace-text-secondary/30 mt-1 px-1">
-                Sync refreshes the token + reloads data. Auto-refreshes every 5 min.
+                Sync refreshes the token + reloads data. Auto-refreshes every 30 min server-side.
               </p>
+              {connectMessage && (
+                <p className={`text-[9px] px-1 mt-1 break-words leading-relaxed ${connectMessage.kind === 'success' ? 'text-emerald-500/80' : 'text-red-400/70'}`}>
+                  {connectMessage.text}
+                </p>
+              )}
             </div>
           )}
         </div>

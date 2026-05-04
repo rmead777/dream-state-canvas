@@ -1,14 +1,18 @@
 /**
  * QuickBooks API Client — shared utility for Dream State Canvas
  *
- * Connects to Working Capital Wizard's Supabase to retrieve the active
- * QuickBooks OAuth token, refreshes it if needed, then calls QB API.
- * This reuses the SAME token / company / realm as WCW.
+ * Reads the active QB OAuth connection from DSC's OWN Supabase
+ * (qbo_connections table). DSC has its own independent OAuth grant
+ * with Intuit — it does NOT share refresh tokens with WCW. This is
+ * the fix for the long-standing refresh-token rotation race that used
+ * to manifest as "click Sync in WCW every hour to make Sherpa work."
  *
- * Token refresh: DSC CAN refresh the token (same as WCW does). QB rotates
- * refresh tokens on every use, so each refresh resets the 100-day clock.
- * Race condition guard: after refreshing, we re-read the row to confirm
- * our write won (if WCW refreshed at the same instant, use theirs).
+ * Single-writer invariant: only DSC ever calls Intuit's refresh endpoint
+ * for this connection. The pg_cron job calls qbo-refresh every 30 min
+ * server-side, so the token is always well within its 60-min expiry.
+ *
+ * Lazy refresh (on-demand, < 5 min from expiry) remains as a belt-and-
+ * suspenders safety net in case the cron skips a beat.
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -30,36 +34,45 @@ interface QBOConnection {
   last_error: string | null;
 }
 
-function getWCWClient() {
-  const wcwUrl = Deno.env.get('WCW_SUPABASE_URL');
-  const wcwKey = Deno.env.get('WCW_SUPABASE_SERVICE_ROLE_KEY');
-  if (!wcwUrl || !wcwKey) {
-    throw new Error('WCW_SUPABASE_URL and WCW_SUPABASE_SERVICE_ROLE_KEY must be set');
+/**
+ * Connect to DSC's own Supabase using service role.
+ * This is the single source of truth for QB OAuth state going forward.
+ */
+function getLocalClient() {
+  const url = Deno.env.get('SUPABASE_URL');
+  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!url || !key) {
+    throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set');
   }
-  return createClient(wcwUrl, wcwKey);
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 }
 
 /**
- * Get a live QB access token from WCW's Supabase.
- * Refreshes automatically if expiring within 5 minutes (same logic as WCW).
+ * Get a live QB access token from DSC's own qbo_connections table.
+ * Refreshes automatically if expiring within 5 minutes.
  *
- * Pass `{ force: true }` to always refresh, regardless of expiry. Used by the
- * DSC "Sync QuickBooks" button to replicate WCW's sync behavior from DSC.
+ * Pass `{ force: true }` to always refresh, regardless of expiry. Used by
+ * the qbo-refresh edge function (called manually via the Sync button or
+ * on a 30-minute pg_cron schedule).
  */
 export async function getQBOToken(
   options?: { force?: boolean },
 ): Promise<{ token: string; connection: QBOConnection }> {
-  const wcw = getWCWClient();
+  const db = getLocalClient();
 
-  // Read active connection from WCW
-  const { data: connection, error } = await wcw
+  // Read the active connection from DSC's own table
+  const { data: connection, error } = await db
     .from('qbo_connections')
     .select('*')
     .eq('is_active', true)
     .single();
 
   if (error || !connection) {
-    throw new Error('No active QuickBooks connection found in WCW');
+    throw new Error(
+      'No active QuickBooks connection found. Click "Connect QuickBooks" in the Context tab to authorize.',
+    );
   }
 
   // Skip expiry check when force-refreshing — always hit Intuit's refresh endpoint.
@@ -99,16 +112,27 @@ export async function getQBOToken(
   if (!tokenResponse.ok) {
     const errorText = await tokenResponse.text();
     console.error('[DSC] Token refresh failed:', errorText);
-    // Don't touch WCW's connection state — just report the error
-    throw new Error('QuickBooks token refresh failed. The refresh token may be expired — reconnect in Working Capital Wizard.');
+    // Mark connection as errored so the UI can show a "reconnect" prompt.
+    await db
+      .from('qbo_connections')
+      .update({
+        last_error: `Refresh failed: ${errorText.slice(0, 200)}`,
+        connection_status: 'refresh_failed',
+      })
+      .eq('id', connection.id);
+    throw new Error(
+      'QuickBooks token refresh failed. The refresh token may be expired — click "Connect QuickBooks" in the Context tab to re-authorize.',
+    );
   }
 
   const tokens = await tokenResponse.json();
   const newExpiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
-  const newRefreshExpiresAt = new Date(Date.now() + (tokens.x_refresh_token_expires_in || 100 * 24 * 60 * 60) * 1000).toISOString();
+  const newRefreshExpiresAt = new Date(
+    Date.now() + (tokens.x_refresh_token_expires_in || 100 * 24 * 60 * 60) * 1000,
+  ).toISOString();
 
-  // Write refreshed tokens back to WCW's table
-  await wcw
+  // Write refreshed tokens back to DSC's own table
+  await db
     .from('qbo_connections')
     .update({
       access_token: tokens.access_token,
@@ -116,23 +140,14 @@ export async function getQBOToken(
       token_expires_at: newExpiresAt,
       refresh_token_expires_at: newRefreshExpiresAt,
       last_error: null,
+      connection_status: 'active',
     })
     .eq('id', connection.id);
 
-  // Race condition guard: re-read to confirm our write won.
-  // If WCW refreshed at the same instant, their token is equally valid — use whatever is in the DB now.
-  const { data: confirmed } = await wcw
-    .from('qbo_connections')
-    .select('access_token')
-    .eq('id', connection.id)
-    .single();
-
-  const finalToken = confirmed?.access_token || tokens.access_token;
-
   console.log('[DSC] Token refreshed successfully');
   return {
-    token: finalToken,
-    connection: { ...connection, access_token: finalToken },
+    token: tokens.access_token,
+    connection: { ...connection, access_token: tokens.access_token },
   };
 }
 
