@@ -18,6 +18,7 @@ import {
   deleteMemory,
 } from '@/lib/memory-store';
 import type { SherpaMemory } from '@/lib/memory-types';
+import { CloneProfileModal } from './CloneProfileModal';
 
 interface NotebookProps {
   onSendToSherpa?: (message: string) => void;
@@ -430,6 +431,7 @@ export function Notebook({ onSendToSherpa }: NotebookProps) {
   const [memories, setMemories] = useState<SherpaMemory[]>([]);
   const [pending, setPending] = useState<SherpaMemory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cloneOpen, setCloneOpen] = useState(false);
 
   const reload = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -543,8 +545,19 @@ export function Notebook({ onSendToSherpa }: NotebookProps) {
         hint="What Sherpa knows about you. Confidence reinforces with each successful application; decays with disuse."
         defaultOpen={false}
       >
+        <div className="flex justify-end">
+          <button
+            onClick={() => setCloneOpen(true)}
+            className="rounded-full border border-workspace-accent/30 bg-workspace-accent/10 px-2.5 py-1 text-[10px] font-medium text-workspace-accent transition-colors hover:bg-workspace-accent/20"
+            title="Copy your tuned Sherpa (memories + documents) to another user account"
+          >
+            Clone to User…
+          </button>
+        </div>
         <MemoryGrouped memories={memories} pendingIds={pendingIds} onDelete={handleDelete} />
       </Section>
+
+      <CloneProfileModal open={cloneOpen} onClose={() => setCloneOpen(false)} />
     </div>
   );
 }
