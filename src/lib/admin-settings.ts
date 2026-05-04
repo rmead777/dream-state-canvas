@@ -40,10 +40,12 @@ const AVAILABLE_MODELS: ModelDef[] = [
   { id: 'xai/grok-4-1-fast', label: 'Grok 4.1 Fast', description: 'Fast general-purpose', provider: 'xai' },
   { id: 'xai/grok-4.20-beta', label: 'Grok 4.20', description: 'Latest Grok flagship', provider: 'xai' },
   { id: 'xai/grok-4.20-multi-agent-beta-latest', label: 'Grok 4.20 Multi-Agent', description: 'Multi-agent orchestration', provider: 'xai' },
+  { id: 'xai/grok-4.3-latest', label: 'Grok 4.3', description: 'Latest Grok release', provider: 'xai' },
 
   // OpenAI
   { id: 'openai/gpt-5.4-2026-03-05', label: 'GPT-5.4', description: 'Latest OpenAI flagship', provider: 'openai' },
   { id: 'openai/gpt-5.4-mini-2026-03-17', label: 'GPT-5.4 Mini', description: 'Fast & efficient OpenAI', provider: 'openai' },
+  { id: 'openai/gpt-5.5-2026-04-23', label: 'GPT-5.5', description: 'Latest OpenAI flagship', provider: 'openai' },
 ];
 
 export { AVAILABLE_MODELS };
