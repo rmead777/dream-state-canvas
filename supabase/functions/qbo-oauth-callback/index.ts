@@ -118,9 +118,16 @@ serve(async (req) => {
   if (!tokenResp.ok) {
     const errText = await tokenResp.text();
     console.error('qbo-oauth-callback: token exchange failed', errText);
+    console.error('Diagnostic — redirect_uri sent:', redirectUri);
+    console.error('Diagnostic — client_id first 8:', clientId.slice(0, 8));
+    console.error('Diagnostic — client_secret length:', clientSecret.length);
+    console.error('Diagnostic — code prefix:', code.slice(0, 12));
+    console.error('Diagnostic — realmId:', realmId);
+    // Include diagnostic in the error so Ryan sees it without having to dig in Lovable logs.
+    const diag = `redirect_uri=${redirectUri} | client_id=${clientId.slice(0, 8)}… | client_secret_len=${clientSecret.length}`;
     return redirectTo(returnTo, {
       qbo: 'error',
-      msg: `Token exchange failed: ${errText.slice(0, 200)}`,
+      msg: `Token exchange failed: ${errText.slice(0, 150)} :: ${diag}`,
     });
   }
 
