@@ -77,15 +77,16 @@ $$ LANGUAGE sql;
 -- ─── 5. pg_cron: schedule a token refresh every 30 min ───────────────────────
 -- Requires pg_cron + pg_net extensions (already enabled).
 --
--- The cron calls qbo-refresh edge function with the service role key.
--- The service role key is read from Supabase Vault — it must be stored
--- there in a separate one-time SQL command (see follow-up SQL below).
+-- The cron calls qbo-refresh with a custom shared secret stored in Supabase
+-- Vault. We use a shared secret rather than the Supabase service role key
+-- because Lovable doesn't expose the service role key in its UI. The shared
+-- secret is functionally equivalent for this one endpoint and has a much
+-- narrower blast radius (only valid for qbo-refresh, not the whole DB).
 --
 -- Why every 30 min? QB access tokens last 60 min. Refreshing every 30 min
--- gives us ~2x safety margin and ensures the token is always well within
--- its valid window. Each refresh also rotates the refresh_token, resetting
--- Intuit's 100-day refresh-token clock — so the connection never expires
--- as long as the cron is running.
+-- gives us ~2x safety margin. Each refresh also rotates the refresh_token,
+-- resetting Intuit's 100-day refresh-token clock — so the connection never
+-- expires as long as the cron is running.
 
 -- Schedule the refresh job (idempotent — drops existing job first if any).
 DO $$
@@ -95,22 +96,27 @@ EXCEPTION
   WHEN OTHERS THEN NULL; -- ok if job doesn't exist yet
 END $$;
 
--- NOTE: After the first deployment, run the follow-up SQL block below
--- (separately, in the SQL editor) to actually create the cron job.
--- It's split out because the service role key must be stored in vault first.
+-- NOTE: The follow-up SQL block below must be run separately in the SQL
+-- editor AFTER (a) you set the QBO_CRON_SECRET secret in Lovable Cloud
+-- and (b) the qbo-refresh edge function has been redeployed.
 --
 -- ┌─────────────────────────────────────────────────────────────────────────┐
--- │ POST-MIGRATION FOLLOW-UP — run this AFTER first OAuth completes         │
+-- │ POST-MIGRATION FOLLOW-UP — run AFTER setting QBO_CRON_SECRET in Lovable │
 -- ├─────────────────────────────────────────────────────────────────────────┤
 -- │                                                                         │
--- │ -- 5a. Store service role key in vault (one time)                       │
+-- │ -- 5a. Generate a strong secret first (any 32+ char random string).     │
+-- │ -- Easiest: openssl rand -hex 32  →  copy the output                    │
+-- │ -- Add it to Lovable secrets as: QBO_CRON_SECRET                        │
+-- │ -- Redeploy qbo-refresh in Lovable so the function picks it up.         │
+-- │                                                                         │
+-- │ -- 5b. Store the SAME secret in Supabase Vault (so pg_cron can read it) │
 -- │ SELECT vault.create_secret(                                             │
--- │   '<paste-DSC-service-role-key-from-Lovable-secrets>',                  │
--- │   'qbo_cron_service_key',                                               │
--- │   'Service role key used by qbo-token-refresh cron job'                 │
+-- │   '<paste-the-same-QBO_CRON_SECRET-value-here>',                        │
+-- │   'qbo_cron_secret',                                                    │
+-- │   'Shared secret passed by qbo-token-refresh cron job to qbo-refresh'   │
 -- │ );                                                                      │
 -- │                                                                         │
--- │ -- 5b. Schedule the cron                                                │
+-- │ -- 5c. Schedule the cron                                                │
 -- │ SELECT cron.schedule(                                                   │
 -- │   'qbo-token-refresh',                                                  │
 -- │   '*/30 * * * *',                                                       │
@@ -119,16 +125,23 @@ END $$;
 -- │     url := 'https://xdnetcsecqoeifdjmwhk.supabase.co/functions/v1/qbo-refresh', │
 -- │     headers := jsonb_build_object(                                      │
 -- │       'Content-Type', 'application/json',                               │
--- │       'Authorization', 'Bearer ' || (                                   │
+-- │       'x-cron-secret', (                                                │
 -- │         SELECT decrypted_secret FROM vault.decrypted_secrets            │
--- │         WHERE name = 'qbo_cron_service_key'                             │
+-- │         WHERE name = 'qbo_cron_secret'                                  │
 -- │       )                                                                 │
 -- │     )                                                                   │
 -- │   ) AS request_id;                                                      │
 -- │   $cron$                                                                │
 -- │ );                                                                      │
 -- │                                                                         │
--- │ -- 5c. Verify                                                           │
--- │ SELECT * FROM cron.job WHERE jobname = 'qbo-token-refresh';             │
+-- │ -- 5d. Verify the cron is scheduled                                     │
+-- │ SELECT jobname, schedule, active FROM cron.job                          │
+-- │   WHERE jobname = 'qbo-token-refresh';                                  │
+-- │                                                                         │
+-- │ -- 5e. (After ~30 min) Verify a run actually happened                   │
+-- │ SELECT runid, status, return_message, start_time                        │
+-- │   FROM cron.job_run_details                                             │
+-- │   WHERE jobid = (SELECT jobid FROM cron.job WHERE jobname = 'qbo-token-refresh') │
+-- │   ORDER BY start_time DESC LIMIT 5;                                     │
 -- │                                                                         │
 -- └─────────────────────────────────────────────────────────────────────────┘
