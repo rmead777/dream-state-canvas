@@ -344,6 +344,81 @@ export type Database = {
         }
         Relationships: []
       }
+      qbo_connections: {
+        Row: {
+          access_token: string
+          company_name: string | null
+          connection_status: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          is_sandbox: boolean
+          last_error: string | null
+          realm_id: string
+          refresh_token: string
+          refresh_token_expires_at: string
+          token_expires_at: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          access_token: string
+          company_name?: string | null
+          connection_status?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_sandbox?: boolean
+          last_error?: string | null
+          realm_id: string
+          refresh_token: string
+          refresh_token_expires_at: string
+          token_expires_at: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          access_token?: string
+          company_name?: string | null
+          connection_status?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_sandbox?: boolean
+          last_error?: string | null
+          realm_id?: string
+          refresh_token?: string
+          refresh_token_expires_at?: string
+          token_expires_at?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      qbo_oauth_state: {
+        Row: {
+          created_at: string
+          expires_at: string
+          initiated_by: string | null
+          return_to: string | null
+          state: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          initiated_by?: string | null
+          return_to?: string | null
+          state: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          initiated_by?: string | null
+          return_to?: string | null
+          state?: string
+        }
+        Relationships: []
+      }
       ragic_connections: {
         Row: {
           account_name: string
@@ -531,6 +606,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cleanup_qbo_oauth_state: { Args: never; Returns: undefined }
       decay_stale_memories: {
         Args: {
           decay_factor?: number
