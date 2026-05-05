@@ -312,6 +312,8 @@ export async function callAI(
       provider: routeMeta.provider,
       authMode: routeMeta.authMode,
       fallback: routeMeta.fallback,
+      fallbackReason: routeMeta.fallbackReason,
+      attempts: routeMeta.attempts,
       durationMs: Date.now() - callStartTime,
       mode,
     });
