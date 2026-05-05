@@ -71,11 +71,25 @@ interface RouteResult {
   meta: RouteMeta;
 }
 
+export interface RouteAttempt {
+  provider: Provider;
+  model: string;
+  authMode: AuthMode;
+  status: 'ok' | 'error' | 'skipped';
+  httpStatus?: number;
+  retry?: number;
+  reason?: string;       // human-readable: why this attempt failed or was skipped
+  errorBody?: string;    // first ~200 chars of provider error response
+  durationMs?: number;
+}
+
 export interface RouteMeta {
   model: string;
   provider: Provider;
   authMode: AuthMode;
   fallback: boolean;
+  fallbackReason?: string;     // single-sentence summary of why fallback fired
+  attempts?: RouteAttempt[];   // ordered chain of attempts (success last)
 }
 
 /**
