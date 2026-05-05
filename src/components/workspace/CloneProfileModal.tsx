@@ -50,6 +50,30 @@ export function CloneProfileModal({ open, onClose }: CloneProfileModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CloneResult | null>(null);
+  const [recipients, setRecipients] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (open) setRecipients(loadRecipients());
+  }, [open]);
+
+  const addRecipient = (email: string) => {
+    const e = email.trim().toLowerCase();
+    if (!e || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return;
+    setRecipients((prev) => {
+      if (prev.includes(e)) return prev;
+      const next = [...prev, e];
+      saveRecipients(next);
+      return next;
+    });
+  };
+
+  const removeRecipient = (email: string) => {
+    setRecipients((prev) => {
+      const next = prev.filter((r) => r !== email);
+      saveRecipients(next);
+      return next;
+    });
+  };
 
   const reset = () => {
     setTargetEmail('');
