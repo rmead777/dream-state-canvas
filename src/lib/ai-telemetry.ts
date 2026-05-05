@@ -63,6 +63,8 @@ export function defaultRouteMeta(): {
   provider: string;
   authMode: AuthMode;
   fallback: boolean;
+  fallbackReason?: string;
+  attempts?: RouteAttempt[];
 } {
   return {
     model: 'unknown',
@@ -72,20 +74,20 @@ export function defaultRouteMeta(): {
   };
 }
 
-/**
- * Extract route metadata from a __telemetry object (injected by edge function
- * into the SSE stream or JSON body). Falls back to defaults for missing fields.
- */
 export function parseRouteMeta(telemetry: any): {
   model: string;
   provider: string;
   authMode: AuthMode;
   fallback: boolean;
+  fallbackReason?: string;
+  attempts?: RouteAttempt[];
 } {
   return {
     model: telemetry?.model || 'unknown',
     provider: telemetry?.provider || 'unknown',
     authMode: telemetry?.authMode || 'unknown',
     fallback: telemetry?.fallback ?? false,
+    fallbackReason: telemetry?.fallbackReason,
+    attempts: Array.isArray(telemetry?.attempts) ? telemetry.attempts : undefined,
   };
 }
