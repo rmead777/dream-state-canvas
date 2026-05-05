@@ -379,17 +379,17 @@ export function AITelemetryPanel() {
                 </div>
               </div>
 
-              {/* Expanded payload viewer */}
-              {isExpanded && event.requestPayload && (
-                <div className="px-3 pb-3">
-                  <PayloadViewer payload={event.requestPayload} />
-                </div>
-              )}
-              {isExpanded && !event.requestPayload && (
-                <div className="px-3 pb-3">
-                  <div className="rounded-lg bg-slate-900/80 px-3 py-2 text-[10px] text-slate-400 font-mono">
-                    No payload captured for this call
-                  </div>
+              {/* Expanded view: routing trace + payload */}
+              {isExpanded && (
+                <div className="px-3 pb-3 space-y-2">
+                  <RoutingTrace event={event} />
+                  {event.requestPayload ? (
+                    <PayloadViewer payload={event.requestPayload} />
+                  ) : (
+                    <div className="rounded-lg bg-slate-900/80 px-3 py-2 text-[10px] text-slate-400 font-mono">
+                      No payload captured for this call
+                    </div>
+                  )}
                 </div>
               )}
             </div>
