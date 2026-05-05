@@ -897,6 +897,8 @@ async function callAIWithTools(
       provider: routeMeta.provider,
       authMode: routeMeta.authMode,
       fallback: routeMeta.fallback,
+      fallbackReason: routeMeta.fallbackReason,
+      attempts: routeMeta.attempts,
       durationMs: Date.now() - callStartTime,
       mode: 'intent',
       toolCalls: actualToolCallCount,
