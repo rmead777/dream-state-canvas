@@ -175,15 +175,72 @@ export function CloneProfileModal({ open, onClose }: CloneProfileModalProps) {
               <span className="text-[10px] font-medium uppercase tracking-wider text-workspace-text-secondary/80">
                 Target user email
               </span>
-              <input
-                type="email"
-                value={targetEmail}
-                onChange={(e) => setTargetEmail(e.target.value)}
-                disabled={loading}
-                placeholder="teammate@example.com"
-                className="mt-1 w-full rounded-lg border border-workspace-border bg-workspace-bg/50 px-3 py-2 text-xs text-workspace-text placeholder:text-workspace-text-secondary/50 focus:border-workspace-accent focus:outline-none"
-              />
+              <div className="mt-1 flex gap-1.5">
+                <input
+                  type="email"
+                  value={targetEmail}
+                  onChange={(e) => setTargetEmail(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && targetEmail.trim()) {
+                      e.preventDefault();
+                      addRecipient(targetEmail);
+                      setTargetEmail('');
+                    }
+                  }}
+                  disabled={loading}
+                  placeholder="teammate@example.com"
+                  className="flex-1 rounded-lg border border-workspace-border bg-workspace-bg/50 px-3 py-2 text-xs text-workspace-text placeholder:text-workspace-text-secondary/50 focus:border-workspace-accent focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (targetEmail.trim()) {
+                      addRecipient(targetEmail);
+                      setTargetEmail('');
+                    }
+                  }}
+                  disabled={loading || !targetEmail.trim()}
+                  className="rounded-lg border border-workspace-border bg-workspace-bg/50 px-2.5 text-[11px] text-workspace-text-secondary hover:text-workspace-text disabled:opacity-40"
+                  title="Save to recipient list"
+                >
+                  + Save
+                </button>
+              </div>
             </label>
+
+            {recipients.length > 0 && (
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-workspace-text-secondary/80">
+                  Saved recipients ({recipients.length})
+                </span>
+                <div className="max-h-32 overflow-y-auto space-y-1 rounded-lg border border-workspace-border bg-workspace-bg/30 p-1.5">
+                  {recipients.map((email) => (
+                    <div
+                      key={email}
+                      className="group flex items-center justify-between gap-2 rounded-md px-2 py-1 hover:bg-workspace-surface/60"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setTargetEmail(email)}
+                        className="flex-1 truncate text-left text-[11px] text-workspace-text hover:text-workspace-accent"
+                        title="Click to use this email"
+                      >
+                        {email}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeRecipient(email)}
+                        className="shrink-0 rounded p-1 text-[10px] text-workspace-text-secondary/40 opacity-0 transition-all group-hover:opacity-100 hover:text-red-500"
+                        title="Remove from list"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
 
             <label className="block">
               <span className="text-[10px] font-medium uppercase tracking-wider text-workspace-text-secondary/80">
