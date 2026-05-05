@@ -5,6 +5,18 @@
 
 export type AuthMode = 'oauth' | 'api_key' | 'api_key_fallback' | 'oauth_failed' | 'gateway' | 'unknown';
 
+export interface RouteAttempt {
+  provider: string;
+  model: string;
+  authMode: AuthMode;
+  status: 'ok' | 'error' | 'skipped';
+  httpStatus?: number;
+  retry?: number;
+  reason?: string;
+  errorBody?: string;
+  durationMs?: number;
+}
+
 export interface AICallEvent {
   id: string;
   timestamp: number;
@@ -12,6 +24,8 @@ export interface AICallEvent {
   provider: string;
   authMode: AuthMode;
   fallback: boolean;
+  fallbackReason?: string;
+  attempts?: RouteAttempt[];
   durationMs: number;
   mode: string;
   toolCalls?: number;
@@ -49,6 +63,8 @@ export function defaultRouteMeta(): {
   provider: string;
   authMode: AuthMode;
   fallback: boolean;
+  fallbackReason?: string;
+  attempts?: RouteAttempt[];
 } {
   return {
     model: 'unknown',
@@ -58,20 +74,20 @@ export function defaultRouteMeta(): {
   };
 }
 
-/**
- * Extract route metadata from a __telemetry object (injected by edge function
- * into the SSE stream or JSON body). Falls back to defaults for missing fields.
- */
 export function parseRouteMeta(telemetry: any): {
   model: string;
   provider: string;
   authMode: AuthMode;
   fallback: boolean;
+  fallbackReason?: string;
+  attempts?: RouteAttempt[];
 } {
   return {
     model: telemetry?.model || 'unknown',
     provider: telemetry?.provider || 'unknown',
     authMode: telemetry?.authMode || 'unknown',
     fallback: telemetry?.fallback ?? false,
+    fallbackReason: telemetry?.fallbackReason,
+    attempts: Array.isArray(telemetry?.attempts) ? telemetry.attempts : undefined,
   };
 }

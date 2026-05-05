@@ -4,7 +4,7 @@
  * Click any entry to expand and see the full raw API call payload.
  */
 import { useState, useEffect } from 'react';
-import { getAITelemetryEvents, clearAITelemetry, type AICallEvent, type AuthMode } from '@/lib/ai-telemetry';
+import { getAITelemetryEvents, clearAITelemetry, type AICallEvent, type AuthMode, type RouteAttempt } from '@/lib/ai-telemetry';
 
 const AUTH_CONFIG: Record<AuthMode, { label: string; detail: string; color: string; bg: string }> = {
   oauth:             { label: 'Subscription', detail: 'OAuth token', color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-200/50' },
@@ -100,6 +100,103 @@ function PayloadViewer({ payload }: { payload: Record<string, unknown> }) {
   );
 }
 
+const ATTEMPT_STATUS: Record<RouteAttempt['status'], { dot: string; label: string; text: string }> = {
+  ok:      { dot: 'bg-emerald-500',  label: 'OK',      text: 'text-emerald-700' },
+  error:   { dot: 'bg-red-500',      label: 'ERROR',   text: 'text-red-700' },
+  skipped: { dot: 'bg-slate-400',    label: 'SKIPPED', text: 'text-slate-600' },
+};
+
+function RoutingTrace({ event }: { event: AICallEvent }) {
+  const attempts = event.attempts ?? [];
+  const finalAuth = AUTH_CONFIG[event.authMode] || AUTH_CONFIG.unknown;
+
+  return (
+    <div className="rounded-lg border border-workspace-border/30 bg-white/80 p-3 space-y-2.5">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[9px] font-semibold uppercase tracking-wider text-workspace-text-secondary">API Routing</span>
+        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-medium ${finalAuth.bg} ${finalAuth.color}`}>
+          Resolved → {finalAuth.label}
+        </span>
+        {event.fallback && (
+          <span className="inline-flex items-center rounded-full border border-amber-200/60 bg-amber-50 px-2 py-0.5 text-[9px] font-medium text-amber-700">
+            Fallback fired
+          </span>
+        )}
+      </div>
+
+      {event.fallbackReason ? (
+        <div className="rounded-md border border-amber-200/50 bg-amber-50/80 px-2.5 py-2 text-[11px] leading-relaxed text-amber-900">
+          <span className="font-semibold">Why fallback: </span>{event.fallbackReason}
+        </div>
+      ) : event.fallback ? (
+        <div className="rounded-md border border-workspace-border/30 bg-workspace-surface/30 px-2.5 py-2 text-[11px] text-workspace-text-secondary">
+          Fallback fired but no reason was captured (older edge function deployment).
+        </div>
+      ) : (
+        <div className="text-[10px] text-workspace-text-secondary/60">
+          Primary route succeeded — no fallback needed.
+        </div>
+      )}
+
+      {attempts.length > 0 ? (
+        <div className="space-y-1">
+          <div className="text-[9px] uppercase tracking-wider text-workspace-text-secondary/60">Attempt chain ({attempts.length})</div>
+          <ol className="space-y-1">
+            {attempts.map((a, i) => {
+              const s = ATTEMPT_STATUS[a.status];
+              return (
+                <li key={i} className="rounded-md border border-workspace-border/20 bg-white/70 px-2.5 py-1.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono text-[9px] text-workspace-text-secondary/50 tabular-nums w-4">{i + 1}.</span>
+                    <span className={`inline-block w-1.5 h-1.5 rounded-full ${s.dot}`} />
+                    <span className={`text-[10px] font-semibold ${s.text}`}>{s.label}</span>
+                    <span className="text-[10px] font-mono text-workspace-text">
+                      {a.provider}/{a.model.split('/').pop()}
+                    </span>
+                    <span className="text-[9px] text-workspace-text-secondary/60">via {a.authMode}</span>
+                    {typeof a.httpStatus === 'number' && (
+                      <span className={`text-[9px] font-mono ${a.status === 'ok' ? 'text-emerald-700' : 'text-red-700'}`}>
+                        HTTP {a.httpStatus}
+                      </span>
+                    )}
+                    {typeof a.retry === 'number' && a.retry > 0 && (
+                      <span className="text-[9px] text-amber-700">retry #{a.retry}</span>
+                    )}
+                    {typeof a.durationMs === 'number' && (
+                      <span className="ml-auto text-[9px] font-mono text-workspace-text-secondary/50 tabular-nums">
+                        {(a.durationMs / 1000).toFixed(2)}s
+                      </span>
+                    )}
+                  </div>
+                  {a.reason && (
+                    <div className="mt-1 pl-6 text-[10px] text-workspace-text-secondary leading-relaxed">
+                      {a.reason}
+                    </div>
+                  )}
+                  {a.errorBody && (
+                    <details className="mt-1 pl-6">
+                      <summary className="text-[9px] text-workspace-text-secondary/50 cursor-pointer hover:text-workspace-text-secondary">
+                        Provider error body
+                      </summary>
+                      <pre className="mt-1 text-[9px] font-mono text-slate-600 whitespace-pre-wrap break-words bg-slate-50 rounded px-2 py-1">
+                        {a.errorBody}
+                      </pre>
+                    </details>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      ) : (
+        <div className="text-[10px] text-workspace-text-secondary/50 italic">
+          No per-attempt trace (older edge function deployment — redeploy ai-chat to capture).
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AITelemetryPanel() {
   const [events, setEvents] = useState<AICallEvent[]>(getAITelemetryEvents());
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -178,6 +275,17 @@ export function AITelemetryPanel() {
               const lines = [
                 `[${time}] ${e.model} | ${e.provider} | ${e.authMode} | ${(e.durationMs/1000).toFixed(1)}s | in:${e.inputTokens??'?'} out:${e.outputTokens??'?'} | toolCalls:${e.toolCalls??0}`,
               ];
+              if (e.fallback) {
+                lines.push(`--- ROUTING ---`);
+                lines.push(`Fallback: ${e.fallbackReason ?? '(no reason captured)'}`);
+              }
+              if (e.attempts?.length) {
+                lines.push('Attempts:');
+                e.attempts.forEach((a, i) => {
+                  lines.push(`  ${i + 1}. [${a.status}] ${a.provider}/${a.model} via ${a.authMode}${a.httpStatus ? ` HTTP ${a.httpStatus}` : ''}${a.retry ? ` retry#${a.retry}` : ''}${a.reason ? ` — ${a.reason}` : ''}`);
+                  if (a.errorBody) lines.push(`     body: ${a.errorBody}`);
+                });
+              }
               if (e.requestPayload) {
                 lines.push('--- REQUEST ---');
                 lines.push(JSON.stringify(e.requestPayload, null, 2));
@@ -280,19 +388,25 @@ export function AITelemetryPanel() {
                     )}
                   </span>
                 </div>
+                {/* Inline fallback reason — visible without expanding */}
+                {event.fallback && event.fallbackReason && !isExpanded && (
+                  <div className="mt-1.5 rounded-md border border-amber-200/50 bg-amber-50/70 px-2 py-1 text-[10px] leading-snug text-amber-800">
+                    <span className="font-semibold">Fallback: </span>{event.fallbackReason}
+                  </div>
+                )}
               </div>
 
-              {/* Expanded payload viewer */}
-              {isExpanded && event.requestPayload && (
-                <div className="px-3 pb-3">
-                  <PayloadViewer payload={event.requestPayload} />
-                </div>
-              )}
-              {isExpanded && !event.requestPayload && (
-                <div className="px-3 pb-3">
-                  <div className="rounded-lg bg-slate-900/80 px-3 py-2 text-[10px] text-slate-400 font-mono">
-                    No payload captured for this call
-                  </div>
+              {/* Expanded view: routing trace + payload */}
+              {isExpanded && (
+                <div className="px-3 pb-3 space-y-2">
+                  <RoutingTrace event={event} />
+                  {event.requestPayload ? (
+                    <PayloadViewer payload={event.requestPayload} />
+                  ) : (
+                    <div className="rounded-lg bg-slate-900/80 px-3 py-2 text-[10px] text-slate-400 font-mono">
+                      No payload captured for this call
+                    </div>
+                  )}
                 </div>
               )}
             </div>
