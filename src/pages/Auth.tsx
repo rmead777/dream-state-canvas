@@ -86,6 +86,8 @@ export default function Auth() {
       setLoading(false);
     }
   };
+
+  const handleGoogleSignIn = async () => {
     try {
       setLoading(true);
       setError(null);
