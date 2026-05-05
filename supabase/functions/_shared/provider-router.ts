@@ -146,22 +146,26 @@ export async function routeToProvider(
   const { provider, model } = parseModelId(modelId);
   const config = PROVIDERS[provider];
 
+  const attemptsLog: RouteAttempt[] = [];
+
   // ─── Anthropic: OAuth → API key, with retry. NEVER falls back to Google. ───
   if (provider === 'anthropic') {
     const oauthToken = Deno.env.get('CLAUDE_CODE_OAUTH_TOKEN');
     const legacyKey = Deno.env.get('ANTHROPIC_API_KEY');
 
     if (!oauthToken && !legacyKey) {
-      // No Anthropic auth at all — return a clear error, don't silently switch models
+      attemptsLog.push({ provider, model, authMode: 'oauth', status: 'skipped', reason: 'CLAUDE_CODE_OAUTH_TOKEN env var not set' });
+      attemptsLog.push({ provider, model, authMode: 'api_key', status: 'skipped', reason: 'ANTHROPIC_API_KEY env var not set' });
       return {
         response: new Response(JSON.stringify({ error: 'No Anthropic API credentials configured. Set CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY.' }), { status: 500 }),
-        meta: { model: modelId, provider, authMode: 'oauth_failed', fallback: false },
+        meta: { model: modelId, provider, authMode: 'oauth_failed', fallback: false, fallbackReason: 'No Anthropic credentials configured', attempts: attemptsLog },
       };
     }
 
     // Try OAuth first, then API key. Retry up to 3 times with backoff on 429/5xx.
     const attempts: { key: string; useOAuth: boolean; authMode: AuthMode }[] = [];
     if (oauthToken) attempts.push({ key: oauthToken, useOAuth: true, authMode: 'oauth' });
+    else attemptsLog.push({ provider, model, authMode: 'oauth', status: 'skipped', reason: 'CLAUDE_CODE_OAUTH_TOKEN env var not set' });
     if (legacyKey) attempts.push({ key: legacyKey, useOAuth: false, authMode: 'api_key' });
 
     const MAX_RETRIES = 3;
@@ -175,25 +179,43 @@ export async function routeToProvider(
           await new Promise(r => setTimeout(r, delay));
         }
 
+        const t0 = Date.now();
         const response = await makeAnthropicRequest(
           config.endpoint, attempt.key, model, systemPrompt, messages, maxTokens, stream, tools, attempt.useOAuth,
         );
+        const dur = Date.now() - t0;
 
         if (response.ok) {
           console.log(`[anthropic] model=${model} auth=${attempt.authMode}${retry > 0 ? ` (retry ${retry})` : ''}`);
-          return { response, meta: { model: modelId, provider, authMode: attempt.authMode, fallback: false } };
+          attemptsLog.push({ provider, model, authMode: attempt.authMode, status: 'ok', httpStatus: response.status, retry, durationMs: dur });
+          return { response, meta: { model: modelId, provider, authMode: attempt.authMode, fallback: false, attempts: attemptsLog } };
         }
 
         // Only retry on rate limits (429) and server errors (5xx)
         if (response.status === 429 || response.status >= 500) {
           const errBody = await response.text();
           console.warn(`[anthropic] ${attempt.authMode} ${response.status} for ${model}: ${errBody.slice(0, 150)}`);
+          attemptsLog.push({
+            provider, model, authMode: attempt.authMode, status: 'error',
+            httpStatus: response.status, retry, durationMs: dur,
+            reason: response.status === 429 ? 'Rate limited (429)' : `Server error (${response.status})`,
+            errorBody: errBody.slice(0, 200),
+          });
           continue; // retry
         }
 
         // Non-retryable error (400, 401, 403) — try next auth method
         const errBody = await response.text();
         console.warn(`[anthropic] ${attempt.authMode} failed (${response.status}) for ${model}: ${errBody.slice(0, 150)}`);
+        attemptsLog.push({
+          provider, model, authMode: attempt.authMode, status: 'error',
+          httpStatus: response.status, retry, durationMs: dur,
+          reason: response.status === 401 ? 'Auth rejected (401) — token invalid or expired'
+                : response.status === 403 ? 'Forbidden (403) — token lacks access to this model'
+                : response.status === 400 ? 'Bad request (400) — payload rejected'
+                : `HTTP ${response.status}`,
+          errorBody: errBody.slice(0, 200),
+        });
         break; // don't retry, try next auth method
       }
     }
@@ -202,7 +224,7 @@ export async function routeToProvider(
     console.error(`[anthropic] All auth attempts exhausted for ${model}`);
     return {
       response: new Response(JSON.stringify({ error: `Anthropic API unavailable after retries. Please try again shortly.` }), { status: 503 }),
-      meta: { model: modelId, provider, authMode: 'oauth_failed', fallback: false },
+      meta: { model: modelId, provider, authMode: 'oauth_failed', fallback: false, fallbackReason: 'All Anthropic auth attempts exhausted', attempts: attemptsLog },
     };
   }
 
@@ -211,22 +233,35 @@ export async function routeToProvider(
 
   if (!apiKey) {
     console.warn(`[provider-router] No API key for ${provider}, falling back to default model`);
+    attemptsLog.push({ provider, model, authMode: 'api_key', status: 'skipped', reason: `${config.envKey} env var not set` });
+    const t0 = Date.now();
     const response = await fallbackToDefault(systemPrompt, messages, maxTokens, stream, tools);
-    return { response, meta: { model: DEFAULT_MODEL, provider: 'google', authMode: 'gateway', fallback: true } };
+    attemptsLog.push({ provider: 'google', model: DEFAULT_MODEL, authMode: 'gateway', status: response.ok ? 'ok' : 'error', httpStatus: response.status, durationMs: Date.now() - t0, reason: response.ok ? undefined : `Fallback returned HTTP ${response.status}` });
+    return { response, meta: { model: DEFAULT_MODEL, provider: 'google', authMode: 'gateway', fallback: true, fallbackReason: `${config.envKey} not configured — routed to default ${DEFAULT_MODEL}`, attempts: attemptsLog } };
   }
 
   const modelForRequest = provider === 'google' ? modelId : model;
+  const t0 = Date.now();
   const response = await makeOpenAIRequest(config.endpoint, apiKey, modelForRequest, systemPrompt, messages, maxTokens, stream, tools);
+  const dur = Date.now() - t0;
 
   if (!response.ok && [400, 401, 403, 429].includes(response.status) && provider !== 'google') {
     const errBody = await response.text();
     console.warn(`[provider-router] ${provider} returned ${response.status}: ${errBody}. Falling back to default.`);
+    const reason = response.status === 401 ? 'Auth rejected (401) — API key invalid or expired'
+                 : response.status === 403 ? 'Forbidden (403) — key lacks access to this model'
+                 : response.status === 429 ? 'Rate limited (429) — quota or RPM exceeded'
+                 : `Bad request (${response.status}) — payload rejected`;
+    attemptsLog.push({ provider, model, authMode: 'api_key', status: 'error', httpStatus: response.status, durationMs: dur, reason, errorBody: errBody.slice(0, 200) });
+    const t1 = Date.now();
     const fallbackResp = await fallbackToDefault(systemPrompt, messages, maxTokens, stream, tools);
-    return { response: fallbackResp, meta: { model: DEFAULT_MODEL, provider: 'google', authMode: 'gateway', fallback: true } };
+    attemptsLog.push({ provider: 'google', model: DEFAULT_MODEL, authMode: 'gateway', status: fallbackResp.ok ? 'ok' : 'error', httpStatus: fallbackResp.status, durationMs: Date.now() - t1 });
+    return { response: fallbackResp, meta: { model: DEFAULT_MODEL, provider: 'google', authMode: 'gateway', fallback: true, fallbackReason: `${provider} ${response.status}: ${reason} — fell back to ${DEFAULT_MODEL}`, attempts: attemptsLog } };
   }
 
   const authMode: AuthMode = provider === 'google' ? 'gateway' : 'api_key';
-  return { response, meta: { model: modelId, provider, authMode, fallback: false } };
+  attemptsLog.push({ provider, model: modelForRequest, authMode, status: response.ok ? 'ok' : 'error', httpStatus: response.status, durationMs: dur, reason: response.ok ? undefined : `HTTP ${response.status}` });
+  return { response, meta: { model: modelId, provider, authMode, fallback: false, attempts: attemptsLog } };
 }
 
 /**
