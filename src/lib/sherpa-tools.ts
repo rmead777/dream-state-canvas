@@ -533,14 +533,14 @@ export const SHERPA_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'queryQuickBooks',
-      description: 'Fetch live financial data from the company\'s QuickBooks Online account. Returns AP (accounts payable/bills), AR (accounts receivable/invoices), bank balances, P&L, customer payments (cash collected), bill payments, vendor list, customer list, or a full financial summary. Use when the user asks about cash flow, accounts payable, accounts receivable, invoices, bills, payments, cash collected, vendors, customers, bank balances, working capital, or any financial analysis that would benefit from live accounting data.',
+      description: 'Fetch live financial data from the company\'s QuickBooks Online account. Returns AP (accounts payable/bills), AR (accounts receivable/invoices), bank balances, P&L, CASH RECEIVED FROM CUSTOMERS (payments), bill payments, vendor list, customer list, or a full financial summary. Use when the user asks about cash flow, accounts payable, accounts receivable, invoices, bills, cash collected, money received, revenue collected, customer receipts, vendors, customers, bank balances, working capital, or any financial analysis that would benefit from live accounting data.',
       parameters: {
         type: 'object',
         properties: {
           dataType: {
             type: 'string',
             enum: ['ap', 'ar', 'bank', 'pnl', 'vendors', 'customers', 'payments', 'bill_payments', 'summary'],
-            description: 'What to fetch. "summary" returns cash + AR + AP + working capital in one call. "ap" = unpaid bills by vendor with aging. "ar" = open + recent invoices by customer with aging. "bank" = bank account balances. "pnl" = profit & loss report. "payments" = customer payments received (cash collected from customers) — use for "cash collected", "payments received", "how much did we collect". "bill_payments" = payments made to vendors (AP side). "vendors" = vendor list. "customers" = customer list.',
+            description: 'What to fetch. "summary" returns cash + AR + AP + working capital in one call. "ap" = unpaid bills by vendor with aging. "ar" = open + recent invoices by customer with aging. "bank" = bank account balances. "pnl" = profit & loss report. "payments" = MONEY RECEIVED FROM CUSTOMERS — cash that came IN. Use this for ANY question about cash collected, revenue received, customer payments, money received, collections, how much customers paid, total receipts. This is the QBO Payment entity (money IN). DO NOT confuse with bill_payments. "bill_payments" = MONEY PAID TO VENDORS — cash that went OUT (AP side only). "vendors" = vendor list. "customers" = customer list.',
           },
           options: {
             type: 'object',
