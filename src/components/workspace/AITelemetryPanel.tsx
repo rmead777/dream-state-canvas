@@ -275,6 +275,17 @@ export function AITelemetryPanel() {
               const lines = [
                 `[${time}] ${e.model} | ${e.provider} | ${e.authMode} | ${(e.durationMs/1000).toFixed(1)}s | in:${e.inputTokens??'?'} out:${e.outputTokens??'?'} | toolCalls:${e.toolCalls??0}`,
               ];
+              if (e.fallback) {
+                lines.push(`--- ROUTING ---`);
+                lines.push(`Fallback: ${e.fallbackReason ?? '(no reason captured)'}`);
+              }
+              if (e.attempts?.length) {
+                lines.push('Attempts:');
+                e.attempts.forEach((a, i) => {
+                  lines.push(`  ${i + 1}. [${a.status}] ${a.provider}/${a.model} via ${a.authMode}${a.httpStatus ? ` HTTP ${a.httpStatus}` : ''}${a.retry ? ` retry#${a.retry}` : ''}${a.reason ? ` — ${a.reason}` : ''}`);
+                  if (a.errorBody) lines.push(`     body: ${a.errorBody}`);
+                });
+              }
               if (e.requestPayload) {
                 lines.push('--- REQUEST ---');
                 lines.push(JSON.stringify(e.requestPayload, null, 2));
