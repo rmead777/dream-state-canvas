@@ -4,7 +4,7 @@
  * Fetches live AP, AR, bank balance, vendor, customer, and P&L data
  * from QuickBooks using the shared OAuth token stored in WCW's Supabase.
  *
- * POST body: { type: "ap" | "ar" | "bank" | "pnl" | "vendors" | "customers" | "summary" }
+ * POST body: { type: "ap" | "ar" | "bank" | "pnl" | "vendors" | "customers" | "payments" | "bill_payments" | "summary" }
  *
  * Returns structured JSON tailored for Sherpa AI analysis.
  */
@@ -49,6 +49,9 @@ serve(async (req) => {
       case 'customers':
         result = await fetchCustomers(token, connection);
         break;
+      case 'payments':
+        result = await fetchCustomerPayments(token, connection, options);
+        break;
       case 'bill_payments':
         result = await fetchBillPayments(token, connection, options);
         break;
@@ -57,7 +60,7 @@ serve(async (req) => {
         break;
       default:
         return new Response(
-          JSON.stringify({ error: `Unknown data type: ${type}. Use: ap, ar, bank, pnl, vendors, customers, bill_payments, summary` }),
+          JSON.stringify({ error: `Unknown data type: ${type}. Use: ap, ar, bank, pnl, vendors, customers, payments, bill_payments, summary` }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
     }
@@ -388,12 +391,78 @@ async function fetchFinancialSummary(token: string, connection: any) {
   };
 }
 
+// ─── Customer Payments (cash collected) ───────────────────────────────────
+
+async function fetchCustomerPayments(token: string, connection: any, options?: any) {
+  const startDate = options?.startDate
+    || (() => { const d = new Date(); d.setMonth(d.getMonth() - 6); return d.toISOString().split('T')[0]; })();
+  const endDate = options?.endDate || new Date().toISOString().split('T')[0];
+
+  const allPayments: any[] = [];
+  let startPosition = 1;
+  const pageSize = 500;
+
+  while (true) {
+    const data = await queryQBO(token, connection,
+      `SELECT * FROM Payment WHERE TxnDate >= '${startDate}' AND TxnDate <= '${endDate}' ORDER BY TxnDate DESC STARTPOSITION ${startPosition} MAXRESULTS ${pageSize}`);
+    const page = data.QueryResponse?.Payment || [];
+    allPayments.push(...page);
+    if (page.length < pageSize) break;
+    startPosition += pageSize;
+  }
+
+  const transformed = allPayments.map((p: any) => {
+    // Which invoices were applied
+    const appliedTo = (p.Line || [])
+      .filter((line: any) => line.LinkedTxn?.length > 0)
+      .map((line: any) => ({
+        amount: line.Amount,
+        invoiceIds: line.LinkedTxn?.filter((t: any) => t.TxnType === 'Invoice').map((t: any) => t.TxnId) || [],
+      }));
+
+    return {
+      id: p.Id,
+      date: p.TxnDate,
+      customer: p.CustomerRef?.name || 'Unknown',
+      customerId: p.CustomerRef?.value,
+      amount: p.TotalAmt,
+      unapplied: p.UnappliedAmt || 0,
+      paymentMethod: p.PaymentMethodRef?.name || null,
+      depositToAccount: p.DepositToAccountRef?.name || null,
+      docNumber: p.DocNumber || null,
+      memo: p.PrivateNote || null,
+      appliedTo,
+    };
+  });
+
+  const byCustomer: Record<string, number> = {};
+  for (const p of transformed) {
+    byCustomer[p.customer] = (byCustomer[p.customer] || 0) + p.amount;
+  }
+
+  const byMethod: Record<string, number> = {};
+  for (const p of transformed) {
+    const method = p.paymentMethod || 'Unspecified';
+    byMethod[method] = (byMethod[method] || 0) + p.amount;
+  }
+
+  return {
+    payments: transformed,
+    totalCashCollected: transformed.reduce((s: number, p: any) => s + p.amount, 0),
+    paymentCount: transformed.length,
+    dateRange: { from: startDate, to: endDate },
+    byCustomer,
+    byMethod,
+  };
+}
+
 // ─── Bill Payments ─────────────────────────────────────────────────────────
 
 async function fetchBillPayments(token: string, connection: any, options?: any) {
   // Default to last 6 months if no date range specified
   const startDate = options?.startDate
     || (() => { const d = new Date(); d.setMonth(d.getMonth() - 6); return d.toISOString().split('T')[0]; })();
+  const endDate = options?.endDate || new Date().toISOString().split('T')[0];
 
   // Paginate — BillPayment can be large
   const allPayments: any[] = [];
@@ -402,7 +471,7 @@ async function fetchBillPayments(token: string, connection: any, options?: any) 
 
   while (true) {
     const data = await queryQBO(token, connection,
-      `SELECT * FROM BillPayment WHERE TxnDate >= '${startDate}' ORDER BY TxnDate DESC STARTPOSITION ${startPosition} MAXRESULTS ${pageSize}`);
+      `SELECT * FROM BillPayment WHERE TxnDate >= '${startDate}' AND TxnDate <= '${endDate}' ORDER BY TxnDate DESC STARTPOSITION ${startPosition} MAXRESULTS ${pageSize}`);
     const page = data.QueryResponse?.BillPayment || [];
     allPayments.push(...page);
     if (page.length < pageSize) break;
@@ -462,7 +531,7 @@ async function fetchBillPayments(token: string, connection: any, options?: any) 
     payments: transformed,
     totalPaid: transformed.reduce((s: number, p: any) => s + p.amount, 0),
     paymentCount: transformed.length,
-    dateRange: { from: startDate, to: new Date().toISOString().split('T')[0] },
+    dateRange: { from: startDate, to: endDate },
     byVendor,
     byMethod,
   };

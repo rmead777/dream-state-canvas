@@ -533,22 +533,22 @@ export const SHERPA_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'queryQuickBooks',
-      description: 'Fetch live financial data from the company\'s QuickBooks Online account. Returns AP (accounts payable/bills), AR (accounts receivable/invoices), bank balances, P&L, bill payments, vendor list, customer list, or a full financial summary. Use when the user asks about cash flow, accounts payable, accounts receivable, invoices, bills, payments, vendors, customers, bank balances, working capital, or any financial analysis that would benefit from live accounting data.',
+      description: 'Fetch live financial data from the company\'s QuickBooks Online account. Returns AP (accounts payable/bills), AR (accounts receivable/invoices), bank balances, P&L, customer payments (cash collected), bill payments, vendor list, customer list, or a full financial summary. Use when the user asks about cash flow, accounts payable, accounts receivable, invoices, bills, payments, cash collected, vendors, customers, bank balances, working capital, or any financial analysis that would benefit from live accounting data.',
       parameters: {
         type: 'object',
         properties: {
           dataType: {
             type: 'string',
-            enum: ['ap', 'ar', 'bank', 'pnl', 'vendors', 'customers', 'bill_payments', 'summary'],
-            description: 'What to fetch. "summary" returns cash + AR + AP + working capital in one call. "ap" = unpaid bills by vendor with aging. "ar" = open + recent invoices by customer with aging. "bank" = bank account balances. "pnl" = profit & loss report. "bill_payments" = bill payment history with vendor, method, and which bills were paid. "vendors" = vendor list. "customers" = customer list.',
+            enum: ['ap', 'ar', 'bank', 'pnl', 'vendors', 'customers', 'payments', 'bill_payments', 'summary'],
+            description: 'What to fetch. "summary" returns cash + AR + AP + working capital in one call. "ap" = unpaid bills by vendor with aging. "ar" = open + recent invoices by customer with aging. "bank" = bank account balances. "pnl" = profit & loss report. "payments" = customer payments received (cash collected from customers) — use for "cash collected", "payments received", "how much did we collect". "bill_payments" = payments made to vendors (AP side). "vendors" = vendor list. "customers" = customer list.',
           },
           options: {
             type: 'object',
-            description: 'Optional parameters. For pnl: { startDate, endDate, summarizeBy }. Dates are YYYY-MM-DD.',
+            description: 'Optional date range and filter params. Supported for "payments", "bill_payments", and "pnl": { startDate, endDate }. For pnl also: { summarizeBy }. Dates are YYYY-MM-DD. Example: last 30 days = startDate set to 30 days ago, endDate today. Defaults to last 6 months if omitted.',
             properties: {
-              startDate: { type: 'string' },
-              endDate: { type: 'string' },
-              summarizeBy: { type: 'string', description: 'Month, Quarter, or Year' },
+              startDate: { type: 'string', description: 'YYYY-MM-DD — start of date range' },
+              endDate: { type: 'string', description: 'YYYY-MM-DD — end of date range (defaults to today)' },
+              summarizeBy: { type: 'string', description: 'Month, Quarter, or Year (pnl only)' },
             },
           },
         },
@@ -645,7 +645,7 @@ export const SHERPA_TOOLS = [
         properties: {
           dataType: {
             type: 'string',
-            enum: ['ap', 'ar', 'bank', 'pnl', 'vendors', 'customers', 'bill_payments', 'summary', 'all'],
+            enum: ['ap', 'ar', 'bank', 'pnl', 'vendors', 'customers', 'payments', 'bill_payments', 'summary', 'all'],
             description: 'Which data to refresh. Use "all" to clear everything and re-fetch a fresh summary. Default: "all".',
           },
         },
