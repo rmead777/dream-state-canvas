@@ -377,6 +377,12 @@ export function AITelemetryPanel() {
                     )}
                   </span>
                 </div>
+                {/* Inline fallback reason — visible without expanding */}
+                {event.fallback && event.fallbackReason && !isExpanded && (
+                  <div className="mt-1.5 rounded-md border border-amber-200/50 bg-amber-50/70 px-2 py-1 text-[10px] leading-snug text-amber-800">
+                    <span className="font-semibold">Fallback: </span>{event.fallbackReason}
+                  </div>
+                )}
               </div>
 
               {/* Expanded view: routing trace + payload */}
