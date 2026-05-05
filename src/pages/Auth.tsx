@@ -7,9 +7,10 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [mode, setMode] = useState<'signin' | 'signup' | 'forgot'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [resetSent, setResetSent] = useState(false);
   const productMoments = [
     'Materialize the right objects from a single prompt',
     'Cross-reference datasets, documents, and risk signals in one canvas',
@@ -61,6 +62,27 @@ export default function Auth() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Authentication failed');
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) return;
+    try {
+      setLoading(true);
+      setError(null);
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) {
+        setError(error.message);
+      } else {
+        setResetSent(true);
+      }
+      setLoading(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send reset email');
       setLoading(false);
     }
   };
@@ -224,51 +246,104 @@ export default function Auth() {
             )}
 
             <div className="space-y-4">
-              <form onSubmit={handleEmailAuth} className="space-y-3">
-                <div>
-                  <label htmlFor="auth-email" className="block text-[10px] font-medium uppercase tracking-[0.18em] text-workspace-text-secondary/60 mb-1.5">Email</label>
-                  <input
-                    id="auth-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    required
+              {mode === 'forgot' ? (
+                <form onSubmit={handleForgotPassword} className="space-y-3">
+                  <div>
+                    <label htmlFor="auth-email" className="block text-[10px] font-medium uppercase tracking-[0.18em] text-workspace-text-secondary/60 mb-1.5">Email</label>
+                    <input
+                      id="auth-email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      required
+                      disabled={isBusy || resetSent}
+                      className="w-full rounded-xl border border-workspace-border/60 bg-white px-4 py-3 text-sm text-workspace-text placeholder:text-workspace-text-secondary/40 outline-none transition-all focus:border-workspace-accent/30 focus:shadow-[0_8px_20px_rgba(99,102,241,0.08)] disabled:opacity-50"
+                    />
+                  </div>
+                  {resetSent ? (
+                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700">
+                      Check your email for a link to reset your password.
+                    </div>
+                  ) : (
+                    <button
+                      type="submit"
+                      disabled={isBusy || !email.trim()}
+                      className="workspace-focus-ring flex w-full items-center justify-center gap-2 rounded-2xl border border-workspace-accent/20 bg-workspace-accent/10 px-4 py-3.5 text-sm font-medium text-workspace-accent shadow-[0_14px_30px_rgba(99,102,241,0.1)] transition-all duration-200 workspace-spring hover:-translate-y-0.5 hover:bg-workspace-accent/15 disabled:translate-y-0 disabled:opacity-50"
+                    >
+                      {loading ? 'Sending reset link…' : 'Send reset link'}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => { setMode('signin'); setError(null); setResetSent(false); }}
                     disabled={isBusy}
-                    className="w-full rounded-xl border border-workspace-border/60 bg-white px-4 py-3 text-sm text-workspace-text placeholder:text-workspace-text-secondary/40 outline-none transition-all focus:border-workspace-accent/30 focus:shadow-[0_8px_20px_rgba(99,102,241,0.08)] disabled:opacity-50"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="auth-password" className="block text-[10px] font-medium uppercase tracking-[0.18em] text-workspace-text-secondary/60 mb-1.5">Password</label>
-                  <input
-                    id="auth-password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder={mode === 'signup' ? 'Create a password (6+ chars)' : 'Your password'}
-                    required
-                    minLength={6}
-                    disabled={isBusy}
-                    className="w-full rounded-xl border border-workspace-border/60 bg-white px-4 py-3 text-sm text-workspace-text placeholder:text-workspace-text-secondary/40 outline-none transition-all focus:border-workspace-accent/30 focus:shadow-[0_8px_20px_rgba(99,102,241,0.08)] disabled:opacity-50"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={isBusy || !email.trim() || !password.trim()}
-                  className="workspace-focus-ring flex w-full items-center justify-center gap-2 rounded-2xl border border-workspace-accent/20 bg-workspace-accent/10 px-4 py-3.5 text-sm font-medium text-workspace-accent shadow-[0_14px_30px_rgba(99,102,241,0.1)] transition-all duration-200 workspace-spring hover:-translate-y-0.5 hover:bg-workspace-accent/15 hover:shadow-[0_18px_40px_rgba(99,102,241,0.16)] disabled:translate-y-0 disabled:opacity-50"
-                >
-                  {loading ? (mode === 'signup' ? 'Creating account…' : 'Signing in…') : (mode === 'signup' ? 'Create Account' : 'Sign In')}
-                </button>
-              </form>
+                    className="w-full text-center text-[11px] text-workspace-text-secondary/60 transition-colors hover:text-workspace-accent"
+                  >
+                    Back to sign in
+                  </button>
+                </form>
+              ) : (
+                <>
+                  <form onSubmit={handleEmailAuth} className="space-y-3">
+                    <div>
+                      <label htmlFor="auth-email" className="block text-[10px] font-medium uppercase tracking-[0.18em] text-workspace-text-secondary/60 mb-1.5">Email</label>
+                      <input
+                        id="auth-email"
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        required
+                        disabled={isBusy}
+                        className="w-full rounded-xl border border-workspace-border/60 bg-white px-4 py-3 text-sm text-workspace-text placeholder:text-workspace-text-secondary/40 outline-none transition-all focus:border-workspace-accent/30 focus:shadow-[0_8px_20px_rgba(99,102,241,0.08)] disabled:opacity-50"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label htmlFor="auth-password" className="block text-[10px] font-medium uppercase tracking-[0.18em] text-workspace-text-secondary/60">Password</label>
+                        {mode === 'signin' && (
+                          <button
+                            type="button"
+                            onClick={() => { setMode('forgot'); setError(null); setResetSent(false); }}
+                            disabled={isBusy}
+                            className="text-[10px] uppercase tracking-[0.18em] text-workspace-accent/70 transition-colors hover:text-workspace-accent"
+                          >
+                            Forgot?
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        id="auth-password"
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder={mode === 'signup' ? 'Create a password (6+ chars)' : 'Your password'}
+                        required
+                        minLength={6}
+                        disabled={isBusy}
+                        className="w-full rounded-xl border border-workspace-border/60 bg-white px-4 py-3 text-sm text-workspace-text placeholder:text-workspace-text-secondary/40 outline-none transition-all focus:border-workspace-accent/30 focus:shadow-[0_8px_20px_rgba(99,102,241,0.08)] disabled:opacity-50"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={isBusy || !email.trim() || !password.trim()}
+                      className="workspace-focus-ring flex w-full items-center justify-center gap-2 rounded-2xl border border-workspace-accent/20 bg-workspace-accent/10 px-4 py-3.5 text-sm font-medium text-workspace-accent shadow-[0_14px_30px_rgba(99,102,241,0.1)] transition-all duration-200 workspace-spring hover:-translate-y-0.5 hover:bg-workspace-accent/15 hover:shadow-[0_18px_40px_rgba(99,102,241,0.16)] disabled:translate-y-0 disabled:opacity-50"
+                    >
+                      {loading ? (mode === 'signup' ? 'Creating account…' : 'Signing in…') : (mode === 'signup' ? 'Create Account' : 'Sign In')}
+                    </button>
+                  </form>
 
-              <button
-                type="button"
-                onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setError(null); }}
-                disabled={isBusy}
-                className="w-full text-center text-[11px] text-workspace-text-secondary/60 transition-colors hover:text-workspace-accent"
-              >
-                {mode === 'signin' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setError(null); }}
+                    disabled={isBusy}
+                    className="w-full text-center text-[11px] text-workspace-text-secondary/60 transition-colors hover:text-workspace-accent"
+                  >
+                    {mode === 'signin' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
+                  </button>
+                </>
+              )}
 
               <div className="relative">
                 <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-workspace-border/40" /></div>
