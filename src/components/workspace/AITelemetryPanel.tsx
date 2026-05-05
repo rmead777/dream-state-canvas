@@ -4,7 +4,7 @@
  * Click any entry to expand and see the full raw API call payload.
  */
 import { useState, useEffect } from 'react';
-import { getAITelemetryEvents, clearAITelemetry, type AICallEvent, type AuthMode } from '@/lib/ai-telemetry';
+import { getAITelemetryEvents, clearAITelemetry, type AICallEvent, type AuthMode, type RouteAttempt } from '@/lib/ai-telemetry';
 
 const AUTH_CONFIG: Record<AuthMode, { label: string; detail: string; color: string; bg: string }> = {
   oauth:             { label: 'Subscription', detail: 'OAuth token', color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-200/50' },
