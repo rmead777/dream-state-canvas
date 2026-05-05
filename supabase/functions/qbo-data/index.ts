@@ -49,7 +49,7 @@ serve(async (req) => {
       case 'customers':
         result = await fetchCustomers(token, connection);
         break;
-      case 'payments':
+      case 'payments_received':
         result = await fetchCustomerPayments(token, connection, options);
         break;
       case 'bill_payments':
@@ -60,7 +60,7 @@ serve(async (req) => {
         break;
       default:
         return new Response(
-          JSON.stringify({ error: `Unknown data type: ${type}. Use: ap, ar, bank, pnl, vendors, customers, payments, bill_payments, summary` }),
+          JSON.stringify({ error: `Unknown data type: ${type}. Use: ap, ar, bank, pnl, vendors, customers, payments_received, bill_payments, summary` }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
     }

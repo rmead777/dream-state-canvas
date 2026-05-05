@@ -539,8 +539,8 @@ export const SHERPA_TOOLS = [
         properties: {
           dataType: {
             type: 'string',
-            enum: ['ap', 'ar', 'bank', 'pnl', 'vendors', 'customers', 'payments', 'bill_payments', 'summary'],
-            description: 'What to fetch. "summary" returns cash + AR + AP + working capital in one call. "ap" = unpaid bills by vendor with aging. "ar" = open + recent invoices by customer with aging. "bank" = bank account balances. "pnl" = profit & loss report. "payments" = MONEY RECEIVED FROM CUSTOMERS — cash that came IN. Use this for ANY question about cash collected, revenue received, customer payments, money received, collections, how much customers paid, total receipts. This is the QBO Payment entity (money IN). DO NOT confuse with bill_payments. "bill_payments" = MONEY PAID TO VENDORS — cash that went OUT (AP side only). "vendors" = vendor list. "customers" = customer list.',
+            enum: ['ap', 'ar', 'bank', 'pnl', 'vendors', 'customers', 'payments_received', 'bill_payments', 'summary'],
+            description: 'What to fetch. "summary" returns cash + AR + AP + working capital in one call. "ap" = unpaid bills by vendor with aging. "ar" = open + recent invoices by customer with aging. "bank" = bank account balances. "pnl" = profit & loss report. "payments_received" = MONEY RECEIVED FROM CUSTOMERS — cash that came IN. Use this for ANY question about cash collected, revenue received, customer payments, money received, collections, how much customers paid, total receipts. This is the QBO Payment entity (money IN). DO NOT confuse with bill_payments. "bill_payments" = MONEY PAID TO VENDORS — cash that went OUT (AP side only). "vendors" = vendor list. "customers" = customer list.',
           },
           options: {
             type: 'object',
@@ -645,7 +645,7 @@ export const SHERPA_TOOLS = [
         properties: {
           dataType: {
             type: 'string',
-            enum: ['ap', 'ar', 'bank', 'pnl', 'vendors', 'customers', 'payments', 'bill_payments', 'summary', 'all'],
+            enum: ['ap', 'ar', 'bank', 'pnl', 'vendors', 'customers', 'payments_received', 'bill_payments', 'summary', 'all'],
             description: 'Which data to refresh. Use "all" to clear everything and re-fetch a fresh summary. Default: "all".',
           },
         },

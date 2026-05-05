@@ -205,11 +205,11 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
   - "ar" — accounts receivable: open invoices by customer with aging + recent paid history
   - "bank" — bank account and credit card balances
   - "pnl" — profit & loss report (with optional date range)
-  - "payments" — CASH RECEIVED FROM CUSTOMERS (money IN). Use for ANY question about cash collected, revenue received, customer payments, collections, total receipts, how much came in. Accepts startDate/endDate options. This is NOT the same as bill_payments.
+  - "payments_received" — CASH RECEIVED FROM CUSTOMERS (money IN). Use for ANY question about cash collected, revenue received, customer payments, collections, total receipts, how much came in. Accepts startDate/endDate options. This is NOT the same as bill_payments.
   - "bill_payments" — CASH PAID TO VENDORS (money OUT). Bill payment history: vendor, amount, method, which bills paid. Accepts startDate/endDate options.
   - "vendors" — vendor master list
   - "customers" — customer master list
-CRITICAL DISTINCTION: "payments" = money received from customers (cash IN). "bill_payments" = money paid to vendors (cash OUT). Never confuse these.
+CRITICAL DISTINCTION: "payments_received" = money received from customers (cash IN). "bill_payments" = money paid to vendors (cash OUT). Never confuse these.
 Use this data when the user asks about cash flow, bills, invoices, working capital, vendor performance, customer analysis, or any financial question. Prefer "summary" for broad financial questions. Cross-reference QB data with uploaded spreadsheets when both are relevant.
 If the user asks to refresh or update QB data, use the refreshQuickBooks tool to clear the cache and pull fresh data.`;
 
