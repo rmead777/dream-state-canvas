@@ -10,8 +10,27 @@
  * Behavior is skip-existing on both memories and documents — running it twice
  * is safe and idempotent.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+
+const RECIPIENTS_KEY = 'clone-profile-recipients';
+
+function loadRecipients(): string[] {
+  try {
+    const raw = localStorage.getItem(RECIPIENTS_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.filter((s) => typeof s === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecipients(list: string[]) {
+  try {
+    localStorage.setItem(RECIPIENTS_KEY, JSON.stringify(list));
+  } catch { /* ignore */ }
+}
 
 interface CloneResult {
   ok: boolean;
