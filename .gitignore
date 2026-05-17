@@ -33,3 +33,5 @@ dist-ssr
 
 # Claude Code session files
 .claude/
+.vercel
+.env*.local
