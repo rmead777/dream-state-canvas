@@ -400,20 +400,31 @@ async function makeAnthropicRequest(
   // beta header is sent. Gives Sherpa reasoning room between tool calls,
   // which is the workload where it helps most.
   //
-  // Anthropic has TWO thinking APIs that depend on the model generation:
+  // Anthropic has THREE reasoning regimes that depend on the model generation:
   //   - Legacy (Claude 4.6 and earlier): `thinking: {type: 'enabled', budget_tokens: N}`.
   //     Requires max_tokens > budget_tokens. Interleaved with tool use via beta header.
-  //   - Adaptive (Claude 4.7+): `thinking: {type: 'adaptive'}` + `output_config.effort`.
-  //     No budget param — `effort` ("low" | "medium" | "high" | "max" | "xhigh") tunes depth.
-  //     OFF by default on 4.7; must be explicitly requested.
+  //   - Adaptive opt-in (Claude 4.7): `thinking: {type: 'adaptive'}` + `output_config.effort`.
+  //     Adaptive is OFF by default on 4.7, so it must be requested explicitly.
+  //   - Effort-only (Claude Opus 4.8, Fable 5): adaptive thinking is automatic /
+  //     always-on, so there is NO `thinking` object. Sending ANY thinking object —
+  //     `{type:'enabled', budget_tokens}` OR `{type:'adaptive'}` — returns 400.
+  //     Depth is tuned with `output_config.effort` alone
+  //     ("low" | "medium" | "high" | "max" | "xhigh"). `budget_tokens` has no
+  //     equivalent here — effort is an output-level control, not a token budget.
   //
-  // Sampling parameters (temperature, top_p, top_k) are REMOVED on Claude 4.7 —
+  // Sampling parameters (temperature, top_p, top_k) are REMOVED on Claude 4.7+ —
   // setting any of them to a non-default value returns 400. On older models they
   // must be 1 (or unset) when thinking is on. We never set them, so no changes needed.
   // Stream transform below only emits text_delta and tool-use events, so thinking
-  // blocks (empty content on 4.7 by default anyway) never leak to the UI.
+  // blocks never leak to the UI.
   const useThinking = useOAuth;
-  const isAdaptiveThinkingModel = /claude-(opus|sonnet|haiku)-4-7/i.test(model);
+  // Effort-only models reject any manual `thinking` object (400). Opus 4.8 and
+  // Fable 5 share this regime — set effort, never `thinking`.
+  const isEffortOnlyModel = /claude-fable/i.test(model) || /claude-opus-4-8/i.test(model);
+  // Claude 4.7: adaptive is opt-in, requested via an explicit `thinking` object.
+  const isAdaptiveThinkingModel = !isEffortOnlyModel && /claude-(opus|sonnet|haiku)-4-7/i.test(model);
+  // Only legacy thinking carries a token budget that max_tokens must clear.
+  const usesLegacyThinking = !isEffortOnlyModel && !isAdaptiveThinkingModel;
   const thinkingBudget = 5000;
   const minMaxTokensForLegacyThinking = thinkingBudget + 4096;
 
@@ -421,14 +432,18 @@ async function makeAnthropicRequest(
     model,
     system: systemField,
     messages: anthropicMessages,
-    max_tokens: useThinking && !isAdaptiveThinkingModel
+    max_tokens: useThinking && usesLegacyThinking
       ? Math.max(maxTokens, minMaxTokensForLegacyThinking)
       : maxTokens,
     stream,
   };
 
   if (useThinking) {
-    if (isAdaptiveThinkingModel) {
+    if (isEffortOnlyModel) {
+      // Opus 4.8 / Fable 5: adaptive thinking is automatic. Tune depth with
+      // effort only — any `thinking` object (enabled or adaptive) returns 400.
+      body.output_config = { effort: 'high' };
+    } else if (isAdaptiveThinkingModel) {
       body.thinking = { type: 'adaptive' };
       body.output_config = { effort: 'medium' };
     } else {

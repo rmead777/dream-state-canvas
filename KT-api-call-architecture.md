@@ -31,8 +31,8 @@
 │  └────────────────────────────────────────────────────────────┘  │
 │  ┌────────────────────────────────────────────────────────────┐  │
 │  │ supabase/functions/_shared/provider-router.ts              │  │
-│  │   parseModelId("anthropic/claude-opus-4-7")                │  │
-│  │     → { provider: "anthropic", model: "claude-opus-4-7" }  │  │
+│  │   parseModelId("anthropic/claude-opus-4-8")                │  │
+│  │     → { provider: "anthropic", model: "claude-opus-4-8" }  │  │
 │  │   Anthropic path: OAuth → API key (NO gateway fallback)    │  │
 │  │   Other paths:    provider key → Google/Lovable fallback   │  │
 │  └────────────────────────────────────────────────────────────┘  │
@@ -47,7 +47,7 @@
 **Two unbreakable rules baked into this design:**
 
 1. **Model IDs are namespaced strings: `provider/model-name`.** The provider prefix IS the routing decision. Strip it before sending to the provider.
-2. **The provider router lives in the edge function, not the client.** The browser never holds API keys. It just says "I want `anthropic/claude-opus-4-7`" and the server decides how to authenticate.
+2. **The provider router lives in the edge function, not the client.** The browser never holds API keys. It just says "I want `anthropic/claude-opus-4-8`" and the server decides how to authenticate.
 
 ---
 
@@ -61,8 +61,8 @@ A single source of truth for which models the user can pick.
 export type AIProvider = 'google' | 'anthropic' | 'openai' | 'xai';
 
 export interface ModelDef {
-  id: string;          // "anthropic/claude-opus-4-7"
-  label: string;       // "Claude Opus 4.7"
+  id: string;          // "anthropic/claude-opus-4-8"
+  label: string;       // "Claude opus 4.8"
   description: string;
   provider: AIProvider;
 }
@@ -77,7 +77,7 @@ const AVAILABLE_MODELS: ModelDef[] = [
   // Anthropic — uses CLAUDE_CODE_OAUTH_TOKEN (subscription, zero per-token cost)
   { id: 'anthropic/claude-sonnet-4-6', label: 'Claude Sonnet 4.6',
     description: 'Balanced',           provider: 'anthropic' },
-  { id: 'anthropic/claude-opus-4-7',   label: 'Claude Opus 4.7',
+  { id: 'anthropic/claude-opus-4-8',   label: 'Claude opus 4.8',
     description: 'Max reasoning',      provider: 'anthropic' },
   { id: 'anthropic/claude-haiku-4-5',  label: 'Claude Haiku 4.5',
     description: 'Fastest',            provider: 'anthropic' },
@@ -271,16 +271,28 @@ headers['anthropic-version'] = '2023-06-01';
 
 ### 4d. Extended thinking — gen-dependent API
 
-OAuth requests turn on extended thinking, but the API differs by model generation:
+OAuth requests turn on extended thinking, but the API differs by model generation — **three** regimes, not two:
+
+| Regime | Models | What to send |
+| --- | --- | --- |
+| Legacy | 4.6 and earlier | `thinking: {type:'enabled', budget_tokens}` (+ `max_tokens > budget + 4096`) |
+| Adaptive opt-in | 4.7 | `thinking: {type:'adaptive'}` + `output_config.effort` |
+| Effort-only | Opus 4.8, Fable 5 | `output_config.effort` only — **no `thinking` object** (either kind 400s) |
 
 ```ts
 const useThinking = useOAuth;
-const isAdaptive = /claude-(opus|sonnet|haiku)-4-7/i.test(model);
+// Opus 4.8 & Fable 5: adaptive thinking is automatic. Manual `thinking` (enabled
+// OR adaptive) 400s — set effort only, never a `thinking` object.
+const isEffortOnly = /claude-fable/i.test(model) || /claude-opus-4-8/i.test(model);
+const isAdaptive   = !isEffortOnly && /claude-(opus|sonnet|haiku)-4-7/i.test(model);
+const usesLegacy   = !isEffortOnly && !isAdaptive;
 
 if (useThinking) {
-  if (isAdaptive) {
+  if (isEffortOnly) {
+    body.output_config = { effort: 'high' };       // no `thinking` object at all
+  } else if (isAdaptive) {
     body.thinking = { type: 'adaptive' };
-    body.output_config = { effort: 'medium' };  // low|medium|high|max|xhigh
+    body.output_config = { effort: 'medium' };      // low|medium|high|max|xhigh
   } else {
     body.thinking = { type: 'enabled', budget_tokens: 5000 };
     // Legacy thinking requires max_tokens > budget_tokens + 4096
@@ -290,6 +302,8 @@ if (useThinking) {
 ```
 
 **Sampling caveat (Claude 4.7+):** Setting any non-default `temperature`, `top_p`, or `top_k` returns 400. Just don't pass them.
+
+**`budget_tokens` has no equivalent on Opus 4.8 / Fable 5** — `effort` is a separate output-level control, not a thinking budget. Sending `thinking: {type:'enabled', budget_tokens}` returns 400 on both.
 
 ### 4e. Translating OpenAI-style messages → Anthropic native format
 
@@ -577,8 +591,8 @@ The token is issued by the Claude Code CLI when you run `claude setup-token` (wi
 After deployment, send any prompt and check the edge function logs. You should see:
 
 ```
-[anthropic] model=claude-opus-4-7 auth=oauth
-[Sherpa] model=anthropic/claude-opus-4-7 auth=oauth
+[anthropic] model=claude-opus-4-8 auth=oauth
+[Sherpa] model=anthropic/claude-opus-4-8 auth=oauth
 ```
 
 If you see `auth=api_key` after switching to a Claude model, the OAuth token is missing or rejected. If you see `auth=gateway` and `fallback=true`, something failed and you fell back to Lovable/Google — investigate.

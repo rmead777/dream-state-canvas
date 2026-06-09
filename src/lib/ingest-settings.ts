@@ -26,14 +26,20 @@ export interface ModelOption {
 
 export const MODEL_OPTIONS: ModelOption[] = [
   {
+    id: 'anthropic/claude-fable-5',
+    label: 'Claude Fable 5',
+    description: 'Newest flagship — frontier reasoning, native PDF',
+    supportsPdf: true,
+  },
+  {
     id: 'anthropic/claude-sonnet-4-6',
     label: 'Claude Sonnet 4.6',
     description: 'Best balance — deep reasoning, native PDF, $0 on subscription',
     supportsPdf: true,
   },
   {
-    id: 'anthropic/claude-opus-4-7',
-    label: 'Claude Opus 4.7',
+    id: 'anthropic/claude-opus-4-8',
+    label: 'Claude opus 4.8',
     description: 'Maximum accuracy for critical docs — slower, worth it for IC memos',
     supportsPdf: true,
   },
