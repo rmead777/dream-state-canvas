@@ -12,15 +12,61 @@ export default function ResetPassword() {
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    // Supabase parses the recovery token from the URL hash and emits a PASSWORD_RECOVERY event.
+    let isMounted = true;
+    let hasVerifiedRecovery = false;
+    const combinedUrlParts = `${window.location.search}&${window.location.hash}`;
+    const hasRecoveryHint = /(type=recovery|access_token=|refresh_token=|code=)/i.test(combinedUrlParts);
+
+    // Supabase parses recovery tokens from URL and emits PASSWORD_RECOVERY/SIGNED_IN.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') setReady(true);
+      if (!isMounted) return;
+      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
+        hasVerifiedRecovery = true;
+        setReady(true);
+        setError(null);
+      }
     });
-    // Also check existing session (link may have already been processed)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) setReady(true);
-    });
-    return () => subscription.unsubscribe();
+
+    const initRecovery = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+
+      // Handle code-based links explicitly in case auto-detection doesn't run.
+      if (code) {
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        if (exchangeError && isMounted) {
+          setError('This reset link is invalid or expired. Request a new one from Sign in → Forgot password.');
+        }
+      }
+
+      // Check existing session (link may have already been processed)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!isMounted) return;
+
+      if (session) {
+        hasVerifiedRecovery = true;
+        setReady(true);
+        setError(null);
+        return;
+      }
+
+      if (!hasRecoveryHint) {
+        setError('This reset link appears incomplete. Open the newest reset email link directly in Edge or Chrome.');
+      }
+    };
+
+    void initRecovery();
+
+    const timeout = window.setTimeout(() => {
+      if (!isMounted || hasVerifiedRecovery) return;
+      setError((prev) => prev ?? 'We could not verify this reset link. Try requesting a fresh reset email.');
+    }, 7000);
+
+    return () => {
+      isMounted = false;
+      window.clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {

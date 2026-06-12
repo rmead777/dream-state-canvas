@@ -22,6 +22,8 @@ export default function Auth() {
     { label: 'Ambient guide', value: 'Sherpa live' },
   ];
   const workflowSteps = ['Authenticate', 'Restore context', 'Materialize the next best view'];
+  const configuredAppUrl = import.meta.env.VITE_APP_URL?.trim();
+  const appUrl = configuredAppUrl ? configuredAppUrl.replace(/\/+$/, '') : window.location.origin;
   const isBusy = loading || checkingSession;
   const statusTitle = checkingSession ? 'Restoring workspace' : loading ? (mode === 'signup' ? 'Creating account' : 'Signing in') : 'Secure sign-in';
   const statusDetail = checkingSession
@@ -73,7 +75,7 @@ export default function Auth() {
       setLoading(true);
       setError(null);
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: `${appUrl}/reset-password`,
       });
       if (error) {
         setError(error.message);
@@ -94,7 +96,7 @@ export default function Auth() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin,
+          redirectTo: appUrl,
         },
       });
       if (error) {
